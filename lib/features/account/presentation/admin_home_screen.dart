@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../auth/models/admin_session.dart';
 import '../../auth/providers/auth_providers.dart';
+import '../../locations/models/location.dart';
+import '../../locations/providers/locations_providers.dart';
 
 class AdminHomeScreen extends ConsumerWidget {
   const AdminHomeScreen({super.key});
@@ -10,6 +12,10 @@ class AdminHomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final AdminSession? session = ref.watch(authControllerProvider).value;
+    final AsyncValue<List<Location>> locations = ref.watch(locationsProvider);
+    final AsyncValue<Location?> currentLocation = ref.watch(
+      currentLocationProvider,
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -23,72 +29,202 @@ class AdminHomeScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 480),
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: <Widget>[
-                    const Icon(Icons.verified_user_outlined, size: 56),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Administrator access confirmed',
-                      style: Theme.of(context).textTheme.titleLarge,
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 24),
-                    _ProfileRow(
-                      label: 'Name',
-                      value: session?.profile.fullName ?? 'Not provided',
-                    ),
-                    _ProfileRow(
-                      label: 'Email',
-                      value: session?.email ?? 'Not provided',
-                    ),
-                    _ProfileRow(
-                      label: 'Role',
-                      value: session?.profile.role.name ?? 'admin',
-                    ),
-                    const SizedBox(height: 24),
-                    OutlinedButton.icon(
-                      onPressed: () =>
-                          ref.read(authControllerProvider.notifier).signOut(),
-                      icon: const Icon(Icons.logout),
-                      label: const Text('Log out'),
-                    ),
-                  ],
-                ),
-              ),
+      body: locations.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (Object error, StackTrace stackTrace) => _LocationsError(
+          message: error.toString(),
+          onRetry: () {
+            ref.invalidate(currentLocationProvider);
+            ref.read(locationsProvider.notifier).retry();
+          },
+        ),
+        data: (List<Location> available) {
+          if (available.isEmpty) return const _EmptyLocations();
+          return currentLocation.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (Object error, StackTrace stackTrace) => _LocationsError(
+              message: error.toString(),
+              onRetry: () => ref.invalidate(currentLocationProvider),
             ),
+            data: (Location? selected) => selected == null
+                ? _LocationPicker(locations: available)
+                : _HomeContent(session: session, location: selected),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _HomeContent extends ConsumerWidget {
+  const _HomeContent({required this.session, required this.location});
+
+  final AdminSession? session;
+  final Location location;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return ListView(
+      padding: const EdgeInsets.all(24),
+      children: <Widget>[
+        Text('Welcome', style: Theme.of(context).textTheme.headlineMedium),
+        const SizedBox(height: 4),
+        Text(
+          session?.profile.fullName ?? session?.email ?? 'Administrator',
+          style: Theme.of(context).textTheme.bodyMedium
+              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+        ),
+        const SizedBox(height: 32),
+        Text('Current location', style: Theme.of(context).textTheme.labelLarge),
+        const SizedBox(height: 8),
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.storefront_outlined),
+            title: Text(location.name),
+            subtitle: location.address == null ? null : Text(location.address!),
           ),
+        ),
+        const SizedBox(height: 12),
+        FilledButton.tonalIcon(
+          onPressed: () => _showLocationPicker(context, ref),
+          icon: const Icon(Icons.swap_horiz),
+          label: const Text('Change location'),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _showLocationPicker(BuildContext context, WidgetRef ref) async {
+    final List<Location>? locations = ref.read(locationsProvider).value;
+    if (locations == null) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (BuildContext context) => SafeArea(
+        child: _LocationList(
+          locations: locations,
+          selectedId: location.id,
+          onSelected: (Location next) async {
+            await ref.read(currentLocationProvider.notifier).select(next);
+            if (context.mounted) Navigator.pop(context);
+          },
         ),
       ),
     );
   }
 }
 
-class _ProfileRow extends StatelessWidget {
-  const _ProfileRow({required this.label, required this.value});
+class _LocationPicker extends ConsumerWidget {
+  const _LocationPicker({required this.locations});
 
-  final String label;
-  final String value;
+  final List<Location> locations;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Text(
+            'Choose a location',
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Your selection will be used throughout the admin app.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 16),
+          Expanded(
+            child: _LocationList(
+              locations: locations,
+              onSelected: (Location location) =>
+                  ref.read(currentLocationProvider.notifier).select(location),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LocationList extends StatelessWidget {
+  const _LocationList({
+    required this.locations,
+    required this.onSelected,
+    this.selectedId,
+  });
+
+  final List<Location> locations;
+  final String? selectedId;
+  final Future<void> Function(Location) onSelected;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          SizedBox(width: 72, child: Text('$label:')),
-          Expanded(child: Text(value)),
-        ],
+    return ListView.builder(
+      shrinkWrap: true,
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      itemCount: locations.length,
+      itemBuilder: (BuildContext context, int index) {
+        final Location location = locations[index];
+        return ListTile(
+          enabled: location.isActive,
+          leading: Icon(
+            location.isActive
+                ? Icons.storefront_outlined
+                : Icons.store_outlined,
+          ),
+          title: Text(location.name),
+          subtitle: Text(
+            <String>[
+              if (location.address != null) location.address!,
+              if (!location.isActive) 'Inactive',
+            ].join('\n'),
+          ),
+          trailing: selectedId == location.id
+              ? const Icon(Icons.check_circle)
+              : null,
+          onTap: location.isActive ? () => onSelected(location) : null,
+        );
+      },
+    );
+  }
+}
+
+class _EmptyLocations extends StatelessWidget {
+  const _EmptyLocations();
+
+  @override
+  Widget build(BuildContext context) => const Center(
+    child: Padding(
+      padding: EdgeInsets.all(24),
+      child: Text('No locations are available.'),
+    ),
+  );
+}
+
+class _LocationsError extends StatelessWidget {
+  const _LocationsError({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            const Icon(Icons.cloud_off_outlined, size: 48),
+            const SizedBox(height: 16),
+            Text(message, textAlign: TextAlign.center),
+            const SizedBox(height: 16),
+            FilledButton(onPressed: onRetry, child: const Text('Try again')),
+          ],
+        ),
       ),
     );
   }
