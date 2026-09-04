@@ -75,6 +75,65 @@ void main() {
     expect(product.modifierGroups.single.options, hasLength(1));
   });
 
+  test('price parser is deterministic', () {
+    expect(parsePriceCents('12'), 1200);
+    expect(parsePriceCents('12.5'), 1250);
+    expect(parsePriceCents('12.50'), 1250);
+    expect(parsePriceCents('0.99'), 99);
+    expect(parsePriceCents('invalid'), isNull);
+    expect(parsePriceCents('-1'), isNull);
+    expect(parsePriceCents('1.999'), isNull);
+  });
+
+  for (final bool create in <bool>[true, false]) {
+    test(
+      '${create ? 'POST create' : 'PATCH update'} sends exact safe body',
+      () async {
+        final _Adapter adapter = _Adapter(jsonEncode(_product(full: true)));
+        final MenuRepository repository = _api(adapter);
+        const ProductWriteInput input = ProductWriteInput(
+          categoryId: 'category-a',
+          name: 'Test Product',
+          description: 'Desc',
+          priceCents: 1250,
+          isAvailable: true,
+          sortOrder: 3,
+          subcategory: 'Lunch',
+          servesCount: 2,
+          disclaimer: 'Notice',
+        );
+        if (create) {
+          await repository.createProduct(input);
+        } else {
+          await repository.updateProduct('product-uuid', input);
+        }
+        expect(adapter.options?.method, create ? 'POST' : 'PATCH');
+        expect(
+          adapter.options?.path,
+          create ? 'products' : 'products/product-uuid',
+        );
+        expect(adapter.options?.data, <String, dynamic>{
+          'categoryId': 'category-a',
+          'name': 'Test Product',
+          'slug': 'test-product',
+          'description': 'Desc',
+          'priceCents': 1250,
+          'isAvailable': true,
+          'sortOrder': 3,
+          'subcategory': 'Lunch',
+          'disclaimer': 'Notice',
+          'servesCount': 2,
+        });
+        expect((adapter.options?.data as Map).containsKey('imageUrl'), isFalse);
+        expect(
+          (adapter.options?.data as Map).containsKey('modifierGroups'),
+          isFalse,
+        );
+        expect((adapter.options?.data as Map).containsKey('id'), isFalse);
+      },
+    );
+  }
+
   for (final int status in <int>[401, 403, 404]) {
     test('product detail maps $status', () async {
       final MenuRepository repository = _api(_Adapter('{}', status: status));
@@ -141,6 +200,91 @@ void main() {
       categoryId: 'category-a',
     );
     expect(await container.read(menuProductsProvider(query).future), isEmpty);
+  });
+
+  test('update timeout reconciles by GET without retrying PATCH', () async {
+    final _Repository repository = _Repository()..writeError = _timeout();
+    final ProviderContainer container = ProviderContainer(
+      overrides: [
+        currentLocationProvider.overrideWith(_CurrentLocation.new),
+        menuRepositoryProvider.overrideWithValue(repository),
+      ],
+    );
+    addTearDown(container.dispose);
+    const key = (
+      locationId: 'location-a',
+      locationSlug: 'a',
+      kind: MenuKind.store,
+      categoryId: 'category-a',
+      productId: 'product-uuid',
+    );
+    final bool result = await container
+        .read(productMutationProvider(key).notifier)
+        .save(_writeInput());
+    expect(
+      result,
+      isTrue,
+      reason: container.read(productMutationProvider(key)).message,
+    );
+    expect(repository.updateCalls, 1);
+    expect(
+      container.read(productMutationProvider(key)).phase,
+      ProductMutationPhase.success,
+    );
+  });
+
+  test('create timeout never retries and warns before duplicate', () async {
+    final _Repository repository = _Repository()..writeError = _timeout();
+    final ProviderContainer container = ProviderContainer(
+      overrides: [
+        currentLocationProvider.overrideWith(_CurrentLocation.new),
+        menuRepositoryProvider.overrideWithValue(repository),
+      ],
+    );
+    addTearDown(container.dispose);
+    const key = (
+      locationId: 'location-a',
+      locationSlug: 'a',
+      kind: MenuKind.store,
+      categoryId: 'category-a',
+      productId: null,
+    );
+    expect(
+      await container
+          .read(productMutationProvider(key).notifier)
+          .save(_writeInput()),
+      isFalse,
+    );
+    expect(repository.createCalls, 1);
+    expect(
+      container.read(productMutationProvider(key)).message,
+      contains('avoid a duplicate'),
+    );
+  });
+
+  test('wrong location blocks mutation request', () async {
+    final _Repository repository = _Repository();
+    final ProviderContainer container = ProviderContainer(
+      overrides: [
+        currentLocationProvider.overrideWith(_CurrentLocation.new),
+        menuRepositoryProvider.overrideWithValue(repository),
+      ],
+    );
+    addTearDown(container.dispose);
+    const key = (
+      locationId: 'wrong',
+      locationSlug: 'wrong',
+      kind: MenuKind.store,
+      categoryId: 'category-a',
+      productId: null,
+    );
+    expect(
+      await container
+          .read(productMutationProvider(key).notifier)
+          .save(_writeInput()),
+      isFalse,
+    );
+    expect(repository.createCalls, 0);
   });
 
   testWidgets('landing follows Menu to category to product and Back', (
@@ -214,6 +358,24 @@ MenuRepository _api(_Adapter adapter) {
   final dio = Dio(BaseOptions(baseUrl: 'https://example.test/v1/'))
     ..httpClientAdapter = adapter;
   return ApiMenuRepository(ApiClient(dio: dio));
+}
+
+ProductWriteInput _writeInput() => const ProductWriteInput(
+  categoryId: 'category-a',
+  name: 'Test Product',
+  priceCents: 1250,
+  isAvailable: false,
+  sortOrder: 1,
+);
+ApiException _timeout() {
+  final options = RequestOptions(path: 'products');
+  return ApiException(
+    message: 'timed out',
+    cause: DioException(
+      requestOptions: options,
+      type: DioExceptionType.receiveTimeout,
+    ),
+  );
 }
 
 Map<String, dynamic> _category({
@@ -292,6 +454,9 @@ class _CurrentLocation extends CurrentLocationController {
 
 class _Repository implements MenuRepository {
   bool wrongProductCategory = false;
+  Object? writeError;
+  int createCalls = 0;
+  int updateCalls = 0;
   @override
   Future<List<MenuCategory>> getCategories({
     required String locationSlug,
@@ -309,6 +474,20 @@ class _Repository implements MenuRepository {
   @override
   Future<MenuProduct> getProduct(String productId) async =>
       MenuProduct.fromJson(_product(full: true));
+  @override
+  Future<MenuProduct> createProduct(ProductWriteInput input) async =>
+      (++createCalls > 0 && writeError != null)
+      ? throw writeError!
+      : MenuProduct.fromJson(_product(full: true));
+  @override
+  Future<MenuProduct> updateProduct(
+    String productId,
+    ProductWriteInput input,
+  ) async {
+    updateCalls++;
+    if (writeError != null) throw writeError!;
+    return MenuProduct.fromJson(_product(full: true));
+  }
 }
 
 class _Adapter implements HttpClientAdapter {

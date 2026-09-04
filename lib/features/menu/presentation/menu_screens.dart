@@ -142,6 +142,15 @@ class MenuProductsScreen extends ConsumerWidget {
     final AsyncValue<Location?> location = ref.watch(currentLocationProvider);
     return Scaffold(
       appBar: AppBar(title: Text(categoryName)),
+      floatingActionButton: location.value == null
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: () => context.push(
+                '/app/menu/${kind.name}/categories/$categoryId/products/new?category=${Uri.encodeQueryComponent(categoryName)}',
+              ),
+              icon: const Icon(Icons.add),
+              label: const Text('Add Product'),
+            ),
       body: location.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, stack) => MenuError(
@@ -246,7 +255,18 @@ class MenuProductDetailScreen extends ConsumerWidget {
     );
     final product = ref.watch(menuProductDetailProvider(query));
     return Scaffold(
-      appBar: AppBar(title: const Text('Product Detail')),
+      appBar: AppBar(
+        title: const Text('Product Detail'),
+        actions: <Widget>[
+          IconButton(
+            tooltip: 'Edit Product',
+            onPressed: () => context.push(
+              '/app/menu/${kind.name}/categories/$categoryId/products/$productId/edit?category=${Uri.encodeQueryComponent(categoryName)}',
+            ),
+            icon: const Icon(Icons.edit_outlined),
+          ),
+        ],
+      ),
       body: product.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, stack) => MenuError(

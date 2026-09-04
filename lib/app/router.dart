@@ -11,6 +11,7 @@ import '../features/orders/presentation/historical_orders_screen.dart';
 import '../features/orders/presentation/orders_calendar_screen.dart';
 import '../features/menu/models/menu_models.dart';
 import '../features/menu/presentation/menu_screens.dart';
+import '../features/menu/presentation/product_form_screen.dart';
 
 enum AuthRouteStatus { loading, authenticated, unauthenticated }
 
@@ -81,6 +82,23 @@ final routerProvider = Provider<GoRouter>((Ref ref) {
               kind: MenuKind.fromJson(state.pathParameters['kind']),
               categoryId: state.pathParameters['categoryId']!,
               categoryName: state.uri.queryParameters['name'] ?? 'Products',
+            ),
+          ),
+          GoRoute(
+            path: 'menu/:kind/categories/:categoryId/products/new',
+            builder: (_, state) => ProductFormScreen(
+              kind: MenuKind.fromJson(state.pathParameters['kind']),
+              categoryId: state.pathParameters['categoryId']!,
+              categoryName: state.uri.queryParameters['category'] ?? 'Category',
+            ),
+          ),
+          GoRoute(
+            path: 'menu/:kind/categories/:categoryId/products/:productId/edit',
+            builder: (_, state) => ProductFormScreen(
+              kind: MenuKind.fromJson(state.pathParameters['kind']),
+              categoryId: state.pathParameters['categoryId']!,
+              productId: state.pathParameters['productId']!,
+              categoryName: state.uri.queryParameters['category'] ?? 'Category',
             ),
           ),
           GoRoute(
