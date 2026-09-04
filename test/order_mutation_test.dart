@@ -283,6 +283,7 @@ void main() {
       await tester.scrollUntilVisible(
         find.byKey(const Key('order-primary-action')),
         500,
+        scrollable: find.byType(Scrollable).first,
       );
       expect(find.text('Accept order'), findsOneWidget);
       await tester.tap(find.byKey(const Key('order-primary-action')));
@@ -324,6 +325,7 @@ void main() {
         await tester.scrollUntilVisible(
           find.byKey(const Key('order-primary-action')),
           500,
+          scrollable: find.byType(Scrollable).first,
         );
         await tester.ensureVisible(
           find.byKey(const Key('order-primary-action')),
@@ -391,6 +393,7 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const Key('order-primary-action')),
       500,
+      scrollable: find.byType(Scrollable).first,
     );
     await tester.tap(find.byKey(const Key('order-primary-action')));
     await tester.pumpAndSettle();
@@ -493,13 +496,22 @@ class _FakeOrdersRepository implements OrdersRepository {
   }
 
   @override
+  Future<OrderDetail> updateInternalNotes({
+    required String orderId,
+    required String internalNotes,
+  }) => throw UnimplementedError();
+
+  @override
   Future<OrderDetail> getOrderById(String id) async {
     getCalls++;
     return getResult;
   }
 
   @override
-  Future<List<OrderSummary>> getOrders({required String locationId}) async {
+  Future<List<OrderSummary>> getOrders({
+    required String locationId,
+    OrderStatus? status,
+  }) async {
     listLocationIds.add(locationId);
     return <OrderSummary>[];
   }

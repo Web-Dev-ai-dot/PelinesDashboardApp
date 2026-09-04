@@ -6,6 +6,7 @@ Map<String, dynamic> orderJson({
   String locationId = 'location-id',
   String fulfillment = 'pickup',
   String? deliveredAt,
+  String? internalNotes,
 }) => <String, dynamic>{
   'id': id,
   'orderNumber': 'ORD-1048',
@@ -19,6 +20,7 @@ Map<String, dynamic> orderJson({
   'contactEmail': 'customer@example.test',
   'createdAt': '2026-09-04T18:00:00.000Z',
   'deliveredAt': deliveredAt,
+  'internalNotes': internalNotes,
   'subtotalCents': 1000,
   'taxCents': 100,
   'serviceFeeCents': 0,
@@ -35,6 +37,7 @@ OrderDetail orderDetail({
   String locationId = 'location-id',
   FulfillmentType fulfillment = FulfillmentType.pickup,
   DateTime? deliveredAt,
+  String? internalNotes,
 }) => OrderDetail.fromJson(
   orderJson(
     id: id,
@@ -42,5 +45,6 @@ OrderDetail orderDetail({
     locationId: locationId,
     fulfillment: fulfillment.name,
     deliveredAt: deliveredAt?.toIso8601String(),
+    internalNotes: internalNotes,
   ),
 );

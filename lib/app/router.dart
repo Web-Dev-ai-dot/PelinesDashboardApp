@@ -7,6 +7,7 @@ import '../features/auth/models/admin_session.dart';
 import '../features/auth/presentation/login_screen.dart';
 import '../features/auth/providers/auth_providers.dart';
 import '../features/orders/presentation/order_detail_screen.dart';
+import '../features/orders/presentation/historical_orders_screen.dart';
 
 enum AuthRouteStatus { loading, authenticated, unauthenticated }
 
@@ -64,6 +65,20 @@ final routerProvider = Provider<GoRouter>((Ref ref) {
         builder: (BuildContext context, GoRouterState state) =>
             const AdminHomeScreen(),
         routes: <RouteBase>[
+          GoRoute(
+            path: 'orders/completed',
+            builder: (BuildContext context, GoRouterState state) =>
+                const HistoricalOrdersScreen(
+                  kind: HistoricalOrdersKind.completed,
+                ),
+          ),
+          GoRoute(
+            path: 'orders/cancelled',
+            builder: (BuildContext context, GoRouterState state) =>
+                const HistoricalOrdersScreen(
+                  kind: HistoricalOrdersKind.cancelled,
+                ),
+          ),
           GoRoute(
             path: 'orders/:id',
             builder: (BuildContext context, GoRouterState state) =>

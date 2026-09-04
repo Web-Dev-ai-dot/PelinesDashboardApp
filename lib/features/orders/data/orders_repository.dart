@@ -5,11 +5,18 @@ import '../../../core/api/api_exception.dart';
 import '../models/order_models.dart';
 
 abstract interface class OrdersRepository {
-  Future<List<OrderSummary>> getOrders({required String locationId});
+  Future<List<OrderSummary>> getOrders({
+    required String locationId,
+    OrderStatus? status,
+  });
   Future<OrderDetail> getOrderById(String id);
   Future<OrderDetail> updateOrderStatus({
     required String orderId,
     required OrderStatus status,
+  });
+  Future<OrderDetail> updateInternalNotes({
+    required String orderId,
+    required String internalNotes,
   });
 }
 
@@ -18,11 +25,17 @@ class ApiOrdersRepository implements OrdersRepository {
   final ApiClient _client;
 
   @override
-  Future<List<OrderSummary>> getOrders({required String locationId}) async {
+  Future<List<OrderSummary>> getOrders({
+    required String locationId,
+    OrderStatus? status,
+  }) async {
     try {
       final Response<dynamic> response = await _client.dio.get<dynamic>(
         'orders',
-        queryParameters: <String, dynamic>{'locationId': locationId},
+        queryParameters: <String, dynamic>{
+          'locationId': locationId,
+          if (status != null) 'status': status.name,
+        },
       );
       final Object? data = response.data;
       if (data is! List<dynamic>) {
@@ -90,6 +103,36 @@ class ApiOrdersRepository implements OrdersRepository {
       final Object? data = response.data;
       if (data is! Map<String, dynamic>) {
         throw const FormatException('Invalid status update response.');
+      }
+      return OrderDetail.fromJson(data);
+    } on DioException catch (error) {
+      throw _mapDioError(error, detail: true);
+    } on FormatException catch (error) {
+      throw ApiException(
+        message: 'The Pelines server returned an invalid order.',
+        cause: error,
+      );
+    } on TypeError catch (error) {
+      throw ApiException(
+        message: 'The Pelines server returned an invalid order.',
+        cause: error,
+      );
+    }
+  }
+
+  @override
+  Future<OrderDetail> updateInternalNotes({
+    required String orderId,
+    required String internalNotes,
+  }) async {
+    try {
+      final Response<dynamic> response = await _client.dio.patch<dynamic>(
+        'orders/$orderId/internal-notes',
+        data: <String, dynamic>{'internalNotes': internalNotes},
+      );
+      final Object? data = response.data;
+      if (data is! Map<String, dynamic>) {
+        throw const FormatException('Invalid internal notes response.');
       }
       return OrderDetail.fromJson(data);
     } on DioException catch (error) {

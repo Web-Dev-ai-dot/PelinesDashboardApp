@@ -19,6 +19,14 @@ String fulfillmentLabel(FulfillmentType type) => switch (type) {
   FulfillmentType.unknown => 'Unknown fulfillment',
 };
 
+String paymentStatusLabel(PaymentStatus status) => switch (status) {
+  PaymentStatus.unpaid => 'Unpaid',
+  PaymentStatus.paid => 'Paid',
+  PaymentStatus.refunded => 'Refunded',
+  PaymentStatus.failed => 'Failed',
+  PaymentStatus.unknown => 'Unknown payment',
+};
+
 String statusLabel(
   OrderStatus status,
   FulfillmentType fulfillment,

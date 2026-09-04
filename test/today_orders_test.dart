@@ -150,7 +150,10 @@ class _FakeCurrentLocation extends CurrentLocationController {
 class _RecordingRepository implements OrdersRepository {
   final List<String> locationIds = <String>[];
   @override
-  Future<List<OrderSummary>> getOrders({required String locationId}) async {
+  Future<List<OrderSummary>> getOrders({
+    required String locationId,
+    OrderStatus? status,
+  }) async {
     locationIds.add(locationId);
     return <OrderSummary>[];
   }
@@ -162,5 +165,11 @@ class _RecordingRepository implements OrdersRepository {
   Future<OrderDetail> updateOrderStatus({
     required String orderId,
     required OrderStatus status,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<OrderDetail> updateInternalNotes({
+    required String orderId,
+    required String internalNotes,
   }) => throw UnimplementedError();
 }

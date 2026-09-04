@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../auth/providers/auth_providers.dart';
 import '../../locations/models/location.dart';
@@ -20,6 +21,22 @@ class AdminHomeScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Pelines Admin'),
         actions: <Widget>[
+          PopupMenuButton<String>(
+            tooltip: 'More',
+            icon: const Icon(Icons.more_vert),
+            onSelected: context.push,
+            itemBuilder: (BuildContext context) =>
+                const <PopupMenuEntry<String>>[
+                  PopupMenuItem<String>(
+                    value: '/app/orders/completed',
+                    child: Text('Completed Orders'),
+                  ),
+                  PopupMenuItem<String>(
+                    value: '/app/orders/cancelled',
+                    child: Text('Cancelled Orders'),
+                  ),
+                ],
+          ),
           IconButton(
             tooltip: 'Log out',
             onPressed: () =>

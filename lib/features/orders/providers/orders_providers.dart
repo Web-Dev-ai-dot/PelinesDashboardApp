@@ -19,6 +19,16 @@ final todayOrdersProvider =
       TodayOrdersController.new,
     );
 
+final completedOrdersProvider =
+    AsyncNotifierProvider<CompletedOrdersController, HistoricalOrdersState>(
+      CompletedOrdersController.new,
+    );
+
+final cancelledOrdersProvider =
+    AsyncNotifierProvider<CancelledOrdersController, HistoricalOrdersState>(
+      CancelledOrdersController.new,
+    );
+
 final orderDetailProvider = FutureProvider.family<OrderDetail, String>((
   Ref ref,
   String id,
@@ -37,6 +47,213 @@ final orderMutationProvider = NotifierProvider.autoDispose
     .family<OrderMutationController, OrderMutationState, String>(
       OrderMutationController.new,
     );
+
+final orderNotesProvider = NotifierProvider.autoDispose
+    .family<OrderNotesController, OrderNotesState, String>(
+      OrderNotesController.new,
+    );
+
+enum OrderNotesPhase { clean, dirty, saving, reconciling, saved, error }
+
+class OrderNotesState {
+  const OrderNotesState({
+    this.phase = OrderNotesPhase.clean,
+    this.serverNotes = '',
+    this.draft = '',
+    this.initialized = false,
+    this.hasRemoteConflict = false,
+    this.errorMessage,
+    this.orderMissing = false,
+  });
+
+  final OrderNotesPhase phase;
+  final String serverNotes;
+  final String draft;
+  final bool initialized;
+  final bool hasRemoteConflict;
+  final String? errorMessage;
+  final bool orderMissing;
+
+  bool get isDirty => draft != serverNotes;
+  bool get isBusy =>
+      phase == OrderNotesPhase.saving || phase == OrderNotesPhase.reconciling;
+  bool get isValid => draft.length <= OrderNotesController.maxLength;
+  bool get canSave => isDirty && isValid && !isBusy && !orderMissing;
+}
+
+class OrderNotesController extends Notifier<OrderNotesState> {
+  OrderNotesController(this.orderId);
+
+  static const int maxLength = 5000;
+  final String orderId;
+
+  @override
+  OrderNotesState build() => const OrderNotesState();
+
+  void syncFromCanonical(String? notes) {
+    final String remote = notes ?? '';
+    if (!state.initialized) {
+      state = OrderNotesState(
+        serverNotes: remote,
+        draft: remote,
+        initialized: true,
+      );
+      return;
+    }
+    if (state.isBusy || remote == state.serverNotes) return;
+    if (!state.isDirty) {
+      state = OrderNotesState(
+        serverNotes: remote,
+        draft: remote,
+        initialized: true,
+      );
+      return;
+    }
+    final bool remainsDirty = state.draft != remote;
+    state = OrderNotesState(
+      phase: remainsDirty ? OrderNotesPhase.dirty : OrderNotesPhase.clean,
+      serverNotes: remote,
+      draft: state.draft,
+      initialized: true,
+      hasRemoteConflict: remainsDirty,
+    );
+  }
+
+  void edit(String draft) {
+    if (state.isBusy || state.orderMissing) return;
+    final bool dirty = draft != state.serverNotes;
+    state = OrderNotesState(
+      phase: dirty ? OrderNotesPhase.dirty : OrderNotesPhase.clean,
+      serverNotes: state.serverNotes,
+      draft: draft,
+      initialized: true,
+      hasRemoteConflict: dirty && state.hasRemoteConflict,
+    );
+  }
+
+  Future<void> save({bool overwriteConflict = false}) async {
+    if (!state.canSave ||
+        state.hasRemoteConflict && !overwriteConflict ||
+        ref.read(orderMutationProvider(orderId)).isBusy) {
+      return;
+    }
+    final String attempted = state.draft;
+    final String previousServer = state.serverNotes;
+    state = OrderNotesState(
+      phase: OrderNotesPhase.saving,
+      serverNotes: previousServer,
+      draft: attempted,
+      initialized: true,
+      hasRemoteConflict: state.hasRemoteConflict,
+    );
+    try {
+      await ref
+          .read(ordersRepositoryProvider)
+          .updateInternalNotes(orderId: orderId, internalNotes: attempted);
+      state = OrderNotesState(
+        phase: OrderNotesPhase.reconciling,
+        serverNotes: previousServer,
+        draft: attempted,
+        initialized: true,
+      );
+      await _reconcile(attempted, previousServer);
+    } on ApiException catch (error) {
+      if (error.statusCode == 401) {
+        await ref.read(authControllerProvider.notifier).signOut();
+      }
+      if (_isAmbiguousNetworkError(error)) {
+        state = OrderNotesState(
+          phase: OrderNotesPhase.reconciling,
+          serverNotes: previousServer,
+          draft: attempted,
+          initialized: true,
+        );
+        await _reconcile(attempted, previousServer, patchError: error);
+      } else {
+        state = OrderNotesState(
+          phase: OrderNotesPhase.error,
+          serverNotes: previousServer,
+          draft: attempted,
+          initialized: true,
+          errorMessage: error.message,
+          orderMissing: error.statusCode == 404,
+        );
+      }
+    } on Object {
+      state = OrderNotesState(
+        phase: OrderNotesPhase.error,
+        serverNotes: previousServer,
+        draft: attempted,
+        initialized: true,
+        errorMessage: 'Internal notes could not be saved.',
+      );
+    }
+  }
+
+  Future<void> _reconcile(
+    String attempted,
+    String previousServer, {
+    ApiException? patchError,
+  }) async {
+    try {
+      final OrderDetail canonical = await ref
+          .read(ordersRepositoryProvider)
+          .getOrderById(orderId);
+      final String remote = canonical.internalNotes ?? '';
+      if (remote == attempted) {
+        state = OrderNotesState(
+          phase: OrderNotesPhase.saved,
+          serverNotes: remote,
+          draft: attempted,
+          initialized: true,
+        );
+      } else {
+        final bool unchanged = remote == previousServer;
+        state = OrderNotesState(
+          phase: OrderNotesPhase.error,
+          serverNotes: remote,
+          draft: attempted,
+          initialized: true,
+          hasRemoteConflict: !unchanged,
+          errorMessage: unchanged
+              ? '${patchError?.message ?? 'The note was not saved.'} You can try again.'
+              : 'This note was updated elsewhere.',
+        );
+      }
+      ref.invalidate(orderDetailProvider(orderId));
+    } on ApiException catch (error) {
+      if (error.statusCode == 401) {
+        await ref.read(authControllerProvider.notifier).signOut();
+      }
+      state = OrderNotesState(
+        phase: OrderNotesPhase.error,
+        serverNotes: previousServer,
+        draft: attempted,
+        initialized: true,
+        errorMessage:
+            '${patchError?.message ?? 'The note may have been saved.'} The current note could not be verified.',
+        orderMissing: error.statusCode == 404,
+      );
+    }
+  }
+
+  void discardDraft() {
+    state = OrderNotesState(
+      serverNotes: state.serverNotes,
+      draft: state.serverNotes,
+      initialized: true,
+    );
+  }
+
+  bool _isAmbiguousNetworkError(ApiException error) {
+    final Object? cause = error.cause;
+    if (cause is! DioException) return false;
+    return cause.type == DioExceptionType.connectionTimeout ||
+        cause.type == DioExceptionType.sendTimeout ||
+        cause.type == DioExceptionType.receiveTimeout ||
+        cause.type == DioExceptionType.connectionError;
+  }
+}
 
 enum OrderMutationPhase { idle, submitting, reconciling, success, error }
 
@@ -99,6 +316,7 @@ class OrderMutationController extends Notifier<OrderMutationState> {
 
   Future<void> _run(OrderDetail order, OrderStatusAction action) async {
     if (state.isBusy ||
+        ref.read(orderNotesProvider(orderId)).isBusy ||
         order.id != orderId ||
         !OrderStatusAction.allows(
           order.status,
@@ -315,6 +533,115 @@ class TodayOrdersController extends AsyncNotifier<TodayOrdersState> {
       rethrow;
     }
   }
+}
+
+class HistoricalOrdersState {
+  const HistoricalOrdersState({
+    required this.orders,
+    this.isRefreshing = false,
+    this.refreshError,
+  });
+
+  final List<OrderSummary> orders;
+  final bool isRefreshing;
+  final String? refreshError;
+
+  HistoricalOrdersState refreshing() =>
+      HistoricalOrdersState(orders: orders, isRefreshing: true);
+
+  HistoricalOrdersState failed(String message) =>
+      HistoricalOrdersState(orders: orders, refreshError: message);
+}
+
+abstract class HistoricalOrdersController
+    extends AsyncNotifier<HistoricalOrdersState> {
+  OrderStatus get status;
+
+  bool _requestInFlight = false;
+
+  @override
+  Future<HistoricalOrdersState> build() async {
+    final Location? location = await ref.watch(currentLocationProvider.future);
+    if (location == null) {
+      return const HistoricalOrdersState(orders: <OrderSummary>[]);
+    }
+    return HistoricalOrdersState(orders: await _load(location.id));
+  }
+
+  Future<void> refresh() async {
+    if (_requestInFlight) return;
+    final Location? location = await ref.read(currentLocationProvider.future);
+    if (location == null) return;
+    _requestInFlight = true;
+    final HistoricalOrdersState? previous = state.value;
+    if (previous != null) state = AsyncData(previous.refreshing());
+    try {
+      final List<OrderSummary> orders = await _load(location.id);
+      if (ref.read(currentLocationProvider).value?.id == location.id) {
+        state = AsyncData(HistoricalOrdersState(orders: orders));
+      }
+    } on Object catch (error, stackTrace) {
+      if (previous == null) {
+        state = AsyncError<HistoricalOrdersState>(error, stackTrace);
+      } else {
+        state = AsyncData(previous.failed(_message(error)));
+      }
+    } finally {
+      _requestInFlight = false;
+    }
+  }
+
+  Future<List<OrderSummary>> _load(String locationId) async {
+    try {
+      final List<OrderSummary> orders = await ref
+          .read(ordersRepositoryProvider)
+          .getOrders(locationId: locationId, status: status);
+      final List<OrderSummary> sorted = List<OrderSummary>.of(orders);
+      sorted.sort(
+        status == OrderStatus.delivered
+            ? compareCompletedOrders
+            : compareCancelledOrders,
+      );
+      return List<OrderSummary>.unmodifiable(sorted);
+    } on ApiException catch (error) {
+      if (error.statusCode == 401) {
+        await ref.read(authControllerProvider.notifier).signOut();
+      }
+      rethrow;
+    }
+  }
+}
+
+class CompletedOrdersController extends HistoricalOrdersController {
+  @override
+  OrderStatus get status => OrderStatus.delivered;
+}
+
+class CancelledOrdersController extends HistoricalOrdersController {
+  @override
+  OrderStatus get status => OrderStatus.cancelled;
+}
+
+int compareCompletedOrders(OrderSummary a, OrderSummary b) {
+  final DateTime aTime = a.deliveredAt ?? a.operationalAt;
+  final DateTime bTime = b.deliveredAt ?? b.operationalAt;
+  return _compareHistoryDescending(a, b, aTime, bTime);
+}
+
+int compareCancelledOrders(OrderSummary a, OrderSummary b) =>
+    _compareHistoryDescending(a, b, a.operationalAt, b.operationalAt);
+
+int _compareHistoryDescending(
+  OrderSummary a,
+  OrderSummary b,
+  DateTime aTime,
+  DateTime bTime,
+) {
+  final int primary = bTime.compareTo(aTime);
+  if (primary != 0) return primary;
+  final int created = b.createdAt.compareTo(a.createdAt);
+  if (created != 0) return created;
+  return a.orderNumber.compareTo(b.orderNumber);
 }
 
 List<OrderSummary> filterTodayActiveOrders(

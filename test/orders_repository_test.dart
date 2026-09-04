@@ -29,6 +29,117 @@ void main() {
     },
   );
 
+  for (final OrderStatus status in <OrderStatus>[
+    OrderStatus.delivered,
+    OrderStatus.cancelled,
+  ]) {
+    test(
+      'GETs exact ${status.name} history query and parses response',
+      () async {
+        final _Adapter adapter = _Adapter(
+          statusCode: 200,
+          body: jsonEncode(<Map<String, dynamic>>[
+            orderJson(
+              status: status.name,
+              deliveredAt: status == OrderStatus.delivered
+                  ? '2026-09-04T20:00:00.000Z'
+                  : null,
+            ),
+          ]),
+        );
+        final Dio dio = Dio(BaseOptions(baseUrl: 'https://example.test/v1/'))
+          ..httpClientAdapter = adapter;
+        final OrdersRepository repository = ApiOrdersRepository(
+          ApiClient(dio: dio),
+        );
+
+        final List<OrderSummary> result = await repository.getOrders(
+          locationId: 'location-uuid',
+          status: status,
+        );
+
+        expect(adapter.lastOptions?.method, 'GET');
+        expect(adapter.lastOptions?.path, 'orders');
+        expect(adapter.lastOptions?.queryParameters, <String, dynamic>{
+          'locationId': 'location-uuid',
+          'status': status.name,
+        });
+        expect(adapter.hadRequestBody, isFalse);
+        expect(result.single.status, status);
+        if (status == OrderStatus.delivered) {
+          expect(result.single.deliveredAt, isNotNull);
+        }
+      },
+    );
+
+    test('${status.name} history accepts an empty list', () async {
+      final Dio dio = Dio(BaseOptions(baseUrl: 'https://example.test/v1/'))
+        ..httpClientAdapter = _Adapter(statusCode: 200, body: '[]');
+      final OrdersRepository repository = ApiOrdersRepository(
+        ApiClient(dio: dio),
+      );
+      expect(
+        await repository.getOrders(locationId: 'location-id', status: status),
+        isEmpty,
+      );
+    });
+
+    for (final int code in <int>[401, 403]) {
+      test('${status.name} history maps $code', () async {
+        final Dio dio = Dio(BaseOptions(baseUrl: 'https://example.test/v1/'))
+          ..httpClientAdapter = _Adapter(
+            statusCode: code,
+            body: jsonEncode(<String, dynamic>{'message': 'error'}),
+          );
+        final OrdersRepository repository = ApiOrdersRepository(
+          ApiClient(dio: dio),
+        );
+        await expectLater(
+          repository.getOrders(locationId: 'location-id', status: status),
+          throwsA(
+            isA<ApiException>().having((e) => e.statusCode, 'statusCode', code),
+          ),
+        );
+      });
+    }
+  }
+
+  test('history maps timeout', () async {
+    final Dio dio = Dio(BaseOptions(baseUrl: 'https://example.test/v1/'))
+      ..httpClientAdapter = _ThrowingAdapter();
+    final OrdersRepository repository = ApiOrdersRepository(
+      ApiClient(dio: dio),
+    );
+    await expectLater(
+      repository.getOrders(
+        locationId: 'location-id',
+        status: OrderStatus.delivered,
+      ),
+      throwsA(
+        isA<ApiException>().having(
+          (e) => e.message,
+          'message',
+          contains('timed out'),
+        ),
+      ),
+    );
+  });
+
+  test('history rejects invalid response', () async {
+    final Dio dio = Dio(BaseOptions(baseUrl: 'https://example.test/v1/'))
+      ..httpClientAdapter = _Adapter(statusCode: 200, body: '{}');
+    final OrdersRepository repository = ApiOrdersRepository(
+      ApiClient(dio: dio),
+    );
+    await expectLater(
+      repository.getOrders(
+        locationId: 'location-id',
+        status: OrderStatus.cancelled,
+      ),
+      throwsA(isA<ApiException>()),
+    );
+  });
+
   test('maps detail 404 to a typed ApiException', () async {
     final Dio dio = Dio(BaseOptions(baseUrl: 'https://example.test/v1/'))
       ..httpClientAdapter = _Adapter(
@@ -106,6 +217,95 @@ void main() {
       );
     });
   }
+
+  for (final String notes in <String>['Call the customer', '']) {
+    test(
+      'PATCHes exact internal notes body for ${notes.isEmpty ? 'clear' : 'text'}',
+      () async {
+        const String id = '11111111-1111-4111-8111-111111111111';
+        final _Adapter adapter = _Adapter(
+          statusCode: 200,
+          body: jsonEncode(orderJson(id: id, internalNotes: notes)),
+        );
+        final Dio dio = Dio(BaseOptions(baseUrl: 'https://example.test/v1/'))
+          ..httpClientAdapter = adapter;
+        final OrdersRepository repository = ApiOrdersRepository(
+          ApiClient(dio: dio),
+        );
+
+        final OrderDetail result = await repository.updateInternalNotes(
+          orderId: id,
+          internalNotes: notes,
+        );
+
+        expect(adapter.lastOptions?.method, 'PATCH');
+        expect(adapter.lastOptions?.path, 'orders/$id/internal-notes');
+        expect(adapter.lastOptions?.data, <String, dynamic>{
+          'internalNotes': notes,
+        });
+        expect(result.internalNotes, notes);
+      },
+    );
+  }
+
+  for (final int status in <int>[401, 403, 404]) {
+    test('maps internal notes $status to a typed ApiException', () async {
+      final Dio dio = Dio(BaseOptions(baseUrl: 'https://example.test/v1/'))
+        ..httpClientAdapter = _Adapter(
+          statusCode: status,
+          body: jsonEncode(<String, dynamic>{'message': 'error'}),
+        );
+      final OrdersRepository repository = ApiOrdersRepository(
+        ApiClient(dio: dio),
+      );
+
+      await expectLater(
+        repository.updateInternalNotes(
+          orderId: 'order-id',
+          internalNotes: 'draft',
+        ),
+        throwsA(
+          isA<ApiException>().having((e) => e.statusCode, 'statusCode', status),
+        ),
+      );
+    });
+  }
+
+  test('rejects an invalid internal notes response', () async {
+    final Dio dio = Dio(BaseOptions(baseUrl: 'https://example.test/v1/'))
+      ..httpClientAdapter = _Adapter(statusCode: 200, body: '[]');
+    final OrdersRepository repository = ApiOrdersRepository(
+      ApiClient(dio: dio),
+    );
+
+    await expectLater(
+      repository.updateInternalNotes(
+        orderId: 'order-id',
+        internalNotes: 'draft',
+      ),
+      throwsA(isA<ApiException>()),
+    );
+  });
+
+  test('maps an internal notes timeout without retrying', () async {
+    final Dio dio = Dio(BaseOptions(baseUrl: 'https://example.test/v1/'))
+      ..httpClientAdapter = _ThrowingAdapter();
+    final OrdersRepository repository = ApiOrdersRepository(
+      ApiClient(dio: dio),
+    );
+
+    await expectLater(
+      repository.updateInternalNotes(
+        orderId: 'order-id',
+        internalNotes: 'draft',
+      ),
+      throwsA(
+        isA<ApiException>()
+            .having((e) => e.statusCode, 'statusCode', isNull)
+            .having((e) => e.message, 'message', contains('timed out')),
+      ),
+    );
+  });
 }
 
 class _Adapter implements HttpClientAdapter {
@@ -113,6 +313,7 @@ class _Adapter implements HttpClientAdapter {
   final int statusCode;
   final String body;
   RequestOptions? lastOptions;
+  bool hadRequestBody = false;
 
   @override
   Future<ResponseBody> fetch(
@@ -121,6 +322,7 @@ class _Adapter implements HttpClientAdapter {
     Future<void>? cancelFuture,
   ) async {
     lastOptions = options;
+    hadRequestBody = requestStream != null;
     return ResponseBody.fromString(
       body,
       statusCode,
@@ -129,6 +331,21 @@ class _Adapter implements HttpClientAdapter {
       },
     );
   }
+
+  @override
+  void close({bool force = false}) {}
+}
+
+class _ThrowingAdapter implements HttpClientAdapter {
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) => throw DioException(
+    requestOptions: options,
+    type: DioExceptionType.receiveTimeout,
+  );
 
   @override
   void close({bool force = false}) {}

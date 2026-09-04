@@ -74,6 +74,7 @@ class OrderSummary {
     required this.totalCents,
     this.scheduledFor,
     this.eventName,
+    this.deliveredAt,
   });
 
   factory OrderSummary.fromJson(Map<String, dynamic> json) {
@@ -94,6 +95,7 @@ class OrderSummary {
       eventName: event?['eventName'] is String
           ? event!['eventName'] as String
           : null,
+      deliveredAt: _optionalDate(json['deliveredAt']),
       itemCount: items.fold<int>(
         0,
         (int sum, dynamic item) =>
@@ -118,6 +120,7 @@ class OrderSummary {
   final DateTime? scheduledFor;
   final DateTime createdAt;
   final String? eventName;
+  final DateTime? deliveredAt;
   final int itemCount;
   final int totalCents;
 

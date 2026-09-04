@@ -1,6 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/api/api_exception.dart';
 import '../../../core/time/pelines_time.dart';
@@ -18,25 +20,67 @@ class OrderDetailScreen extends ConsumerWidget {
     final AsyncValue<OrderDetail> detail = ref.watch(
       orderDetailProvider(orderId),
     );
-    return Scaffold(
-      appBar: AppBar(
-        leading: BackButton(onPressed: () => context.pop()),
-        title: Text(detail.value?.orderNumber ?? 'Order'),
-      ),
-      body: detail.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (Object error, StackTrace stack) {
-          final bool missing = error is ApiException && error.statusCode == 404;
-          return _DetailError(
-            message: missing ? 'Order no longer available' : error.toString(),
-            onRetry: missing
-                ? null
-                : () => ref.invalidate(orderDetailProvider(orderId)),
-          );
-        },
-        data: (OrderDetail order) => _DetailBody(initialOrder: order),
+    final OrderNotesState notes = ref.watch(orderNotesProvider(orderId));
+
+    Future<void> leave() async {
+      if (notes.isDirty) {
+        final bool discard = await _confirmDiscardNotes(context);
+        if (!discard || !context.mounted) return;
+        ref.read(orderNotesProvider(orderId).notifier).discardDraft();
+        await WidgetsBinding.instance.endOfFrame;
+      }
+      if (context.mounted) await Navigator.of(context).maybePop();
+    }
+
+    return PopScope(
+      canPop: !notes.isDirty,
+      onPopInvokedWithResult: (bool didPop, Object? result) {
+        if (!didPop) unawaited(leave());
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          leading: BackButton(onPressed: leave),
+          title: Text(detail.value?.orderNumber ?? 'Order'),
+        ),
+        body: detail.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (Object error, StackTrace stack) {
+            final bool missing =
+                error is ApiException && error.statusCode == 404;
+            return _DetailError(
+              message: missing ? 'Order no longer available' : error.toString(),
+              onRetry: missing
+                  ? null
+                  : () => ref.invalidate(orderDetailProvider(orderId)),
+            );
+          },
+          data: (OrderDetail order) => _DetailBody(initialOrder: order),
+        ),
       ),
     );
+  }
+
+  Future<bool> _confirmDiscardNotes(BuildContext context) async {
+    return await showDialog<bool>(
+          context: context,
+          builder: (BuildContext context) => AlertDialog(
+            title: const Text('Discard unsaved notes?'),
+            content: const Text('You have unsaved internal notes.'),
+            actions: <Widget>[
+              TextButton(
+                key: const Key('unsaved-stay'),
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Stay'),
+              ),
+              FilledButton(
+                key: const Key('unsaved-discard'),
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Discard changes'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
   }
 }
 
@@ -48,6 +92,9 @@ class _DetailBody extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final OrderMutationState mutation = ref.watch(
       orderMutationProvider(initialOrder.id),
+    );
+    final OrderNotesState notes = ref.watch(
+      orderNotesProvider(initialOrder.id),
     );
     final OrderDetail order = mutation.canonicalOrder ?? initialOrder;
     ref.listen<OrderMutationState>(orderMutationProvider(initialOrder.id), (
@@ -121,6 +168,7 @@ class _DetailBody extends ConsumerWidget {
             title: 'Customer Notes',
             children: <Widget>[Text(order.notes!)],
           ),
+        _InternalNotesEditor(order: order),
         _Section(
           title: 'Items',
           children: order.items.isEmpty
@@ -156,14 +204,10 @@ class _DetailBody extends ConsumerWidget {
               _Row('Card', '${order.cardBrand} ending in ${order.cardLast4}'),
           ],
         ),
-        if (order.internalNotes?.trim().isNotEmpty == true ||
-            order.printedAt != null ||
-            order.deliveredAt != null)
+        if (order.printedAt != null || order.deliveredAt != null)
           _Section(
             title: 'Operational',
             children: <Widget>[
-              if (order.internalNotes?.trim().isNotEmpty == true)
-                _Row('Internal notes', order.internalNotes!),
               if (order.printedAt != null)
                 _Row('Printed', PelinesTime.formatDateTime(order.printedAt!)),
               if (order.deliveredAt != null)
@@ -178,6 +222,7 @@ class _DetailBody extends ConsumerWidget {
             action: action,
             mutation: mutation,
             fulfillment: order.fulfillmentType,
+            otherMutationBusy: notes.isBusy,
             onPressed: () => _performAction(context, ref, order, action),
           ),
       ],
@@ -237,17 +282,19 @@ class _OrderActions extends StatelessWidget {
     required this.action,
     required this.mutation,
     required this.fulfillment,
+    required this.otherMutationBusy,
     required this.onPressed,
   });
 
   final OrderStatusAction action;
   final OrderMutationState mutation;
   final FulfillmentType fulfillment;
+  final bool otherMutationBusy;
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
-    final bool busy = mutation.isBusy;
+    final bool busy = mutation.isBusy || otherMutationBusy;
     final bool showButton =
         action != OrderStatusAction.completeOrder ||
         mutation.phase != OrderMutationPhase.error ||
@@ -292,6 +339,182 @@ class _OrderActions extends StatelessWidget {
           ),
       ],
     );
+  }
+}
+
+class _InternalNotesEditor extends ConsumerStatefulWidget {
+  const _InternalNotesEditor({required this.order});
+
+  final OrderDetail order;
+
+  @override
+  ConsumerState<_InternalNotesEditor> createState() =>
+      _InternalNotesEditorState();
+}
+
+class _InternalNotesEditorState extends ConsumerState<_InternalNotesEditor> {
+  late final TextEditingController _textController;
+
+  @override
+  void initState() {
+    super.initState();
+    _textController = TextEditingController(
+      text: widget.order.internalNotes ?? '',
+    );
+    _syncAfterBuild();
+  }
+
+  @override
+  void didUpdateWidget(covariant _InternalNotesEditor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.order.internalNotes != widget.order.internalNotes) {
+      _syncAfterBuild();
+    }
+  }
+
+  void _syncAfterBuild() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref
+          .read(orderNotesProvider(widget.order.id).notifier)
+          .syncFromCanonical(widget.order.internalNotes);
+    });
+  }
+
+  @override
+  void dispose() {
+    _textController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final OrderNotesState notes = ref.watch(
+      orderNotesProvider(widget.order.id),
+    );
+    final OrderMutationState statusMutation = ref.watch(
+      orderMutationProvider(widget.order.id),
+    );
+    ref.listen<OrderNotesState>(orderNotesProvider(widget.order.id), (
+      OrderNotesState? previous,
+      OrderNotesState next,
+    ) {
+      if (_textController.text == next.draft) return;
+      _textController.value = TextEditingValue(
+        text: next.draft,
+        selection: TextSelection.collapsed(offset: next.draft.length),
+      );
+    });
+    final bool statusBusy = statusMutation.isBusy;
+    final bool canSave = notes.canSave && !statusBusy;
+
+    return _Section(
+      title: 'Internal notes',
+      children: <Widget>[
+        const Text(
+          'Private notes for administrators only.',
+          style: TextStyle(color: Colors.black54),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          key: const Key('internal-notes-field'),
+          controller: _textController,
+          enabled: !notes.isBusy && !notes.orderMissing,
+          minLines: 4,
+          maxLines: 6,
+          maxLength: OrderNotesController.maxLength,
+          maxLengthEnforcement: MaxLengthEnforcement.none,
+          onChanged: ref
+              .read(orderNotesProvider(widget.order.id).notifier)
+              .edit,
+          decoration: InputDecoration(
+            hintText: 'Add a private note about this order',
+            errorText: notes.isValid
+                ? null
+                : 'Internal notes cannot exceed 5000 characters.',
+            border: const OutlineInputBorder(),
+          ),
+        ),
+        if (notes.hasRemoteConflict) ...<Widget>[
+          const Text(
+            'This note was updated elsewhere. Your draft has been preserved.',
+            key: Key('notes-conflict-warning'),
+            style: TextStyle(color: Colors.deepOrange),
+          ),
+          const SizedBox(height: 10),
+        ],
+        if (notes.errorMessage != null) ...<Widget>[
+          Text(
+            notes.errorMessage!,
+            key: const Key('notes-error'),
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          ),
+          const SizedBox(height: 10),
+        ],
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: <Widget>[
+            if (notes.phase == OrderNotesPhase.saved) ...<Widget>[
+              const Text('Saved', key: Key('notes-saved')),
+              const SizedBox(width: 12),
+            ],
+            FilledButton(
+              key: const Key('save-internal-notes'),
+              onPressed: canSave ? _save : null,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  if (notes.isBusy) ...<Widget>[
+                    const SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  Text(notes.isBusy ? 'Saving...' : 'Save notes'),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Future<void> _save() async {
+    final OrderNotesController controller = ref.read(
+      orderNotesProvider(widget.order.id).notifier,
+    );
+    final OrderNotesState notes = ref.read(orderNotesProvider(widget.order.id));
+    if (notes.hasRemoteConflict) {
+      final bool overwrite =
+          await showDialog<bool>(
+            context: context,
+            builder: (BuildContext context) => AlertDialog(
+              title: const Text('Replace newer note?'),
+              content: const Text(
+                'This note was changed by another user. Saving will replace the newer server note with your current draft.',
+              ),
+              actions: <Widget>[
+                TextButton(
+                  key: const Key('notes-conflict-cancel'),
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  key: const Key('notes-conflict-save'),
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: const Text('Save anyway'),
+                ),
+              ],
+            ),
+          ) ??
+          false;
+      if (!overwrite || !mounted) return;
+      await controller.save(overwriteConflict: true);
+      return;
+    }
+    await controller.save();
   }
 }
 
@@ -457,7 +680,7 @@ class _DetailError extends StatelessWidget {
           if (onRetry != null)
             FilledButton(onPressed: onRetry, child: const Text('Try again')),
           TextButton(
-            onPressed: () => context.pop(),
+            onPressed: () => Navigator.of(context).maybePop(),
             child: const Text('Back to Today Orders'),
           ),
         ],
