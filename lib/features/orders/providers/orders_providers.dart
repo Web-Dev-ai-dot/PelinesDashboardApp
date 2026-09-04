@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/api/api_exception.dart';
@@ -7,6 +8,7 @@ import '../../locations/models/location.dart';
 import '../../locations/providers/locations_providers.dart';
 import '../data/orders_repository.dart';
 import '../models/order_models.dart';
+import '../models/order_status_action.dart';
 
 final ordersRepositoryProvider = Provider<OrdersRepository>((Ref ref) {
   return ApiOrdersRepository(ref.watch(apiClientProvider));
@@ -30,6 +32,181 @@ final orderDetailProvider = FutureProvider.family<OrderDetail, String>((
     rethrow;
   }
 });
+
+final orderMutationProvider = NotifierProvider.autoDispose
+    .family<OrderMutationController, OrderMutationState, String>(
+      OrderMutationController.new,
+    );
+
+enum OrderMutationPhase { idle, submitting, reconciling, success, error }
+
+class OrderMutationState {
+  const OrderMutationState({
+    this.phase = OrderMutationPhase.idle,
+    this.canonicalOrder,
+    this.action,
+    this.message,
+  });
+
+  final OrderMutationPhase phase;
+  final OrderDetail? canonicalOrder;
+  final OrderStatusAction? action;
+  final String? message;
+
+  bool get isBusy =>
+      phase == OrderMutationPhase.submitting ||
+      phase == OrderMutationPhase.reconciling;
+}
+
+class OrderMutationController extends Notifier<OrderMutationState> {
+  OrderMutationController(this.orderId);
+
+  final String orderId;
+
+  @override
+  OrderMutationState build() => const OrderMutationState();
+
+  Future<void> acceptOrder(OrderDetail order) =>
+      _run(order, OrderStatusAction.acceptOrder);
+
+  Future<void> startPreparing(OrderDetail order) =>
+      _run(order, OrderStatusAction.startPreparing);
+
+  Future<void> markReady(OrderDetail order) =>
+      _run(order, OrderStatusAction.markReady);
+
+  Future<void> performCurrentAction(OrderDetail order) async {
+    final OrderStatusAction? action = OrderStatusAction.forStatus(order.status);
+    if (action != null) await _run(order, action);
+  }
+
+  Future<void> _run(OrderDetail order, OrderStatusAction action) async {
+    if (state.isBusy ||
+        order.id != orderId ||
+        !OrderStatusAction.allows(order.status, action.target)) {
+      return;
+    }
+
+    state = OrderMutationState(
+      phase: OrderMutationPhase.submitting,
+      canonicalOrder: order,
+      action: action,
+    );
+    try {
+      final OrderDetail provisional = await ref
+          .read(ordersRepositoryProvider)
+          .updateOrderStatus(orderId: orderId, status: action.target);
+      state = OrderMutationState(
+        phase: OrderMutationPhase.reconciling,
+        canonicalOrder: provisional,
+        action: action,
+      );
+      await _reconcileAfterSuccess(action);
+    } on ApiException catch (error) {
+      if (error.statusCode == 401) {
+        await ref.read(authControllerProvider.notifier).signOut();
+      }
+      if (_isAmbiguousNetworkError(error)) {
+        await _reconcileAmbiguous(order, action, error);
+      } else {
+        state = OrderMutationState(
+          phase: OrderMutationPhase.error,
+          canonicalOrder: order,
+          action: action,
+          message: error.message,
+        );
+      }
+    } on Object {
+      state = OrderMutationState(
+        phase: OrderMutationPhase.error,
+        canonicalOrder: order,
+        action: action,
+        message: 'The order could not be updated.',
+      );
+    }
+  }
+
+  Future<void> _reconcileAfterSuccess(OrderStatusAction action) async {
+    try {
+      final OrderDetail canonical = await ref
+          .read(ordersRepositoryProvider)
+          .getOrderById(orderId);
+      state = OrderMutationState(
+        phase: OrderMutationPhase.success,
+        canonicalOrder: canonical,
+        action: action,
+        message: canonical.status == action.target
+            ? action.successMessage
+            : 'Order status changed on the server.',
+      );
+      ref.invalidate(orderDetailProvider(orderId));
+      ref.invalidate(todayOrdersProvider);
+      await ref.read(todayOrdersProvider.future);
+    } on ApiException catch (error) {
+      if (error.statusCode == 401) {
+        await ref.read(authControllerProvider.notifier).signOut();
+      }
+      state = OrderMutationState(
+        phase: OrderMutationPhase.error,
+        canonicalOrder: state.canonicalOrder,
+        action: action,
+        message: 'Status updated, but refresh failed. ${error.message}',
+      );
+    }
+  }
+
+  Future<void> _reconcileAmbiguous(
+    OrderDetail original,
+    OrderStatusAction action,
+    ApiException patchError,
+  ) async {
+    state = OrderMutationState(
+      phase: OrderMutationPhase.reconciling,
+      canonicalOrder: original,
+      action: action,
+    );
+    try {
+      final OrderDetail canonical = await ref
+          .read(ordersRepositoryProvider)
+          .getOrderById(orderId);
+      final bool applied = canonical.status == action.target;
+      final bool unchanged = canonical.status == original.status;
+      state = OrderMutationState(
+        phase: applied ? OrderMutationPhase.success : OrderMutationPhase.error,
+        canonicalOrder: canonical,
+        action: action,
+        message: applied
+            ? action.successMessage
+            : unchanged
+            ? '${patchError.message} You can try again.'
+            : 'Order status changed on the server.',
+      );
+      ref.invalidate(orderDetailProvider(orderId));
+      ref.invalidate(todayOrdersProvider);
+      await ref.read(todayOrdersProvider.future);
+    } on ApiException catch (reconcileError) {
+      if (reconcileError.statusCode == 401) {
+        await ref.read(authControllerProvider.notifier).signOut();
+      }
+      state = OrderMutationState(
+        phase: OrderMutationPhase.error,
+        canonicalOrder: original,
+        action: action,
+        message:
+            '${patchError.message} The current order status could not be verified.',
+      );
+    }
+  }
+
+  bool _isAmbiguousNetworkError(ApiException error) {
+    final Object? cause = error.cause;
+    if (cause is! DioException) return false;
+    return cause.type == DioExceptionType.connectionTimeout ||
+        cause.type == DioExceptionType.sendTimeout ||
+        cause.type == DioExceptionType.receiveTimeout ||
+        cause.type == DioExceptionType.connectionError;
+  }
+}
 
 class TodayOrdersState {
   const TodayOrdersState({
@@ -69,7 +246,7 @@ class TodayOrdersController extends AsyncNotifier<TodayOrdersState> {
 
   Future<void> refresh() async {
     if (_requestInFlight) return;
-    final Location? location = ref.read(currentLocationProvider).value;
+    final Location? location = await ref.read(currentLocationProvider.future);
     if (location == null) return;
     _requestInFlight = true;
     final TodayOrdersState? previous = state.value;

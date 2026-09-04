@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/api/api_exception.dart';
 import '../../../core/time/pelines_time.dart';
 import '../models/order_models.dart';
+import '../models/order_status_action.dart';
 import '../providers/orders_providers.dart';
 import 'order_ui_helpers.dart';
 
@@ -33,18 +34,37 @@ class OrderDetailScreen extends ConsumerWidget {
                 : () => ref.invalidate(orderDetailProvider(orderId)),
           );
         },
-        data: (OrderDetail order) => _DetailBody(order: order),
+        data: (OrderDetail order) => _DetailBody(initialOrder: order),
       ),
     );
   }
 }
 
-class _DetailBody extends StatelessWidget {
-  const _DetailBody({required this.order});
-  final OrderDetail order;
+class _DetailBody extends ConsumerWidget {
+  const _DetailBody({required this.initialOrder});
+  final OrderDetail initialOrder;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final OrderMutationState mutation = ref.watch(
+      orderMutationProvider(initialOrder.id),
+    );
+    final OrderDetail order = mutation.canonicalOrder ?? initialOrder;
+    ref.listen<OrderMutationState>(orderMutationProvider(initialOrder.id), (
+      OrderMutationState? previous,
+      OrderMutationState next,
+    ) {
+      if (next.message == null ||
+          next.phase == previous?.phase && next.message == previous?.message) {
+        return;
+      }
+      if (next.phase == OrderMutationPhase.success) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(content: Text(next.message!)));
+      }
+    });
+    final OrderStatusAction? action = OrderStatusAction.forStatus(order.status);
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
       children: <Widget>[
@@ -149,14 +169,85 @@ class _DetailBody extends StatelessWidget {
                 ),
             ],
           ),
+        if (action != null)
+          _OrderActions(
+            action: action,
+            mutation: mutation,
+            onPressed: () => _performAction(ref, order, action),
+          ),
       ],
     );
   }
+
+  Future<void> _performAction(
+    WidgetRef ref,
+    OrderDetail order,
+    OrderStatusAction action,
+  ) => switch (action) {
+    OrderStatusAction.acceptOrder =>
+      ref.read(orderMutationProvider(order.id).notifier).acceptOrder(order),
+    OrderStatusAction.startPreparing =>
+      ref.read(orderMutationProvider(order.id).notifier).startPreparing(order),
+    OrderStatusAction.markReady =>
+      ref.read(orderMutationProvider(order.id).notifier).markReady(order),
+  };
 
   String _locationName(OrderDetail order) =>
       _mapString(order.location, 'name') == '—'
       ? order.locationId
       : _mapString(order.location, 'name');
+}
+
+class _OrderActions extends StatelessWidget {
+  const _OrderActions({
+    required this.action,
+    required this.mutation,
+    required this.onPressed,
+  });
+
+  final OrderStatusAction action;
+  final OrderMutationState mutation;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool busy = mutation.isBusy;
+    return _Section(
+      title: 'Order actions',
+      children: <Widget>[
+        if (mutation.phase == OrderMutationPhase.error &&
+            mutation.message != null) ...<Widget>[
+          Text(
+            mutation.message!,
+            key: const Key('order-mutation-error'),
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          ),
+          const SizedBox(height: 12),
+        ],
+        FilledButton(
+          key: const Key('order-primary-action'),
+          onPressed: busy ? null : onPressed,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                if (busy) ...<Widget>[
+                  const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  const SizedBox(width: 10),
+                ],
+                Text(busy ? action.progressLabel : action.label),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 class _Section extends StatelessWidget {

@@ -7,6 +7,10 @@ import '../models/order_models.dart';
 abstract interface class OrdersRepository {
   Future<List<OrderSummary>> getOrders({required String locationId});
   Future<OrderDetail> getOrderById(String id);
+  Future<OrderDetail> updateOrderStatus({
+    required String orderId,
+    required OrderStatus status,
+  });
 }
 
 class ApiOrdersRepository implements OrdersRepository {
@@ -56,6 +60,36 @@ class ApiOrdersRepository implements OrdersRepository {
       final Object? data = response.data;
       if (data is! Map<String, dynamic>) {
         throw const FormatException('Invalid order detail.');
+      }
+      return OrderDetail.fromJson(data);
+    } on DioException catch (error) {
+      throw _mapDioError(error, detail: true);
+    } on FormatException catch (error) {
+      throw ApiException(
+        message: 'The Pelines server returned an invalid order.',
+        cause: error,
+      );
+    } on TypeError catch (error) {
+      throw ApiException(
+        message: 'The Pelines server returned an invalid order.',
+        cause: error,
+      );
+    }
+  }
+
+  @override
+  Future<OrderDetail> updateOrderStatus({
+    required String orderId,
+    required OrderStatus status,
+  }) async {
+    try {
+      final Response<dynamic> response = await _client.dio.patch<dynamic>(
+        'orders/$orderId/status',
+        data: <String, dynamic>{'status': status.name},
+      );
+      final Object? data = response.data;
+      if (data is! Map<String, dynamic>) {
+        throw const FormatException('Invalid status update response.');
       }
       return OrderDetail.fromJson(data);
     } on DioException catch (error) {

@@ -157,4 +157,10 @@ class _RecordingRepository implements OrdersRepository {
 
   @override
   Future<OrderDetail> getOrderById(String id) => throw UnimplementedError();
+
+  @override
+  Future<OrderDetail> updateOrderStatus({
+    required String orderId,
+    required OrderStatus status,
+  }) => throw UnimplementedError();
 }
