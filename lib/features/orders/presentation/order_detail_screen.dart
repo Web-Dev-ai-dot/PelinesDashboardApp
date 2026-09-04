@@ -1,0 +1,313 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../core/api/api_exception.dart';
+import '../../../core/time/pelines_time.dart';
+import '../models/order_models.dart';
+import '../providers/orders_providers.dart';
+import 'order_ui_helpers.dart';
+
+class OrderDetailScreen extends ConsumerWidget {
+  const OrderDetailScreen({required this.orderId, super.key});
+  final String orderId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AsyncValue<OrderDetail> detail = ref.watch(
+      orderDetailProvider(orderId),
+    );
+    return Scaffold(
+      appBar: AppBar(
+        leading: BackButton(onPressed: () => context.pop()),
+        title: Text(detail.value?.orderNumber ?? 'Order'),
+      ),
+      body: detail.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (Object error, StackTrace stack) {
+          final bool missing = error is ApiException && error.statusCode == 404;
+          return _DetailError(
+            message: missing ? 'Order no longer available' : error.toString(),
+            onRetry: missing
+                ? null
+                : () => ref.invalidate(orderDetailProvider(orderId)),
+          );
+        },
+        data: (OrderDetail order) => _DetailBody(order: order),
+      ),
+    );
+  }
+}
+
+class _DetailBody extends StatelessWidget {
+  const _DetailBody({required this.order});
+  final OrderDetail order;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: Text(
+                order.orderNumber,
+                style: Theme.of(context).textTheme.headlineMedium,
+              ),
+            ),
+            StatusChip(
+              status: order.status,
+              fulfillment: order.fulfillmentType,
+              rawStatus: order.rawStatus,
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text('Placed ${PelinesTime.formatDateTime(order.createdAt)}'),
+        const SizedBox(height: 16),
+        _Section(
+          title: 'Fulfillment',
+          children: <Widget>[
+            _Row('Requested time', requestedTime(order.scheduledFor)),
+            _Row('Method', fulfillmentLabel(order.fulfillmentType)),
+            _Row('Location', _locationName(order)),
+            if (order.fulfillmentType == FulfillmentType.delivery)
+              _Row('Delivery address', _address(order.deliveryAddress)),
+          ],
+        ),
+        _Section(
+          title: 'Customer',
+          children: <Widget>[
+            _Row('Name', order.contactName),
+            _Row('Phone', order.contactPhone),
+            _Row('Email', order.contactEmail),
+          ],
+        ),
+        if (order.orderType == OrderType.catering)
+          _Section(
+            title: 'Event',
+            children: <Widget>[
+              _Row('Event name', _mapString(order.eventDetails, 'eventName')),
+              _Row('Attendees', _mapValue(order.eventDetails, 'attendees')),
+            ],
+          ),
+        if (order.notes?.trim().isNotEmpty == true)
+          _Section(
+            title: 'Customer Notes',
+            children: <Widget>[Text(order.notes!)],
+          ),
+        _Section(
+          title: 'Items',
+          children: order.items.isEmpty
+              ? const <Widget>[Text('No items recorded')]
+              : order.items
+                    .map((OrderItem item) => _Item(order: item))
+                    .toList(growable: false),
+        ),
+        _Section(
+          title: 'Financial',
+          children: <Widget>[
+            _MoneyRow('Subtotal', order.subtotalCents),
+            if (order.discountCents != 0)
+              _MoneyRow(
+                order.discountCode == null
+                    ? 'Discount'
+                    : 'Discount (${order.discountCode})',
+                -order.discountCents,
+              ),
+            _MoneyRow('Service fee', order.serviceFeeCents),
+            _MoneyRow('Delivery fee', order.deliveryFeeCents),
+            _MoneyRow('Tax', order.taxCents),
+            _MoneyRow('Tip', order.tipCents),
+            const Divider(),
+            _MoneyRow('Total', order.totalCents, emphasized: true),
+          ],
+        ),
+        _Section(
+          title: 'Payment',
+          children: <Widget>[
+            _Row('Status', order.paymentStatus.name),
+            if (order.cardBrand != null && order.cardLast4 != null)
+              _Row('Card', '${order.cardBrand} ending in ${order.cardLast4}'),
+          ],
+        ),
+        if (order.internalNotes?.trim().isNotEmpty == true ||
+            order.printedAt != null ||
+            order.deliveredAt != null)
+          _Section(
+            title: 'Operational',
+            children: <Widget>[
+              if (order.internalNotes?.trim().isNotEmpty == true)
+                _Row('Internal notes', order.internalNotes!),
+              if (order.printedAt != null)
+                _Row('Printed', PelinesTime.formatDateTime(order.printedAt!)),
+              if (order.deliveredAt != null)
+                _Row(
+                  'Completed',
+                  PelinesTime.formatDateTime(order.deliveredAt!),
+                ),
+            ],
+          ),
+      ],
+    );
+  }
+
+  String _locationName(OrderDetail order) =>
+      _mapString(order.location, 'name') == '—'
+      ? order.locationId
+      : _mapString(order.location, 'name');
+}
+
+class _Section extends StatelessWidget {
+  const _Section({required this.title, required this.children});
+  final String title;
+  final List<Widget> children;
+  @override
+  Widget build(BuildContext context) => Card(
+    margin: const EdgeInsets.only(top: 12),
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Text(title, style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 12),
+          ...children,
+        ],
+      ),
+    ),
+  );
+}
+
+class _Row extends StatelessWidget {
+  const _Row(this.label, this.value);
+  final String label;
+  final String value;
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        SizedBox(
+          width: 120,
+          child: Text(
+            label,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+        Expanded(child: Text(value)),
+      ],
+    ),
+  );
+}
+
+class _MoneyRow extends StatelessWidget {
+  const _MoneyRow(this.label, this.cents, {this.emphasized = false});
+  final String label;
+  final int cents;
+  final bool emphasized;
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: <Widget>[
+        Text(
+          label,
+          style: emphasized
+              ? const TextStyle(fontWeight: FontWeight.bold)
+              : null,
+        ),
+        Text(
+          money(cents),
+          style: emphasized
+              ? const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)
+              : null,
+        ),
+      ],
+    ),
+  );
+}
+
+class _Item extends StatelessWidget {
+  const _Item({required this.order});
+  final OrderItem order;
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 14),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: Text(
+                '${order.quantity}× ${order.productName}',
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+            Text(money(order.lineTotalCents)),
+          ],
+        ),
+        for (final OrderModifier modifier in order.modifiers)
+          Padding(
+            padding: const EdgeInsets.only(left: 16, top: 3),
+            child: Text(
+              '${modifier.groupName}: ${modifier.optionName}${modifier.priceDeltaCents == 0 ? '' : ' (+${money(modifier.priceDeltaCents)})'}',
+            ),
+          ),
+        if (order.notes?.trim().isNotEmpty == true)
+          Padding(
+            padding: const EdgeInsets.only(left: 16, top: 4),
+            child: Text(
+              'Note: ${order.notes}',
+              style: const TextStyle(fontStyle: FontStyle.italic),
+            ),
+          ),
+      ],
+    ),
+  );
+}
+
+class _DetailError extends StatelessWidget {
+  const _DetailError({required this.message, this.onRetry});
+  final String message;
+  final VoidCallback? onRetry;
+  @override
+  Widget build(BuildContext context) => Center(
+    child: Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Text(message, textAlign: TextAlign.center),
+          const SizedBox(height: 12),
+          if (onRetry != null)
+            FilledButton(onPressed: onRetry, child: const Text('Try again')),
+          TextButton(
+            onPressed: () => context.pop(),
+            child: const Text('Back to Today Orders'),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+String _mapString(Map<String, dynamic>? map, String key) =>
+    map?[key] is String ? map![key] as String : '—';
+String _mapValue(Map<String, dynamic>? map, String key) =>
+    map?[key]?.toString() ?? '—';
+String _address(Map<String, dynamic>? map) {
+  if (map == null) return '—';
+  final List<String> parts = <String>[
+    for (final String key in <String>['line1', 'line2', 'city', 'state', 'zip'])
+      if (map[key] is String && (map[key] as String).trim().isNotEmpty)
+        map[key] as String,
+  ];
+  return parts.isEmpty ? '—' : parts.join(', ');
+}

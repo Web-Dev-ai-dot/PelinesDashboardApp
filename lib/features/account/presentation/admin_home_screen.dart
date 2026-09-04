@@ -1,17 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../auth/models/admin_session.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../locations/models/location.dart';
 import '../../locations/providers/locations_providers.dart';
+import '../../orders/presentation/today_orders_view.dart';
 
 class AdminHomeScreen extends ConsumerWidget {
   const AdminHomeScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final AdminSession? session = ref.watch(authControllerProvider).value;
     final AsyncValue<List<Location>> locations = ref.watch(locationsProvider);
     final AsyncValue<Location?> currentLocation = ref.watch(
       currentLocationProvider,
@@ -48,7 +47,7 @@ class AdminHomeScreen extends ConsumerWidget {
             ),
             data: (Location? selected) => selected == null
                 ? _LocationPicker(locations: available)
-                : _HomeContent(session: session, location: selected),
+                : _HomeContent(location: selected),
           );
         },
       ),
@@ -57,40 +56,14 @@ class AdminHomeScreen extends ConsumerWidget {
 }
 
 class _HomeContent extends ConsumerWidget {
-  const _HomeContent({required this.session, required this.location});
-
-  final AdminSession? session;
+  const _HomeContent({required this.location});
   final Location location;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return ListView(
-      padding: const EdgeInsets.all(24),
-      children: <Widget>[
-        Text('Welcome', style: Theme.of(context).textTheme.headlineMedium),
-        const SizedBox(height: 4),
-        Text(
-          session?.profile.fullName ?? session?.email ?? 'Administrator',
-          style: Theme.of(context).textTheme.bodyMedium
-              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
-        ),
-        const SizedBox(height: 32),
-        Text('Current location', style: Theme.of(context).textTheme.labelLarge),
-        const SizedBox(height: 8),
-        Card(
-          child: ListTile(
-            leading: const Icon(Icons.storefront_outlined),
-            title: Text(location.name),
-            subtitle: location.address == null ? null : Text(location.address!),
-          ),
-        ),
-        const SizedBox(height: 12),
-        FilledButton.tonalIcon(
-          onPressed: () => _showLocationPicker(context, ref),
-          icon: const Icon(Icons.swap_horiz),
-          label: const Text('Change location'),
-        ),
-      ],
+    return TodayOrdersView(
+      location: location,
+      onChangeLocation: () => _showLocationPicker(context, ref),
     );
   }
 

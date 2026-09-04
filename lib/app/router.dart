@@ -6,6 +6,7 @@ import '../features/account/presentation/admin_home_screen.dart';
 import '../features/auth/models/admin_session.dart';
 import '../features/auth/presentation/login_screen.dart';
 import '../features/auth/providers/auth_providers.dart';
+import '../features/orders/presentation/order_detail_screen.dart';
 
 enum AuthRouteStatus { loading, authenticated, unauthenticated }
 
@@ -17,7 +18,8 @@ String? authRedirect({
   return switch (status) {
     AuthRouteStatus.loading =>
       atLogin || location == '/loading' ? null : '/loading',
-    AuthRouteStatus.authenticated => location == '/app' ? null : '/app',
+    AuthRouteStatus.authenticated =>
+      location.startsWith('/app') ? null : '/app',
     AuthRouteStatus.unauthenticated => atLogin ? null : '/login',
   };
 }
@@ -61,6 +63,13 @@ final routerProvider = Provider<GoRouter>((Ref ref) {
         path: '/app',
         builder: (BuildContext context, GoRouterState state) =>
             const AdminHomeScreen(),
+        routes: <RouteBase>[
+          GoRoute(
+            path: 'orders/:id',
+            builder: (BuildContext context, GoRouterState state) =>
+                OrderDetailScreen(orderId: state.pathParameters['id']!),
+          ),
+        ],
       ),
     ],
   );
