@@ -29,6 +29,11 @@ final cancelledOrdersProvider =
       CancelledOrdersController.new,
     );
 
+final calendarOrdersProvider =
+    AsyncNotifierProvider<CalendarOrdersController, HistoricalOrdersState>(
+      CalendarOrdersController.new,
+    );
+
 final orderDetailProvider = FutureProvider.family<OrderDetail, String>((
   Ref ref,
   String id,
@@ -620,6 +625,98 @@ class CompletedOrdersController extends HistoricalOrdersController {
 class CancelledOrdersController extends HistoricalOrdersController {
   @override
   OrderStatus get status => OrderStatus.cancelled;
+}
+
+class CalendarOrdersController extends AsyncNotifier<HistoricalOrdersState> {
+  bool _requestInFlight = false;
+
+  @override
+  Future<HistoricalOrdersState> build() async {
+    final Location? location = await ref.watch(currentLocationProvider.future);
+    if (location == null) {
+      return const HistoricalOrdersState(orders: <OrderSummary>[]);
+    }
+    return HistoricalOrdersState(orders: await _load(location.id));
+  }
+
+  Future<void> refresh() async {
+    if (_requestInFlight) return;
+    final Location? location = await ref.read(currentLocationProvider.future);
+    if (location == null) return;
+    _requestInFlight = true;
+    final HistoricalOrdersState? previous = state.value;
+    if (previous != null) state = AsyncData(previous.refreshing());
+    try {
+      final List<OrderSummary> orders = await _load(location.id);
+      if (ref.read(currentLocationProvider).value?.id == location.id) {
+        state = AsyncData(HistoricalOrdersState(orders: orders));
+      }
+    } on Object catch (error, stackTrace) {
+      state = previous == null
+          ? AsyncError<HistoricalOrdersState>(error, stackTrace)
+          : AsyncData(previous.failed(_message(error)));
+    } finally {
+      _requestInFlight = false;
+    }
+  }
+
+  Future<List<OrderSummary>> _load(String locationId) async {
+    try {
+      final List<OrderSummary> orders = await ref
+          .read(ordersRepositoryProvider)
+          .getOrders(locationId: locationId);
+      return calendarRelevantOrders(orders);
+    } on ApiException catch (error) {
+      if (error.statusCode == 401) {
+        await ref.read(authControllerProvider.notifier).signOut();
+      }
+      rethrow;
+    }
+  }
+}
+
+List<OrderSummary> calendarRelevantOrders(List<OrderSummary> orders) {
+  const Set<OrderStatus> operational = <OrderStatus>{
+    OrderStatus.pending,
+    OrderStatus.confirmed,
+    OrderStatus.preparing,
+    OrderStatus.ready,
+  };
+  return List<OrderSummary>.unmodifiable(
+    orders.where((OrderSummary order) => operational.contains(order.status)),
+  );
+}
+
+Map<String, List<OrderSummary>> groupScheduledOrdersByPacificDay(
+  List<OrderSummary> orders,
+) {
+  final Map<String, List<OrderSummary>> grouped =
+      <String, List<OrderSummary>>{};
+  for (final OrderSummary order in orders) {
+    final DateTime? scheduled = order.scheduledFor;
+    if (scheduled == null) continue;
+    grouped
+        .putIfAbsent(PelinesTime.dayKey(scheduled), () => <OrderSummary>[])
+        .add(order);
+  }
+  for (final List<OrderSummary> day in grouped.values) {
+    day.sort((OrderSummary a, OrderSummary b) {
+      final int time = a.scheduledFor!.compareTo(b.scheduledFor!);
+      return time != 0 ? time : a.orderNumber.compareTo(b.orderNumber);
+    });
+  }
+  return grouped;
+}
+
+List<OrderSummary> unscheduledCalendarOrders(List<OrderSummary> orders) {
+  final List<OrderSummary> result = orders
+      .where((OrderSummary order) => order.scheduledFor == null)
+      .toList();
+  result.sort((OrderSummary a, OrderSummary b) {
+    final int created = b.createdAt.compareTo(a.createdAt);
+    return created != 0 ? created : a.orderNumber.compareTo(b.orderNumber);
+  });
+  return List<OrderSummary>.unmodifiable(result);
 }
 
 int compareCompletedOrders(OrderSummary a, OrderSummary b) {

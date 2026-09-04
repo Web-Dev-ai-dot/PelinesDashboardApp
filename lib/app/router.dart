@@ -8,6 +8,7 @@ import '../features/auth/presentation/login_screen.dart';
 import '../features/auth/providers/auth_providers.dart';
 import '../features/orders/presentation/order_detail_screen.dart';
 import '../features/orders/presentation/historical_orders_screen.dart';
+import '../features/orders/presentation/orders_calendar_screen.dart';
 
 enum AuthRouteStatus { loading, authenticated, unauthenticated }
 
@@ -65,6 +66,11 @@ final routerProvider = Provider<GoRouter>((Ref ref) {
         builder: (BuildContext context, GoRouterState state) =>
             const AdminHomeScreen(),
         routes: <RouteBase>[
+          GoRoute(
+            path: 'orders/calendar',
+            builder: (BuildContext context, GoRouterState state) =>
+                const OrdersCalendarScreen(),
+          ),
           GoRoute(
             path: 'orders/completed',
             builder: (BuildContext context, GoRouterState state) =>

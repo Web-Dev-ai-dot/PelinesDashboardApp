@@ -40,6 +40,12 @@ abstract final class PelinesTime {
   static String formatDateTime(DateTime instant) =>
       DateFormat('MMM d, yyyy · h:mm a').format(inPacific(instant));
 
+  static String dayKey(DateTime instant) =>
+      DateFormat('yyyy-MM-dd').format(inPacific(instant));
+
+  static String formatDay(DateTime instant) =>
+      DateFormat('EEEE, MMMM d').format(inPacific(instant));
+
   static void _ensureInitialized() {
     if (!_initialized) initialize();
   }

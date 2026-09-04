@@ -28,6 +28,10 @@ class AdminHomeScreen extends ConsumerWidget {
             itemBuilder: (BuildContext context) =>
                 const <PopupMenuEntry<String>>[
                   PopupMenuItem<String>(
+                    value: '/app/orders/calendar',
+                    child: Text('Calendar'),
+                  ),
+                  PopupMenuItem<String>(
                     value: '/app/orders/completed',
                     child: Text('Completed Orders'),
                   ),

@@ -6,24 +6,35 @@ import '../../../core/time/pelines_time.dart';
 import '../../locations/models/location.dart';
 import '../../locations/providers/locations_providers.dart';
 import '../models/order_models.dart';
+import '../models/history_filters.dart';
 import '../providers/orders_providers.dart';
 import 'order_ui_helpers.dart';
 
 enum HistoricalOrdersKind { completed, cancelled }
 
-class HistoricalOrdersScreen extends ConsumerWidget {
+class HistoricalOrdersScreen extends ConsumerStatefulWidget {
   const HistoricalOrdersScreen({required this.kind, super.key});
 
   final HistoricalOrdersKind kind;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HistoricalOrdersScreen> createState() =>
+      _HistoricalOrdersScreenState();
+}
+
+class _HistoricalOrdersScreenState
+    extends ConsumerState<HistoricalOrdersScreen> {
+  HistoryFilters _filters = const HistoryFilters();
+  String? _locationId;
+
+  @override
+  Widget build(BuildContext context) {
     final AsyncValue<Location?> location = ref.watch(currentLocationProvider);
-    final AsyncValue<HistoricalOrdersState> orders = switch (kind) {
+    final AsyncValue<HistoricalOrdersState> orders = switch (widget.kind) {
       HistoricalOrdersKind.completed => ref.watch(completedOrdersProvider),
       HistoricalOrdersKind.cancelled => ref.watch(cancelledOrdersProvider),
     };
-    final String title = kind == HistoricalOrdersKind.completed
+    final String title = widget.kind == HistoricalOrdersKind.completed
         ? 'Completed Orders'
         : 'Cancelled Orders';
 
@@ -53,6 +64,10 @@ class HistoricalOrdersScreen extends ConsumerWidget {
               ),
             );
           }
+          if (_locationId != selected.id) {
+            _locationId = selected.id;
+            _filters = const HistoryFilters();
+          }
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
@@ -62,6 +77,14 @@ class HistoricalOrdersScreen extends ConsumerWidget {
                   selected.name,
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
+              ),
+              _HistoryFilterBar(
+                filters: _filters,
+                showPayment: widget.kind == HistoricalOrdersKind.cancelled,
+                onChanged: (HistoryFilters value) =>
+                    setState(() => _filters = value),
+                onClear: () =>
+                    setState(() => _filters = const HistoryFilters()),
               ),
               Expanded(child: _buildOrders(ref, orders)),
             ],
@@ -80,59 +103,70 @@ class HistoricalOrdersScreen extends ConsumerWidget {
       message: error.toString(),
       onRetry: () => _invalidate(ref),
     ),
-    data: (HistoricalOrdersState state) => RefreshIndicator(
-      onRefresh: () => _refresh(ref),
-      child: CustomScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        slivers: <Widget>[
-          if (state.isRefreshing)
-            const SliverToBoxAdapter(
-              child: LinearProgressIndicator(minHeight: 2),
-            ),
-          if (state.refreshError != null)
-            SliverToBoxAdapter(
-              child: MaterialBanner(
-                content: Text('${state.refreshError} Showing previous data.'),
-                actions: <Widget>[
-                  TextButton(
-                    onPressed: () => _refresh(ref),
-                    child: const Text('Retry'),
-                  ),
-                ],
+    data: (HistoricalOrdersState state) {
+      final List<OrderSummary> visible = filterHistoricalOrders(
+        state.orders,
+        _filters,
+        timestamp: widget.kind == HistoricalOrdersKind.completed
+            ? (OrderSummary order) => order.deliveredAt ?? order.operationalAt
+            : null,
+      );
+      return RefreshIndicator(
+        onRefresh: () => _refresh(ref),
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: <Widget>[
+            if (state.isRefreshing)
+              const SliverToBoxAdapter(
+                child: LinearProgressIndicator(minHeight: 2),
               ),
-            ),
-          if (state.orders.isEmpty)
-            SliverFillRemaining(
-              hasScrollBody: false,
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Text(
-                    kind == HistoricalOrdersKind.completed
-                        ? 'No completed orders for this location.'
-                        : 'No cancelled orders for this location.',
-                  ),
+            if (state.refreshError != null)
+              SliverToBoxAdapter(
+                child: MaterialBanner(
+                  content: Text('${state.refreshError} Showing previous data.'),
+                  actions: <Widget>[
+                    TextButton(
+                      onPressed: () => _refresh(ref),
+                      child: const Text('Retry'),
+                    ),
+                  ],
                 ),
               ),
-            )
-          else
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-              sliver: SliverList.builder(
-                itemCount: state.orders.length,
-                itemBuilder: (BuildContext context, int index) =>
-                    _HistoricalOrderCard(
-                      order: state.orders[index],
-                      kind: kind,
+            if (visible.isEmpty)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(
+                      state.orders.isNotEmpty
+                          ? 'No orders match these filters.'
+                          : widget.kind == HistoricalOrdersKind.completed
+                          ? 'No completed orders for this location.'
+                          : 'No cancelled orders for this location.',
                     ),
+                  ),
+                ),
+              )
+            else
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                sliver: SliverList.builder(
+                  itemCount: visible.length,
+                  itemBuilder: (BuildContext context, int index) =>
+                      _HistoricalOrderCard(
+                        order: visible[index],
+                        kind: widget.kind,
+                      ),
+                ),
               ),
-            ),
-        ],
-      ),
-    ),
+          ],
+        ),
+      );
+    },
   );
 
-  Future<void> _refresh(WidgetRef ref) => switch (kind) {
+  Future<void> _refresh(WidgetRef ref) => switch (widget.kind) {
     HistoricalOrdersKind.completed =>
       ref.read(completedOrdersProvider.notifier).refresh(),
     HistoricalOrdersKind.cancelled =>
@@ -140,13 +174,136 @@ class HistoricalOrdersScreen extends ConsumerWidget {
   };
 
   void _invalidate(WidgetRef ref) {
-    switch (kind) {
+    switch (widget.kind) {
       case HistoricalOrdersKind.completed:
         ref.invalidate(completedOrdersProvider);
       case HistoricalOrdersKind.cancelled:
         ref.invalidate(cancelledOrdersProvider);
     }
   }
+}
+
+class _HistoryFilterBar extends StatelessWidget {
+  const _HistoryFilterBar({
+    required this.filters,
+    required this.showPayment,
+    required this.onChanged,
+    required this.onClear,
+  });
+
+  final HistoryFilters filters;
+  final bool showPayment;
+  final ValueChanged<HistoryFilters> onChanged;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) => SingleChildScrollView(
+    scrollDirection: Axis.horizontal,
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+    child: Row(
+      children: <Widget>[
+        _MenuFilter<HistoryDateFilter>(
+          label: switch (filters.date) {
+            HistoryDateFilter.allLoaded => 'All loaded',
+            HistoryDateFilter.today => 'Today',
+            HistoryDateFilter.last7Days => 'Last 7 days',
+            HistoryDateFilter.last30Days => 'Last 30 days',
+          },
+          values: HistoryDateFilter.values,
+          valueLabel: (value) => switch (value) {
+            HistoryDateFilter.allLoaded => 'All loaded',
+            HistoryDateFilter.today => 'Today',
+            HistoryDateFilter.last7Days => 'Last 7 days',
+            HistoryDateFilter.last30Days => 'Last 30 days',
+          },
+          onSelected: (value) => onChanged(filters.copyWith(date: value)),
+        ),
+        _MenuFilter<OrderType?>(
+          label: filters.orderType == null
+              ? 'All types'
+              : orderTypeLabel(filters.orderType!),
+          values: const <OrderType?>[
+            null,
+            OrderType.online,
+            OrderType.catering,
+          ],
+          valueLabel: (value) =>
+              value == null ? 'All types' : orderTypeLabel(value),
+          onSelected: (value) => onChanged(
+            filters.copyWith(orderType: value, clearOrderType: value == null),
+          ),
+        ),
+        _MenuFilter<FulfillmentType?>(
+          label: filters.fulfillment == null
+              ? 'All fulfillment'
+              : fulfillmentLabel(filters.fulfillment!),
+          values: const <FulfillmentType?>[
+            null,
+            FulfillmentType.pickup,
+            FulfillmentType.delivery,
+          ],
+          valueLabel: (value) =>
+              value == null ? 'All fulfillment' : fulfillmentLabel(value),
+          onSelected: (value) => onChanged(
+            filters.copyWith(
+              fulfillment: value,
+              clearFulfillment: value == null,
+            ),
+          ),
+        ),
+        if (showPayment)
+          _MenuFilter<PaymentStatus?>(
+            label: filters.payment == null
+                ? 'All payments'
+                : paymentStatusLabel(filters.payment!),
+            values: const <PaymentStatus?>[
+              null,
+              PaymentStatus.paid,
+              PaymentStatus.refunded,
+              PaymentStatus.failed,
+              PaymentStatus.unpaid,
+            ],
+            valueLabel: (value) =>
+                value == null ? 'All payments' : paymentStatusLabel(value),
+            onSelected: (value) => onChanged(
+              filters.copyWith(payment: value, clearPayment: value == null),
+            ),
+          ),
+        if (!filters.isClear)
+          TextButton(onPressed: onClear, child: const Text('Clear filters')),
+      ],
+    ),
+  );
+}
+
+class _MenuFilter<T> extends StatelessWidget {
+  const _MenuFilter({
+    required this.label,
+    required this.values,
+    required this.valueLabel,
+    required this.onSelected,
+  });
+  final String label;
+  final List<T> values;
+  final String Function(T) valueLabel;
+  final ValueChanged<T> onSelected;
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(right: 8),
+    child: PopupMenuButton<T>(
+      onSelected: onSelected,
+      itemBuilder: (_) => values
+          .map(
+            (value) =>
+                PopupMenuItem<T>(value: value, child: Text(valueLabel(value))),
+          )
+          .toList(),
+      child: Chip(
+        label: Text(label),
+        avatar: const Icon(Icons.arrow_drop_down),
+      ),
+    ),
+  );
 }
 
 class _HistoricalOrderCard extends StatelessWidget {
