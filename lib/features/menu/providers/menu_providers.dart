@@ -27,6 +27,37 @@ typedef ProductDetailQuery = ({
   String categoryId,
   String productId,
 });
+typedef CategoryDetailQuery = ({
+  String locationId,
+  MenuKind kind,
+  String categoryId,
+});
+
+final menuCategoryDetailProvider = FutureProvider.autoDispose
+    .family<MenuCategory, CategoryDetailQuery>((
+      Ref ref,
+      CategoryDetailQuery query,
+    ) async {
+      final Location? current = await ref.watch(currentLocationProvider.future);
+      if (current == null || current.id != query.locationId) {
+        throw const MenuContextChangedException();
+      }
+      try {
+        final MenuCategory category = await ref
+            .watch(menuRepositoryProvider)
+            .getCategory(query.categoryId);
+        if (category.locationId != query.locationId ||
+            category.kind != query.kind) {
+          throw const MenuContextChangedException();
+        }
+        return category;
+      } on ApiException catch (error) {
+        if (error.statusCode == 401) {
+          await ref.read(authControllerProvider.notifier).signOut();
+        }
+        rethrow;
+      }
+    });
 
 final menuCategoriesProvider = FutureProvider.autoDispose
     .family<List<MenuCategory>, CategoryQuery>((
@@ -309,5 +340,192 @@ class ProductMutationController extends Notifier<ProductMutationState> {
         productId: productId,
       )),
     );
+  }
+}
+
+typedef CategoryMutationKey = ({
+  String locationId,
+  String locationSlug,
+  MenuKind kind,
+  String? categoryId,
+});
+
+enum CategoryMutationPhase { idle, submitting, reconciling, success, error }
+
+class CategoryMutationState {
+  const CategoryMutationState({
+    this.phase = CategoryMutationPhase.idle,
+    this.category,
+    this.message,
+  });
+  final CategoryMutationPhase phase;
+  final MenuCategory? category;
+  final String? message;
+  bool get isBusy =>
+      phase == CategoryMutationPhase.submitting ||
+      phase == CategoryMutationPhase.reconciling;
+}
+
+final categoryMutationProvider = NotifierProvider.autoDispose
+    .family<
+      CategoryMutationController,
+      CategoryMutationState,
+      CategoryMutationKey
+    >(CategoryMutationController.new);
+
+class CategoryMutationController extends Notifier<CategoryMutationState> {
+  CategoryMutationController(this.key);
+  final CategoryMutationKey key;
+  @override
+  CategoryMutationState build() => const CategoryMutationState();
+  Future<bool> save(CategoryWriteInput input) async {
+    if (state.isBusy || !await _valid(input)) return false;
+    state = const CategoryMutationState(
+      phase: CategoryMutationPhase.submitting,
+    );
+    try {
+      final provisional = key.categoryId == null
+          ? await ref.read(menuRepositoryProvider).createCategory(input)
+          : await ref
+                .read(menuRepositoryProvider)
+                .updateCategory(key.categoryId!, input);
+      state = CategoryMutationState(
+        phase: CategoryMutationPhase.reconciling,
+        category: provisional,
+      );
+      final canonical = await ref
+          .read(menuRepositoryProvider)
+          .getCategory(provisional.id);
+      if (!_matches(canonical, input)) {
+        state = CategoryMutationState(
+          phase: CategoryMutationPhase.error,
+          category: canonical,
+          message: 'The saved category differs from the submitted values. Review it before retrying.',
+        );
+        return false;
+      }
+      state = CategoryMutationState(
+        phase: CategoryMutationPhase.success,
+        category: canonical,
+        message: key.categoryId == null
+            ? 'Category created.'
+            : 'Category updated.',
+      );
+      _refresh();
+      return true;
+    } on ApiException catch (error) {
+      if (error.statusCode == 401) {
+        await ref.read(authControllerProvider.notifier).signOut();
+      }
+      if (_ambiguousCategory(error) && key.categoryId != null) {
+        return _reconcile(input, error);
+      }
+      state = CategoryMutationState(
+        phase: CategoryMutationPhase.error,
+        message: _ambiguousCategory(error) && key.categoryId == null
+            ? '${error.message} Refresh the category list before trying again to avoid a duplicate.'
+            : error.message,
+      );
+      return false;
+    } on Object {
+      state = const CategoryMutationState(
+        phase: CategoryMutationPhase.error,
+        message: 'The category could not be saved.',
+      );
+      return false;
+    }
+  }
+
+  Future<bool> _valid(CategoryWriteInput input) async {
+    final location = await ref.read(currentLocationProvider.future);
+    if (location == null ||
+        location.id != key.locationId ||
+        location.slug != key.locationSlug ||
+        input.locationId != key.locationId ||
+        input.kind != key.kind) {
+      state = const CategoryMutationState(
+        phase: CategoryMutationPhase.error,
+        message: 'The selected location or menu changed.',
+      );
+      return false;
+    }
+    if (key.categoryId != null) {
+      final current = await ref
+          .read(menuRepositoryProvider)
+          .getCategory(key.categoryId!);
+      if (current.locationId != key.locationId || current.kind != key.kind) {
+        state = const CategoryMutationState(
+          phase: CategoryMutationPhase.error,
+          message: 'This category does not belong to the selected menu.',
+        );
+        return false;
+      }
+    }
+    return true;
+  }
+
+  Future<bool> _reconcile(CategoryWriteInput input, ApiException error) async {
+    state = const CategoryMutationState(
+      phase: CategoryMutationPhase.reconciling,
+    );
+    try {
+      final canonical = await ref
+          .read(menuRepositoryProvider)
+          .getCategory(key.categoryId!);
+      if (_matches(canonical, input)) {
+        state = CategoryMutationState(
+          phase: CategoryMutationPhase.success,
+          category: canonical,
+          message: 'Category updated.',
+        );
+        _refresh();
+        return true;
+      }
+      state = CategoryMutationState(
+        phase: CategoryMutationPhase.error,
+        category: canonical,
+        message:
+            '${error.message} The update was not confirmed; retry manually.',
+      );
+    } on Object {
+      state = CategoryMutationState(
+        phase: CategoryMutationPhase.error,
+        message: '${error.message} The category could not be verified.',
+      );
+    }
+    return false;
+  }
+
+  bool _matches(MenuCategory c, CategoryWriteInput i) =>
+      c.locationId == i.locationId &&
+      c.kind == i.kind &&
+      c.name == i.name &&
+      c.sortOrder == i.sortOrder &&
+      c.isActive == i.isActive;
+  bool _ambiguousCategory(ApiException error) =>
+      error.cause is DioException &&
+      const <DioExceptionType>{
+        DioExceptionType.connectionTimeout,
+        DioExceptionType.sendTimeout,
+        DioExceptionType.receiveTimeout,
+        DioExceptionType.connectionError,
+      }.contains((error.cause! as DioException).type);
+  void _refresh() {
+    ref.invalidate(
+      menuCategoriesProvider((
+        locationId: key.locationId,
+        locationSlug: key.locationSlug,
+        kind: key.kind,
+      )),
+    );
+    if (key.categoryId case final String categoryId) {
+      ref.invalidate(
+        menuCategoryDetailProvider((
+          locationId: key.locationId,
+          kind: key.kind,
+          categoryId: categoryId,
+        )),
+      );
+    }
   }
 }

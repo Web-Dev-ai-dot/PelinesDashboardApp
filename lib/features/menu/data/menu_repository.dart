@@ -16,6 +16,41 @@ abstract interface class MenuRepository {
   Future<MenuProduct> getProduct(String productId);
   Future<MenuProduct> createProduct(ProductWriteInput input);
   Future<MenuProduct> updateProduct(String productId, ProductWriteInput input);
+  Future<MenuCategory> getCategory(String categoryId);
+  Future<MenuCategory> createCategory(CategoryWriteInput input);
+  Future<MenuCategory> updateCategory(
+    String categoryId,
+    CategoryWriteInput input,
+  );
+}
+
+class CategoryWriteInput {
+  const CategoryWriteInput({
+    required this.locationId,
+    required this.kind,
+    required this.name,
+    required this.sortOrder,
+    required this.isActive,
+  });
+  final String locationId;
+  final MenuKind kind;
+  final String name;
+  final int sortOrder;
+  final bool isActive;
+  Map<String, dynamic> toCreateJson() => <String, dynamic>{
+    'locationId': locationId,
+    'name': name,
+    'slug': productSlug(name),
+    'kind': kind.name,
+    'sortOrder': sortOrder,
+    'isActive': isActive,
+  };
+  Map<String, dynamic> toUpdateJson() => <String, dynamic>{
+    'name': name,
+    'slug': productSlug(name),
+    'sortOrder': sortOrder,
+    'isActive': isActive,
+  };
 }
 
 class ProductWriteInput {
@@ -108,7 +143,7 @@ class ApiMenuRepository implements MenuRepository {
       }
       return MenuProduct.fromJson(response.data as Map<String, dynamic>);
     } on DioException catch (error) {
-      throw _error(error, detail: true);
+      throw _error(error, entity: 'Product');
     } on Object catch (error) {
       throw ApiException(
         message: 'The server returned an invalid product.',
@@ -141,10 +176,47 @@ class ApiMenuRepository implements MenuRepository {
       }
       return MenuProduct.fromJson(response.data as Map<String, dynamic>);
     } on DioException catch (error) {
-      throw _error(error, detail: true);
+      throw _error(error, entity: 'Product');
     } on Object catch (error) {
       throw ApiException(
         message: 'The server returned an invalid product.',
+        cause: error,
+      );
+    }
+  }
+
+  @override
+  Future<MenuCategory> getCategory(String categoryId) =>
+      _categoryWrite('categories/$categoryId');
+  @override
+  Future<MenuCategory> createCategory(CategoryWriteInput input) =>
+      _categoryWrite('categories', input: input, create: true);
+  @override
+  Future<MenuCategory> updateCategory(
+    String categoryId,
+    CategoryWriteInput input,
+  ) => _categoryWrite('categories/$categoryId', input: input);
+
+  Future<MenuCategory> _categoryWrite(
+    String path, {
+    CategoryWriteInput? input,
+    bool create = false,
+  }) async {
+    try {
+      final Response<dynamic> response = input == null
+          ? await _client.dio.get<dynamic>(path)
+          : create
+          ? await _client.dio.post<dynamic>(path, data: input.toCreateJson())
+          : await _client.dio.patch<dynamic>(path, data: input.toUpdateJson());
+      if (response.data is! Map<String, dynamic>) {
+        throw const FormatException('Invalid category.');
+      }
+      return MenuCategory.fromJson(response.data as Map<String, dynamic>);
+    } on DioException catch (error) {
+      throw _error(error, entity: 'Category');
+    } on Object catch (error) {
+      throw ApiException(
+        message: 'The server returned an invalid category.',
         cause: error,
       );
     }
@@ -177,14 +249,16 @@ class ApiMenuRepository implements MenuRepository {
     }
   }
 
-  ApiException _error(DioException error, {bool detail = false}) {
+  ApiException _error(DioException error, {String? entity}) {
     final int? status = error.response?.statusCode;
     final String message = switch (status) {
       401 => 'Your session is no longer valid. Please sign in again.',
       403 => 'Administrator access is required.',
-      404 when detail => 'Product no longer available.',
-      409 => 'A product with that slug already exists.',
-      400 => 'The product information is invalid.',
+      404 when entity != null => '$entity no longer available.',
+      409 when entity != null =>
+        'A ${entity.toLowerCase()} with that slug already exists.',
+      400 when entity != null =>
+        'The ${entity.toLowerCase()} information is invalid.',
       _
           when error.type == DioExceptionType.connectionTimeout ||
               error.type == DioExceptionType.receiveTimeout ||
@@ -193,8 +267,8 @@ class ApiMenuRepository implements MenuRepository {
       _ when error.type == DioExceptionType.connectionError =>
         'Could not connect to the Pelines server.',
       _ =>
-        detail
-            ? 'The product could not be loaded.'
+        entity != null
+            ? 'The ${entity.toLowerCase()} could not be loaded.'
             : 'The menu could not be loaded.',
     };
     return ApiException(message: message, statusCode: status, cause: error);

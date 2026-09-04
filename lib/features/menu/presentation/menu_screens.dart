@@ -47,6 +47,14 @@ class MenuCategoriesScreen extends ConsumerWidget {
     final AsyncValue<Location?> location = ref.watch(currentLocationProvider);
     return Scaffold(
       appBar: AppBar(title: Text(kind.label)),
+      floatingActionButton: location.value == null
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: () =>
+                  context.push('/app/menu/${kind.name}/categories/new'),
+              icon: const Icon(Icons.add),
+              label: const Text('Add Category'),
+            ),
       body: location.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, stack) => MenuError(
@@ -108,7 +116,19 @@ class MenuCategoriesScreen extends ConsumerWidget {
                                   subtitle: Text(
                                     '${category.isActive ? 'Active' : 'Inactive'} · Order ${category.sortOrder}',
                                   ),
-                                  trailing: const Icon(Icons.chevron_right),
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: <Widget>[
+                                      IconButton(
+                                        tooltip: 'Edit Category',
+                                        icon: const Icon(Icons.edit_outlined),
+                                        onPressed: () => context.push(
+                                          '/app/menu/${kind.name}/categories/${category.id}/edit',
+                                        ),
+                                      ),
+                                      const Icon(Icons.chevron_right),
+                                    ],
+                                  ),
                                   onTap: () => context.push(
                                     '/app/menu/${kind.name}/categories/${category.id}?name=${Uri.encodeQueryComponent(category.name)}',
                                   ),

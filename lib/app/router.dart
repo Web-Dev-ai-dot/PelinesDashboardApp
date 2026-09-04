@@ -12,6 +12,7 @@ import '../features/orders/presentation/orders_calendar_screen.dart';
 import '../features/menu/models/menu_models.dart';
 import '../features/menu/presentation/menu_screens.dart';
 import '../features/menu/presentation/product_form_screen.dart';
+import '../features/menu/presentation/category_form_screen.dart';
 
 enum AuthRouteStatus { loading, authenticated, unauthenticated }
 
@@ -74,6 +75,19 @@ final routerProvider = Provider<GoRouter>((Ref ref) {
             path: 'menu/:kind',
             builder: (_, state) => MenuCategoriesScreen(
               kind: MenuKind.fromJson(state.pathParameters['kind']),
+            ),
+          ),
+          GoRoute(
+            path: 'menu/:kind/categories/new',
+            builder: (_, state) => CategoryFormScreen(
+              kind: MenuKind.fromJson(state.pathParameters['kind']),
+            ),
+          ),
+          GoRoute(
+            path: 'menu/:kind/categories/:categoryId/edit',
+            builder: (_, state) => CategoryFormScreen(
+              kind: MenuKind.fromJson(state.pathParameters['kind']),
+              categoryId: state.pathParameters['categoryId']!,
             ),
           ),
           GoRoute(

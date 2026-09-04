@@ -50,6 +50,70 @@ void main() {
     });
   });
 
+  for (final bool create in <bool>[true, false]) {
+    test(
+      'category ${create ? 'POST' : 'PATCH'} sends only the safe contract',
+      () async {
+        final _Adapter adapter = _Adapter(jsonEncode(_category()));
+        final MenuRepository repository = _api(adapter);
+        const CategoryWriteInput input = CategoryWriteInput(
+          locationId: 'location-a',
+          kind: MenuKind.catering,
+          name: '  Family & Friends!  ',
+          sortOrder: 4,
+          isActive: false,
+        );
+
+        if (create) {
+          await repository.createCategory(input);
+        } else {
+          await repository.updateCategory('category-a', input);
+        }
+
+        expect(adapter.options?.method, create ? 'POST' : 'PATCH');
+        expect(
+          adapter.options?.path,
+          create ? 'categories' : 'categories/category-a',
+        );
+        expect(adapter.options?.data, <String, dynamic>{
+          if (create) 'locationId': 'location-a',
+          'name': '  Family & Friends!  ',
+          'slug': 'family-friends',
+          if (create) 'kind': 'catering',
+          'sortOrder': 4,
+          'isActive': false,
+        });
+        final Map<dynamic, dynamic> body = adapter.options?.data as Map;
+        expect(body.containsKey('subcategorySchedulesJson'), isFalse);
+        expect(body.containsKey('id'), isFalse);
+        expect(body.containsKey('createdAt'), isFalse);
+        expect(body.containsKey('updatedAt'), isFalse);
+      },
+    );
+  }
+
+  test('category errors use category-specific messages', () async {
+    final MenuRepository repository = _api(_Adapter('{}', status: 409));
+    await expectLater(
+      repository.createCategory(
+        const CategoryWriteInput(
+          locationId: 'location-a',
+          kind: MenuKind.store,
+          name: 'Duplicate',
+          sortOrder: 0,
+          isActive: true,
+        ),
+      ),
+      throwsA(
+        isA<ApiException>().having(
+          (ApiException error) => error.message,
+          'message',
+          contains('category'),
+        ),
+      ),
+    );
+  });
+
   test(
     'repository sends exact products query and list has group names',
     () async {
@@ -287,6 +351,91 @@ void main() {
     expect(repository.createCalls, 0);
   });
 
+  test('category update timeout reconciles without retrying PATCH', () async {
+    final _Repository repository = _Repository()
+      ..categoryWriteError = _timeout();
+    final ProviderContainer container = ProviderContainer(
+      overrides: [
+        currentLocationProvider.overrideWith(_CurrentLocation.new),
+        menuRepositoryProvider.overrideWithValue(repository),
+      ],
+    );
+    addTearDown(container.dispose);
+    const CategoryMutationKey key = (
+      locationId: 'location-a',
+      locationSlug: 'a',
+      kind: MenuKind.store,
+      categoryId: 'category-a',
+    );
+
+    expect(
+      await container
+          .read(categoryMutationProvider(key).notifier)
+          .save(_categoryWriteInput()),
+      isTrue,
+    );
+    expect(repository.categoryUpdateCalls, 1);
+    expect(
+      container.read(categoryMutationProvider(key)).phase,
+      CategoryMutationPhase.success,
+    );
+  });
+
+  test('category create timeout is never retried', () async {
+    final _Repository repository = _Repository()
+      ..categoryWriteError = _timeout();
+    final ProviderContainer container = ProviderContainer(
+      overrides: [
+        currentLocationProvider.overrideWith(_CurrentLocation.new),
+        menuRepositoryProvider.overrideWithValue(repository),
+      ],
+    );
+    addTearDown(container.dispose);
+    const CategoryMutationKey key = (
+      locationId: 'location-a',
+      locationSlug: 'a',
+      kind: MenuKind.store,
+      categoryId: null,
+    );
+
+    expect(
+      await container
+          .read(categoryMutationProvider(key).notifier)
+          .save(_categoryWriteInput()),
+      isFalse,
+    );
+    expect(repository.categoryCreateCalls, 1);
+    expect(
+      container.read(categoryMutationProvider(key)).message,
+      contains('avoid a duplicate'),
+    );
+  });
+
+  test('wrong menu context blocks category creation', () async {
+    final _Repository repository = _Repository();
+    final ProviderContainer container = ProviderContainer(
+      overrides: [
+        currentLocationProvider.overrideWith(_CurrentLocation.new),
+        menuRepositoryProvider.overrideWithValue(repository),
+      ],
+    );
+    addTearDown(container.dispose);
+    const CategoryMutationKey key = (
+      locationId: 'location-a',
+      locationSlug: 'a',
+      kind: MenuKind.catering,
+      categoryId: null,
+    );
+
+    expect(
+      await container
+          .read(categoryMutationProvider(key).notifier)
+          .save(_categoryWriteInput()),
+      isFalse,
+    );
+    expect(repository.categoryCreateCalls, 0);
+  });
+
   testWidgets('landing follows Menu to category to product and Back', (
     tester,
   ) async {
@@ -366,6 +515,14 @@ ProductWriteInput _writeInput() => const ProductWriteInput(
   priceCents: 1250,
   isAvailable: false,
   sortOrder: 1,
+);
+
+CategoryWriteInput _categoryWriteInput() => const CategoryWriteInput(
+  locationId: 'location-a',
+  kind: MenuKind.store,
+  name: 'Store Category',
+  sortOrder: 2,
+  isActive: false,
 );
 ApiException _timeout() {
   final options = RequestOptions(path: 'products');
@@ -457,6 +614,9 @@ class _Repository implements MenuRepository {
   Object? writeError;
   int createCalls = 0;
   int updateCalls = 0;
+  Object? categoryWriteError;
+  int categoryCreateCalls = 0;
+  int categoryUpdateCalls = 0;
   @override
   Future<List<MenuCategory>> getCategories({
     required String locationSlug,
@@ -487,6 +647,24 @@ class _Repository implements MenuRepository {
     updateCalls++;
     if (writeError != null) throw writeError!;
     return MenuProduct.fromJson(_product(full: true));
+  }
+
+  @override
+  Future<MenuCategory> getCategory(String categoryId) async =>
+      MenuCategory.fromJson(_category());
+  @override
+  Future<MenuCategory> createCategory(CategoryWriteInput input) async =>
+      (++categoryCreateCalls > 0 && categoryWriteError != null)
+      ? throw categoryWriteError!
+      : MenuCategory.fromJson(_category());
+  @override
+  Future<MenuCategory> updateCategory(
+    String categoryId,
+    CategoryWriteInput input,
+  ) async {
+    categoryUpdateCalls++;
+    if (categoryWriteError != null) throw categoryWriteError!;
+    return MenuCategory.fromJson(_category());
   }
 }
 
