@@ -176,6 +176,87 @@ void main() {
     },
   );
 
+  test(
+    'terminal success reconciles delivered timestamp and refreshes Today',
+    () async {
+      final DateTime deliveredAt = DateTime.parse('2026-09-04T19:00:00Z');
+      final _FakeOrdersRepository repository = _FakeOrdersRepository(
+        patchResult: orderDetail(
+          status: OrderStatus.delivered,
+          deliveredAt: deliveredAt,
+        ),
+        getResult: orderDetail(
+          status: OrderStatus.delivered,
+          deliveredAt: deliveredAt,
+        ),
+      );
+      final ProviderContainer container = _container(repository);
+      addTearDown(container.dispose);
+      await container.read(currentLocationProvider.future);
+      final subscription = container.listen(
+        orderMutationProvider(repository.orderId),
+        (_, _) {},
+      );
+      addTearDown(subscription.close);
+
+      await container
+          .read(orderMutationProvider(repository.orderId).notifier)
+          .markOrderCompleted(orderDetail(status: OrderStatus.ready));
+
+      final OrderMutationState state = container.read(
+        orderMutationProvider(repository.orderId),
+      );
+      expect(state.phase, OrderMutationPhase.success);
+      expect(state.canonicalOrder?.status, OrderStatus.delivered);
+      expect(state.canonicalOrder?.deliveredAt, deliveredAt);
+      expect(repository.patchCalls, 1);
+      expect(repository.listLocationIds, <String>['location-id']);
+    },
+  );
+
+  for (final (OrderStatus serverStatus, OrderMutationPhase phase, bool retry)
+      in <(OrderStatus, OrderMutationPhase, bool)>[
+        (OrderStatus.delivered, OrderMutationPhase.success, false),
+        (OrderStatus.ready, OrderMutationPhase.error, true),
+        (OrderStatus.cancelled, OrderMutationPhase.error, false),
+      ]) {
+    test(
+      'terminal timeout adopts ${serverStatus.name} without retrying PATCH',
+      () async {
+        final _FakeOrdersRepository repository = _FakeOrdersRepository(
+          patchError: _networkError(),
+          getResult: orderDetail(
+            status: serverStatus,
+            deliveredAt: serverStatus == OrderStatus.delivered
+                ? DateTime.parse('2026-09-04T19:00:00Z')
+                : null,
+          ),
+        );
+        final ProviderContainer container = _container(repository);
+        addTearDown(container.dispose);
+        await container.read(currentLocationProvider.future);
+        final subscription = container.listen(
+          orderMutationProvider(repository.orderId),
+          (_, _) {},
+        );
+        addTearDown(subscription.close);
+
+        await container
+            .read(orderMutationProvider(repository.orderId).notifier)
+            .markOrderCompleted(orderDetail(status: OrderStatus.ready));
+
+        final OrderMutationState state = container.read(
+          orderMutationProvider(repository.orderId),
+        );
+        expect(state.phase, phase);
+        expect(state.canonicalOrder?.status, serverStatus);
+        expect(state.terminalRetryAllowed, retry);
+        expect(repository.patchCalls, 1);
+        expect(repository.getCalls, 1);
+      },
+    );
+  }
+
   testWidgets(
     'detail shows contextual action and disables it while submitting',
     (WidgetTester tester) async {
@@ -218,6 +299,134 @@ void main() {
       expect(repository.patchCalls, 1);
     },
   );
+
+  for (final (FulfillmentType fulfillment, String label)
+      in <(FulfillmentType, String)>[
+        (FulfillmentType.pickup, 'Mark picked up'),
+        (FulfillmentType.delivery, 'Mark delivered'),
+      ]) {
+    testWidgets(
+      'ready ${fulfillment.name} confirms before one terminal PATCH',
+      (WidgetTester tester) async {
+        final DateTime deliveredAt = DateTime.parse('2026-09-04T19:00:00Z');
+        final _FakeOrdersRepository repository = _FakeOrdersRepository(
+          patchResult: orderDetail(
+            status: OrderStatus.delivered,
+            fulfillment: fulfillment,
+            deliveredAt: deliveredAt,
+          ),
+          getResult: orderDetail(
+            status: OrderStatus.ready,
+            fulfillment: fulfillment,
+          ),
+        );
+        await _pumpDetail(tester, repository);
+        await tester.scrollUntilVisible(
+          find.byKey(const Key('order-primary-action')),
+          500,
+        );
+        await tester.ensureVisible(
+          find.byKey(const Key('order-primary-action')),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text(label), findsOneWidget);
+
+        await tester.tap(find.byKey(const Key('order-primary-action')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('completion-confirm')), findsOneWidget);
+        expect(repository.patchCalls, 0);
+
+        await tester.tap(find.byKey(const Key('completion-cancel')));
+        await tester.pumpAndSettle();
+        expect(repository.patchCalls, 0);
+
+        await tester.ensureVisible(
+          find.byKey(const Key('order-primary-action')),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('order-primary-action')));
+        await tester.pumpAndSettle();
+        repository.getResult = orderDetail(
+          status: OrderStatus.delivered,
+          fulfillment: fulfillment,
+          deliveredAt: deliveredAt,
+        );
+        await tester.tap(find.byKey(const Key('completion-confirm')));
+        await tester.pumpAndSettle();
+        expect(repository.patchCalls, 1);
+      },
+    );
+  }
+
+  testWidgets(
+    'terminal action is absent outside ready or for unknown fulfillment',
+    (WidgetTester tester) async {
+      for (final OrderDetail detail in <OrderDetail>[
+        orderDetail(status: OrderStatus.preparing),
+        orderDetail(
+          status: OrderStatus.ready,
+          fulfillment: FulfillmentType.unknown,
+        ),
+        orderDetail(status: OrderStatus.delivered),
+      ]) {
+        final _FakeOrdersRepository repository = _FakeOrdersRepository(
+          patchResult: detail,
+          getResult: detail,
+        );
+        await _pumpDetail(tester, repository);
+        expect(find.text('Mark picked up'), findsNothing);
+        expect(find.text('Mark delivered'), findsNothing);
+      }
+    },
+  );
+
+  testWidgets('status changed while dialog is open prevents terminal PATCH', (
+    WidgetTester tester,
+  ) async {
+    final _FakeOrdersRepository repository = _FakeOrdersRepository(
+      patchResult: orderDetail(status: OrderStatus.delivered),
+      getResult: orderDetail(status: OrderStatus.ready),
+    );
+    await _pumpDetail(tester, repository);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('order-primary-action')),
+      500,
+    );
+    await tester.tap(find.byKey(const Key('order-primary-action')));
+    await tester.pumpAndSettle();
+
+    repository.getResult = orderDetail(status: OrderStatus.cancelled);
+    final ProviderContainer container = ProviderScope.containerOf(
+      tester.element(find.byType(OrderDetailScreen)),
+    );
+    container.invalidate(orderDetailProvider(repository.orderId));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('completion-confirm')));
+    await tester.pumpAndSettle();
+
+    expect(repository.patchCalls, 0);
+    final OrderMutationState state = container.read(
+      orderMutationProvider(repository.orderId),
+    );
+    expect(state.canonicalOrder?.status, OrderStatus.cancelled);
+    expect(state.message, 'Order status changed on the server.');
+  });
+}
+
+Future<void> _pumpDetail(
+  WidgetTester tester,
+  _FakeOrdersRepository repository,
+) async {
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        ordersRepositoryProvider.overrideWithValue(repository),
+        currentLocationProvider.overrideWith(_FakeCurrentLocation.new),
+      ],
+      child: MaterialApp(home: OrderDetailScreen(orderId: repository.orderId)),
+    ),
+  );
+  await tester.pumpAndSettle();
 }
 
 ProviderContainer _container(_FakeOrdersRepository repository) =>

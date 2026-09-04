@@ -21,6 +21,13 @@ enum OrderStatusAction {
     label: 'Mark ready',
     progressLabel: 'Marking ready...',
     successMessage: 'Order marked ready',
+  ),
+  completeOrder(
+    source: OrderStatus.ready,
+    target: OrderStatus.delivered,
+    label: 'Mark delivered',
+    progressLabel: 'Marking delivered...',
+    successMessage: 'Order marked delivered',
   );
 
   const OrderStatusAction({
@@ -47,6 +54,42 @@ enum OrderStatusAction {
     OrderStatus.unknown => null,
   };
 
-  static bool allows(OrderStatus source, OrderStatus target) =>
-      forStatus(source)?.target == target;
+  static OrderStatusAction? forOrder(
+    OrderStatus status,
+    FulfillmentType fulfillment,
+  ) {
+    if (status == OrderStatus.ready) {
+      return fulfillment == FulfillmentType.pickup ||
+              fulfillment == FulfillmentType.delivery
+          ? completeOrder
+          : null;
+    }
+    return forStatus(status);
+  }
+
+  static bool allows(
+    OrderStatus source,
+    OrderStatus target, {
+    FulfillmentType? fulfillment,
+  }) =>
+      (source == OrderStatus.ready
+              ? forOrder(source, fulfillment ?? FulfillmentType.unknown)
+              : forStatus(source))
+          ?.target ==
+      target;
+
+  String labelFor(FulfillmentType fulfillment) =>
+      this == completeOrder && fulfillment == FulfillmentType.pickup
+      ? 'Mark picked up'
+      : label;
+
+  String progressLabelFor(FulfillmentType fulfillment) =>
+      this == completeOrder && fulfillment == FulfillmentType.pickup
+      ? 'Marking picked up...'
+      : progressLabel;
+
+  String successMessageFor(FulfillmentType fulfillment) =>
+      this == completeOrder && fulfillment == FulfillmentType.pickup
+      ? 'Order marked picked up'
+      : successMessage;
 }

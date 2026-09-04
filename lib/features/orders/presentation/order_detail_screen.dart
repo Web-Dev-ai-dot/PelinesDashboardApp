@@ -58,13 +58,17 @@ class _DetailBody extends ConsumerWidget {
           next.phase == previous?.phase && next.message == previous?.message) {
         return;
       }
-      if (next.phase == OrderMutationPhase.success) {
+      if (next.phase == OrderMutationPhase.success ||
+          next.phase == OrderMutationPhase.error) {
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
           ..showSnackBar(SnackBar(content: Text(next.message!)));
       }
     });
-    final OrderStatusAction? action = OrderStatusAction.forStatus(order.status);
+    final OrderStatusAction? action = OrderStatusAction.forOrder(
+      order.status,
+      order.fulfillmentType,
+    );
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
       children: <Widget>[
@@ -173,24 +177,54 @@ class _DetailBody extends ConsumerWidget {
           _OrderActions(
             action: action,
             mutation: mutation,
-            onPressed: () => _performAction(ref, order, action),
+            fulfillment: order.fulfillmentType,
+            onPressed: () => _performAction(context, ref, order, action),
           ),
       ],
     );
   }
 
   Future<void> _performAction(
+    BuildContext context,
     WidgetRef ref,
     OrderDetail order,
     OrderStatusAction action,
-  ) => switch (action) {
-    OrderStatusAction.acceptOrder =>
-      ref.read(orderMutationProvider(order.id).notifier).acceptOrder(order),
-    OrderStatusAction.startPreparing =>
-      ref.read(orderMutationProvider(order.id).notifier).startPreparing(order),
-    OrderStatusAction.markReady =>
-      ref.read(orderMutationProvider(order.id).notifier).markReady(order),
-  };
+  ) async {
+    final OrderMutationController controller = ref.read(
+      orderMutationProvider(order.id).notifier,
+    );
+    if (action == OrderStatusAction.completeOrder) {
+      final bool? confirmed = await showDialog<bool>(
+        context: context,
+        builder: (BuildContext context) => _CompletionDialog(order: order),
+      );
+      if (confirmed != true || !context.mounted) return;
+
+      // Re-read immediately before the terminal PATCH. Completion stamps the
+      // order and triggers customer-facing backend side effects.
+      final OrderDetail latest =
+          ref.read(orderDetailProvider(order.id)).value ??
+          ref.read(orderMutationProvider(order.id)).canonicalOrder ??
+          order;
+      if (!OrderStatusAction.allows(
+        latest.status,
+        OrderStatus.delivered,
+        fulfillment: latest.fulfillmentType,
+      )) {
+        controller.adoptChangedOrder(latest);
+        return;
+      }
+      await controller.markOrderCompleted(latest);
+      return;
+    }
+
+    await switch (action) {
+      OrderStatusAction.acceptOrder => controller.acceptOrder(order),
+      OrderStatusAction.startPreparing => controller.startPreparing(order),
+      OrderStatusAction.markReady => controller.markReady(order),
+      OrderStatusAction.completeOrder => Future<void>.value(),
+    };
+  }
 
   String _locationName(OrderDetail order) =>
       _mapString(order.location, 'name') == '—'
@@ -202,16 +236,22 @@ class _OrderActions extends StatelessWidget {
   const _OrderActions({
     required this.action,
     required this.mutation,
+    required this.fulfillment,
     required this.onPressed,
   });
 
   final OrderStatusAction action;
   final OrderMutationState mutation;
+  final FulfillmentType fulfillment;
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
     final bool busy = mutation.isBusy;
+    final bool showButton =
+        action != OrderStatusAction.completeOrder ||
+        mutation.phase != OrderMutationPhase.error ||
+        mutation.terminalRetryAllowed;
     return _Section(
       title: 'Order actions',
       children: <Widget>[
@@ -224,26 +264,63 @@ class _OrderActions extends StatelessWidget {
           ),
           const SizedBox(height: 12),
         ],
-        FilledButton(
-          key: const Key('order-primary-action'),
-          onPressed: busy ? null : onPressed,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                if (busy) ...<Widget>[
-                  const SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+        if (showButton)
+          FilledButton(
+            key: const Key('order-primary-action'),
+            onPressed: busy ? null : onPressed,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  if (busy) ...<Widget>[
+                    const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                    const SizedBox(width: 10),
+                  ],
+                  Text(
+                    busy
+                        ? action.progressLabelFor(fulfillment)
+                        : action.labelFor(fulfillment),
                   ),
-                  const SizedBox(width: 10),
                 ],
-                Text(busy ? action.progressLabel : action.label),
-              ],
+              ),
             ),
           ),
+      ],
+    );
+  }
+}
+
+class _CompletionDialog extends StatelessWidget {
+  const _CompletionDialog({required this.order});
+
+  final OrderDetail order;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool pickup = order.fulfillmentType == FulfillmentType.pickup;
+    final String action = pickup ? 'Mark picked up' : 'Mark delivered';
+    return AlertDialog(
+      title: Text(pickup ? 'Confirm pickup?' : 'Confirm delivery?'),
+      content: Text(
+        pickup
+            ? 'Confirm that the customer has picked up this order? It will be marked complete and removed from active orders.'
+            : 'Confirm that this order has been delivered to the customer? It will be marked delivered and removed from active orders.',
+      ),
+      actions: <Widget>[
+        TextButton(
+          key: const Key('completion-cancel'),
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Keep active'),
+        ),
+        FilledButton(
+          key: const Key('completion-confirm'),
+          onPressed: () => Navigator.of(context).pop(true),
+          child: Text(action),
         ),
       ],
     );

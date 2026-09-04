@@ -46,12 +46,14 @@ class OrderMutationState {
     this.canonicalOrder,
     this.action,
     this.message,
+    this.terminalRetryAllowed = false,
   });
 
   final OrderMutationPhase phase;
   final OrderDetail? canonicalOrder;
   final OrderStatusAction? action;
   final String? message;
+  final bool terminalRetryAllowed;
 
   bool get isBusy =>
       phase == OrderMutationPhase.submitting ||
@@ -75,15 +77,34 @@ class OrderMutationController extends Notifier<OrderMutationState> {
   Future<void> markReady(OrderDetail order) =>
       _run(order, OrderStatusAction.markReady);
 
+  Future<void> markOrderCompleted(OrderDetail order) =>
+      _run(order, OrderStatusAction.completeOrder);
+
+  void adoptChangedOrder(OrderDetail order) {
+    if (state.isBusy) return;
+    state = OrderMutationState(
+      phase: OrderMutationPhase.error,
+      canonicalOrder: order,
+      message: 'Order status changed on the server.',
+    );
+  }
+
   Future<void> performCurrentAction(OrderDetail order) async {
-    final OrderStatusAction? action = OrderStatusAction.forStatus(order.status);
+    final OrderStatusAction? action = OrderStatusAction.forOrder(
+      order.status,
+      order.fulfillmentType,
+    );
     if (action != null) await _run(order, action);
   }
 
   Future<void> _run(OrderDetail order, OrderStatusAction action) async {
     if (state.isBusy ||
         order.id != orderId ||
-        !OrderStatusAction.allows(order.status, action.target)) {
+        !OrderStatusAction.allows(
+          order.status,
+          action.target,
+          fulfillment: order.fulfillmentType,
+        )) {
       return;
     }
 
@@ -106,7 +127,9 @@ class OrderMutationController extends Notifier<OrderMutationState> {
       if (error.statusCode == 401) {
         await ref.read(authControllerProvider.notifier).signOut();
       }
-      if (_isAmbiguousNetworkError(error)) {
+      if (_isAmbiguousNetworkError(error) ||
+          action == OrderStatusAction.completeOrder &&
+              error.statusCode != 401) {
         await _reconcileAmbiguous(order, action, error);
       } else {
         state = OrderMutationState(
@@ -136,7 +159,7 @@ class OrderMutationController extends Notifier<OrderMutationState> {
         canonicalOrder: canonical,
         action: action,
         message: canonical.status == action.target
-            ? action.successMessage
+            ? action.successMessageFor(canonical.fulfillmentType)
             : 'Order status changed on the server.',
       );
       ref.invalidate(orderDetailProvider(orderId));
@@ -171,15 +194,21 @@ class OrderMutationController extends Notifier<OrderMutationState> {
           .getOrderById(orderId);
       final bool applied = canonical.status == action.target;
       final bool unchanged = canonical.status == original.status;
+      final bool terminalRetryAllowed =
+          action == OrderStatusAction.completeOrder &&
+          canonical.status == OrderStatus.ready &&
+          (canonical.fulfillmentType == FulfillmentType.pickup ||
+              canonical.fulfillmentType == FulfillmentType.delivery);
       state = OrderMutationState(
         phase: applied ? OrderMutationPhase.success : OrderMutationPhase.error,
         canonicalOrder: canonical,
         action: action,
         message: applied
-            ? action.successMessage
+            ? action.successMessageFor(canonical.fulfillmentType)
             : unchanged
             ? '${patchError.message} You can try again.'
             : 'Order status changed on the server.',
+        terminalRetryAllowed: terminalRetryAllowed,
       );
       ref.invalidate(orderDetailProvider(orderId));
       ref.invalidate(todayOrdersProvider);

@@ -18,10 +18,43 @@ void main() {
     );
   });
 
+  test('allows ready to delivered only for known fulfillment', () {
+    for (final FulfillmentType fulfillment in <FulfillmentType>[
+      FulfillmentType.pickup,
+      FulfillmentType.delivery,
+    ]) {
+      expect(
+        OrderStatusAction.allows(
+          OrderStatus.ready,
+          OrderStatus.delivered,
+          fulfillment: fulfillment,
+        ),
+        isTrue,
+      );
+      expect(
+        OrderStatusAction.forOrder(OrderStatus.ready, fulfillment),
+        OrderStatusAction.completeOrder,
+      );
+    }
+    expect(
+      OrderStatusAction.allows(
+        OrderStatus.ready,
+        OrderStatus.delivered,
+        fulfillment: FulfillmentType.unknown,
+      ),
+      isFalse,
+    );
+  });
+
   test('blocks skips, backwards, terminal, unknown and same-state changes', () {
     const List<(OrderStatus, OrderStatus)> blocked =
         <(OrderStatus, OrderStatus)>[
           (OrderStatus.pending, OrderStatus.ready),
+          (OrderStatus.pending, OrderStatus.delivered),
+          (OrderStatus.confirmed, OrderStatus.delivered),
+          (OrderStatus.preparing, OrderStatus.delivered),
+          (OrderStatus.delivered, OrderStatus.delivered),
+          (OrderStatus.cancelled, OrderStatus.delivered),
           (OrderStatus.confirmed, OrderStatus.pending),
           (OrderStatus.ready, OrderStatus.preparing),
           (OrderStatus.delivered, OrderStatus.pending),
