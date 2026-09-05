@@ -392,6 +392,13 @@ class _TimeoutRepository implements LocationsRepository {
     required DateTime originalUpdatedAt,
     required BusinessHoursSchedule schedule,
   }) => throw UnimplementedError();
+  @override
+  Future<Location> saveRegularDeliverySettings({
+    required String locationId,
+    required DateTime originalUpdatedAt,
+    required bool enabled,
+    required int feeCents,
+  }) => throw UnimplementedError();
 }
 
 class _ContextRepository implements LocationsRepository {
@@ -425,6 +432,13 @@ class _ContextRepository implements LocationsRepository {
     required String locationId,
     required DateTime originalUpdatedAt,
     required BusinessHoursSchedule schedule,
+  }) => throw UnimplementedError();
+  @override
+  Future<Location> saveRegularDeliverySettings({
+    required String locationId,
+    required DateTime originalUpdatedAt,
+    required bool enabled,
+    required int feeCents,
   }) => throw UnimplementedError();
 }
 

@@ -5,7 +5,10 @@ import 'package:intl/intl.dart';
 import '../models/location.dart';
 import '../models/temporary_closure.dart';
 import '../models/business_hours.dart';
+import '../models/regular_delivery.dart';
+import '../../orders/presentation/order_ui_helpers.dart';
 import 'business_hours_screen.dart';
+import 'regular_delivery_screen.dart';
 import 'closure_form_screen.dart';
 import '../providers/locations_providers.dart';
 import '../providers/store_operations_controller.dart';
@@ -130,6 +133,8 @@ class _OperationsContent extends ConsumerWidget {
         _TemporaryClosuresCard(location: location),
         const SizedBox(height: 20),
         _BusinessHoursCard(location: location),
+        const SizedBox(height: 20),
+        _RegularDeliveryCard(location: location),
       ],
     );
   }
@@ -184,6 +189,68 @@ class _OperationsContent extends ConsumerWidget {
           observedValue: captured.isAcceptingOrders,
           requestedValue: requested,
         );
+  }
+}
+
+class _RegularDeliveryCard extends StatelessWidget {
+  const _RegularDeliveryCard({required this.location});
+  final Location location;
+  @override
+  Widget build(BuildContext context) {
+    late final RegularDeliverySettings settings;
+    try {
+      settings = RegularDeliverySettings.fromJson(location.regularDeliveryJson);
+    } on UnsupportedRegularDeliveryFormat catch (error) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                'Regular Delivery',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                error.toString(),
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Text(
+              'Regular Delivery',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 6),
+            Text(settings.enabled ? 'Enabled' : 'Disabled'),
+            const SizedBox(height: 12),
+            Text('Delivery fee: ${money(settings.feeCents)}'),
+            Text('Minimum order: ${money(settings.minimumCents)}'),
+            const SizedBox(height: 12),
+            OutlinedButton(
+              key: const Key('edit-regular-delivery'),
+              onPressed: () => Navigator.push<void>(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => RegularDeliveryScreen(location: location),
+                ),
+              ),
+              child: const Text('Edit regular delivery'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

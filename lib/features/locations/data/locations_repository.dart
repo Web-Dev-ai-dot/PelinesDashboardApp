@@ -5,6 +5,7 @@ import '../../../core/api/api_exception.dart';
 import '../models/location.dart';
 import '../models/business_hours.dart';
 import '../models/temporary_closure.dart';
+import '../models/regular_delivery.dart';
 
 class LocationSettingsConflict implements Exception {
   const LocationSettingsConflict(this.canonical);
@@ -28,6 +29,12 @@ abstract interface class LocationsRepository {
     required String locationId,
     required DateTime originalUpdatedAt,
     required BusinessHoursSchedule schedule,
+  });
+  Future<Location> saveRegularDeliverySettings({
+    required String locationId,
+    required DateTime originalUpdatedAt,
+    required bool enabled,
+    required int feeCents,
   });
 }
 
@@ -153,6 +160,34 @@ class ApiLocationsRepository implements LocationsRepository {
       () => _client.dio.patch<dynamic>(
         'locations/$locationId',
         data: <String, dynamic>{'hoursJson': schedule.toJson()},
+      ),
+    );
+  }
+
+  @override
+  Future<Location> saveRegularDeliverySettings({
+    required String locationId,
+    required DateTime originalUpdatedAt,
+    required bool enabled,
+    required int feeCents,
+  }) async {
+    final Location canonical = await getLocation(locationId);
+    if (canonical.updatedAt != originalUpdatedAt) {
+      throw LocationSettingsConflict(canonical);
+    }
+    final RegularDeliverySettings current = RegularDeliverySettings.fromJson(
+      canonical.regularDeliveryJson,
+    );
+    final RegularDeliverySettings next = RegularDeliverySettings(
+      enabled: enabled,
+      feeCents: feeCents,
+      minimumCents: current.minimumCents,
+      preserved: current.preserved,
+    );
+    return _locationRequest(
+      () => _client.dio.patch<dynamic>(
+        'locations/$locationId',
+        data: <String, dynamic>{'regularDeliveryJson': next.toJson()},
       ),
     );
   }

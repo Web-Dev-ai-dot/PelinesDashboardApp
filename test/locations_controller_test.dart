@@ -143,6 +143,13 @@ class _FakeRepository implements LocationsRepository {
     required DateTime originalUpdatedAt,
     required BusinessHoursSchedule schedule,
   }) => throw UnimplementedError();
+  @override
+  Future<Location> saveRegularDeliverySettings({
+    required String locationId,
+    required DateTime originalUpdatedAt,
+    required bool enabled,
+    required int feeCents,
+  }) => throw UnimplementedError();
 }
 
 class _MemoryStore implements LocationSelectionStore {
