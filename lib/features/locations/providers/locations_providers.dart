@@ -37,6 +37,15 @@ class LocationsController extends AsyncNotifier<List<Location>> {
       ref.read(locationsRepositoryProvider).getLocations,
     );
   }
+
+  void adoptCanonical(Location location) {
+    final List<Location>? current = state.value;
+    if (current == null) return;
+    state = AsyncData<List<Location>>(<Location>[
+      for (final Location item in current)
+        if (item.id == location.id) location else item,
+    ]);
+  }
 }
 
 class CurrentLocationController extends AsyncNotifier<Location?> {
@@ -79,5 +88,11 @@ class CurrentLocationController extends AsyncNotifier<Location?> {
 
     await _store.writeLocationId(location.id);
     state = AsyncData<Location?>(location);
+  }
+
+  void adoptCanonical(Location location) {
+    if (state.value?.id == location.id) {
+      state = AsyncData<Location?>(location);
+    }
   }
 }

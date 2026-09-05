@@ -116,6 +116,16 @@ class _FakeRepository implements LocationsRepository {
 
   @override
   Future<List<Location>> getLocations() async => locations;
+
+  @override
+  Future<Location> getLocation(String locationId) async =>
+      locations.singleWhere((Location location) => location.id == locationId);
+
+  @override
+  Future<Location> setAcceptingOrders(
+    String locationId,
+    bool isAcceptingOrders,
+  ) => throw UnimplementedError();
 }
 
 class _MemoryStore implements LocationSelectionStore {

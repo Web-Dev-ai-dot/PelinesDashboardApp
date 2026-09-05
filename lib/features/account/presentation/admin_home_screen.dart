@@ -32,6 +32,10 @@ class AdminHomeScreen extends ConsumerWidget {
                     child: Text('Menu'),
                   ),
                   PopupMenuItem<String>(
+                    value: '/app/store-operations',
+                    child: Text('Store Operations'),
+                  ),
+                  PopupMenuItem<String>(
                     value: '/app/orders/calendar',
                     child: Text('Calendar'),
                   ),

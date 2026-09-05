@@ -6,6 +6,7 @@ import '../features/account/presentation/admin_home_screen.dart';
 import '../features/auth/models/admin_session.dart';
 import '../features/auth/presentation/login_screen.dart';
 import '../features/auth/providers/auth_providers.dart';
+import '../features/locations/presentation/store_operations_screen.dart';
 import '../features/orders/presentation/order_detail_screen.dart';
 import '../features/orders/presentation/historical_orders_screen.dart';
 import '../features/orders/presentation/orders_calendar_screen.dart';
@@ -72,6 +73,10 @@ final routerProvider = Provider<GoRouter>((Ref ref) {
             const AdminHomeScreen(),
         routes: <RouteBase>[
           GoRoute(path: 'menu', builder: (_, _) => const MenuLandingScreen()),
+          GoRoute(
+            path: 'store-operations',
+            builder: (_, _) => const StoreOperationsScreen(),
+          ),
           GoRoute(
             path: 'menu/:kind',
             builder: (_, state) => MenuCategoriesScreen(
