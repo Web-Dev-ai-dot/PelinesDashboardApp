@@ -1,0 +1,93 @@
+import 'package:dio/dio.dart';
+
+import '../../../core/api/api_client.dart';
+import '../../../core/api/api_exception.dart';
+import '../models/discount.dart';
+
+abstract interface class PromotionsRepository {
+  Future<List<Discount>> getDiscounts();
+  Future<Discount> setActive(String id, bool isActive);
+}
+
+class ApiPromotionsRepository implements PromotionsRepository {
+  ApiPromotionsRepository(this._client);
+  final ApiClient _client;
+
+  @override
+  Future<List<Discount>> getDiscounts() async {
+    try {
+      final Response<dynamic> response = await _client.dio.get<dynamic>(
+        'discounts',
+      );
+      final Object? data = response.data;
+      if (data is! List<dynamic>) {
+        throw const FormatException('Invalid discounts response.');
+      }
+      return data
+          .map((dynamic item) {
+            if (item is! Map<String, dynamic>) {
+              throw const FormatException('Invalid discount item.');
+            }
+            return Discount.fromJson(item);
+          })
+          .toList(growable: false);
+    } on DioException catch (error) {
+      throw _apiError(error, 'load promotions');
+    } on FormatException catch (error) {
+      throw ApiException(
+        message: 'The Pelines server returned invalid promotions.',
+        cause: error,
+      );
+    } on TypeError catch (error) {
+      throw ApiException(
+        message: 'The Pelines server returned invalid promotions.',
+        cause: error,
+      );
+    }
+  }
+
+  @override
+  Future<Discount> setActive(String id, bool isActive) async {
+    try {
+      final Response<dynamic> response = await _client.dio.patch<dynamic>(
+        'discounts/$id',
+        data: <String, dynamic>{'isActive': isActive},
+      );
+      final Object? data = response.data;
+      if (data is! Map<String, dynamic>) {
+        throw const FormatException('Invalid discount response.');
+      }
+      return Discount.fromJson(data);
+    } on DioException catch (error) {
+      throw _apiError(error, 'update this promotion');
+    } on FormatException catch (error) {
+      throw ApiException(
+        message: 'The Pelines server returned an invalid promotion.',
+        cause: error,
+      );
+    } on TypeError catch (error) {
+      throw ApiException(
+        message: 'The Pelines server returned an invalid promotion.',
+        cause: error,
+      );
+    }
+  }
+
+  ApiException _apiError(DioException error, String action) {
+    final int? status = error.response?.statusCode;
+    final String message = switch (status) {
+      401 => 'Your session has expired. Please sign in again.',
+      403 => 'Administrator access is required.',
+      404 => 'This promotion no longer exists.',
+      _ => switch (error.type) {
+        DioExceptionType.connectionTimeout ||
+        DioExceptionType.receiveTimeout ||
+        DioExceptionType.sendTimeout => 'The Pelines server timed out.',
+        DioExceptionType.connectionError =>
+          'Could not connect to the Pelines server.',
+        _ => 'The Pelines server could not $action.',
+      },
+    };
+    return ApiException(message: message, statusCode: status, cause: error);
+  }
+}

@@ -15,6 +15,8 @@ import '../features/menu/presentation/menu_screens.dart';
 import '../features/menu/presentation/product_form_screen.dart';
 import '../features/menu/presentation/category_form_screen.dart';
 import '../features/menu/presentation/modifier_form_screen.dart';
+import '../features/promotions/presentation/promotion_detail_screen.dart';
+import '../features/promotions/presentation/promotions_screen.dart';
 
 enum AuthRouteStatus { loading, authenticated, unauthenticated }
 
@@ -76,6 +78,16 @@ final routerProvider = Provider<GoRouter>((Ref ref) {
           GoRoute(
             path: 'store-operations',
             builder: (_, _) => const StoreOperationsScreen(),
+          ),
+          GoRoute(
+            path: 'promotions',
+            builder: (_, _) => const PromotionsScreen(),
+          ),
+          GoRoute(
+            path: 'promotions/:id',
+            builder: (_, state) => PromotionDetailScreen(
+              discountId: state.pathParameters['id']!,
+            ),
           ),
           GoRoute(
             path: 'menu/:kind',
