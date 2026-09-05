@@ -7,6 +7,7 @@ import '../../locations/providers/locations_providers.dart';
 import '../../orders/presentation/order_ui_helpers.dart';
 import '../models/menu_models.dart';
 import '../providers/menu_providers.dart';
+import '../providers/product_image_providers.dart';
 
 class MenuLandingScreen extends StatelessWidget {
   const MenuLandingScreen({super.key});
@@ -296,7 +297,14 @@ class MenuProductDetailScreen extends ConsumerWidget {
         data: (item) => ListView(
           padding: const EdgeInsets.all(20),
           children: <Widget>[
-            Center(child: _ProductImage(url: item.imageUrl, size: 180)),
+            _ProductImageAdministration(
+              imageUrl: item.imageUrl,
+              locationId: location.id,
+              locationSlug: location.slug,
+              kind: kind,
+              categoryId: categoryId,
+              productId: productId,
+            ),
             const SizedBox(height: 20),
             Text(item.name, style: Theme.of(context).textTheme.headlineSmall),
             Text(
@@ -410,6 +418,96 @@ String _modifierRule(MenuModifierGroup group) {
 String _signedMoney(int cents) {
   if (cents == 0) return money(0);
   return '${cents > 0 ? '+' : '-'}${money(cents.abs())}';
+}
+
+class _ProductImageAdministration extends ConsumerWidget {
+  const _ProductImageAdministration({
+    required this.imageUrl,
+    required this.locationId,
+    required this.locationSlug,
+    required this.kind,
+    required this.categoryId,
+    required this.productId,
+  });
+  final String? imageUrl;
+  final String locationId;
+  final String locationSlug;
+  final MenuKind kind;
+  final String categoryId;
+  final String productId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ProductImageContext imageContext = (
+      locationId: locationId,
+      locationSlug: locationSlug,
+      kind: kind,
+      categoryId: categoryId,
+      productId: productId,
+    );
+    final ProductImageState state = ref.watch(
+      productImageMutationProvider(imageContext),
+    );
+    final String? stage = switch (state.phase) {
+      ProductImagePhase.picking => 'Opening gallery...',
+      ProductImagePhase.processing => 'Processing image...',
+      ProductImagePhase.requestingUploadUrl => 'Preparing secure upload...',
+      ProductImagePhase.uploading =>
+        state.progress == null
+            ? 'Uploading image...'
+            : 'Uploading image... ${(state.progress! * 100).round()}%',
+      ProductImagePhase.updatingProduct => 'Saving product...',
+      ProductImagePhase.reconciling => 'Verifying product...',
+      _ => null,
+    };
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: <Widget>[
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Product Image',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+            const SizedBox(height: 12),
+            _ProductImage(url: imageUrl, size: 180),
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed: state.isBusy
+                  ? null
+                  : () => ref
+                        .read(
+                          productImageMutationProvider(imageContext).notifier,
+                        )
+                        .changeImage(),
+              icon: const Icon(Icons.photo_library_outlined),
+              label: const Text('Change Image'),
+            ),
+            if (state.canRetryPatch)
+              TextButton(
+                onPressed: () => ref
+                    .read(productImageMutationProvider(imageContext).notifier)
+                    .retryProductUpdate(),
+                child: const Text('Retry saving uploaded image'),
+              ),
+            if (stage != null) ...<Widget>[
+              const SizedBox(height: 8),
+              const LinearProgressIndicator(),
+              const SizedBox(height: 6),
+              Text(stage),
+            ],
+            if (!state.isBusy && state.message != null) ...<Widget>[
+              const SizedBox(height: 8),
+              Text(state.message!, textAlign: TextAlign.center),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _Field extends StatelessWidget {

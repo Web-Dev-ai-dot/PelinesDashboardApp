@@ -11,6 +11,7 @@ import 'package:pelines_admin_app/core/api/api_exception.dart';
 import 'package:pelines_admin_app/features/locations/models/location.dart';
 import 'package:pelines_admin_app/features/locations/providers/locations_providers.dart';
 import 'package:pelines_admin_app/features/menu/data/menu_repository.dart';
+import 'package:pelines_admin_app/features/menu/data/product_image_service.dart';
 import 'package:pelines_admin_app/features/menu/models/menu_models.dart';
 import 'package:pelines_admin_app/features/menu/presentation/menu_screens.dart';
 import 'package:pelines_admin_app/features/menu/providers/menu_providers.dart';
@@ -157,6 +158,74 @@ void main() {
     expect(parseSignedPriceCents('-0.50'), -50);
     expect(parseSignedPriceCents('1.999'), isNull);
     expect(parseSignedPriceCents('NaN'), isNull);
+  });
+
+  test('image signatures accept JPEG PNG WebP and reject other bytes', () {
+    expect(
+      detectProductImageType(Uint8List.fromList(<int>[0xff, 0xd8, 0xff])),
+      ProductImageType.jpeg,
+    );
+    expect(
+      detectProductImageType(
+        Uint8List.fromList(<int>[0x89, 0x50, 0x4e, 0x47, 13, 10, 26, 10]),
+      ),
+      ProductImageType.png,
+    );
+    expect(
+      detectProductImageType(Uint8List.fromList('RIFFxxxxWEBP'.codeUnits)),
+      ProductImageType.webp,
+    );
+    expect(detectProductImageType(Uint8List.fromList(<int>[1, 2, 3])), isNull);
+    expect(maxProductImageBytes, 5 * 1024 * 1024);
+  });
+
+  test('signed upload target request follows exact backend contract', () async {
+    final adapter = _Adapter(
+      jsonEncode(<String, dynamic>{
+        'uploadUrl': 'https://storage.example/sign?token=secret',
+        'publicUrl': 'https://cdn.example/product.jpg',
+        'path': 'uuid.jpg',
+        'token': 'secret',
+      }),
+    );
+    final target = await _api(adapter).createProductUploadTarget(
+      filename: 'product.jpg',
+      contentType: 'image/jpeg',
+      sizeBytes: 1234,
+    );
+    expect(adapter.options?.method, 'POST');
+    expect(adapter.options?.path, 'storage/products/upload-url');
+    expect(adapter.options?.data, <String, dynamic>{
+      'filename': 'product.jpg',
+      'contentType': 'image/jpeg',
+      'sizeBytes': 1234,
+    });
+    expect(target.publicUrl.toString(), 'https://cdn.example/product.jpg');
+  });
+
+  test('product image PATCH sends imageUrl only', () async {
+    final adapter = _Adapter(jsonEncode(_product(full: true)));
+    await _api(adapter)
+        .updateProductImage('product-uuid', 'https://cdn.example/product.jpg');
+    expect(adapter.options?.method, 'PATCH');
+    expect(adapter.options?.path, 'products/product-uuid');
+    expect(adapter.options?.data, <String, dynamic>{
+      'imageUrl': 'https://cdn.example/product.jpg',
+    });
+  });
+
+  test('storage upload uses PUT bytes without Pelines authorization', () async {
+    final adapter = _Adapter('{}');
+    final dio = Dio()..httpClientAdapter = adapter;
+    await DioProductStorageUploader(dio: dio).upload(
+      uploadUrl: Uri.parse('https://storage.example/sign?token=secret'),
+      bytes: Uint8List.fromList(<int>[1, 2, 3]),
+      contentType: 'image/jpeg',
+    );
+    expect(adapter.options?.method, 'PUT');
+    expect(adapter.options?.data, isA<Uint8List>());
+    expect(adapter.options?.headers['content-type'], 'image/jpeg');
+    expect(adapter.options?.headers.containsKey('Authorization'), isFalse);
   });
 
   test('modifier group POST sends exact granular body', () async {
@@ -932,6 +1001,24 @@ class _Repository implements MenuRepository {
         .options
         .single;
   }
+
+  @override
+  Future<ProductUploadTarget> createProductUploadTarget({
+    required String filename,
+    required String contentType,
+    required int sizeBytes,
+  }) async => ProductUploadTarget(
+    uploadUrl: Uri.parse('https://storage.example/upload?token=secret'),
+    publicUrl: Uri.parse('https://cdn.example/product.jpg'),
+    path: 'product.jpg',
+    token: 'secret',
+  );
+
+  @override
+  Future<MenuProduct> updateProductImage(
+    String productId,
+    String imageUrl,
+  ) async => MenuProduct.fromJson(_product(full: true));
 }
 
 class _Adapter implements HttpClientAdapter {

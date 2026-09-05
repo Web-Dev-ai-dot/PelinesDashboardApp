@@ -39,6 +39,49 @@ abstract interface class MenuRepository {
     String optionId,
     ModifierOptionWriteInput input,
   );
+  Future<ProductUploadTarget> createProductUploadTarget({
+    required String filename,
+    required String contentType,
+    required int sizeBytes,
+  });
+  Future<MenuProduct> updateProductImage(String productId, String imageUrl);
+}
+
+class ProductUploadTarget {
+  const ProductUploadTarget({
+    required this.uploadUrl,
+    required this.publicUrl,
+    required this.path,
+    required this.token,
+  });
+
+  factory ProductUploadTarget.fromJson(Map<String, dynamic> json) {
+    final Uri? uploadUrl = Uri.tryParse(json['uploadUrl']?.toString() ?? '');
+    final Uri? publicUrl = Uri.tryParse(json['publicUrl']?.toString() ?? '');
+    final Object? path = json['path'];
+    final Object? token = json['token'];
+    if (uploadUrl == null ||
+        !uploadUrl.hasScheme ||
+        publicUrl == null ||
+        !publicUrl.hasScheme ||
+        path is! String ||
+        path.isEmpty ||
+        token is! String ||
+        token.isEmpty) {
+      throw const FormatException('Invalid product upload target.');
+    }
+    return ProductUploadTarget(
+      uploadUrl: uploadUrl,
+      publicUrl: publicUrl,
+      path: path,
+      token: token,
+    );
+  }
+
+  final Uri uploadUrl;
+  final Uri publicUrl;
+  final String path;
+  final String token;
 }
 
 class ModifierGroupWriteInput {
@@ -319,6 +362,61 @@ class ApiMenuRepository implements MenuRepository {
     MenuModifierOption.fromJson,
     'modifier option',
   );
+
+  @override
+  Future<ProductUploadTarget> createProductUploadTarget({
+    required String filename,
+    required String contentType,
+    required int sizeBytes,
+  }) async {
+    try {
+      final Response<dynamic> response = await _client.dio.post<dynamic>(
+        'storage/products/upload-url',
+        data: <String, dynamic>{
+          'filename': filename,
+          'contentType': contentType,
+          'sizeBytes': sizeBytes,
+        },
+      );
+      if (response.data is! Map<String, dynamic>) {
+        throw const FormatException('Invalid upload target.');
+      }
+      return ProductUploadTarget.fromJson(
+        response.data as Map<String, dynamic>,
+      );
+    } on DioException catch (error) {
+      throw _error(error, entity: 'Product image upload');
+    } on Object catch (error) {
+      throw ApiException(
+        message: 'The server returned an invalid upload target.',
+        cause: error,
+      );
+    }
+  }
+
+  @override
+  Future<MenuProduct> updateProductImage(
+    String productId,
+    String imageUrl,
+  ) async {
+    try {
+      final Response<dynamic> response = await _client.dio.patch<dynamic>(
+        'products/$productId',
+        data: <String, dynamic>{'imageUrl': imageUrl},
+      );
+      if (response.data is! Map<String, dynamic>) {
+        throw const FormatException('Invalid product.');
+      }
+      return MenuProduct.fromJson(response.data as Map<String, dynamic>);
+    } on DioException catch (error) {
+      throw _error(error, entity: 'Product');
+    } on Object catch (error) {
+      throw ApiException(
+        message: 'The server returned an invalid product.',
+        cause: error,
+      );
+    }
+  }
 
   Future<T> _modifierWrite<T>(
     String path,
