@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../models/location.dart';
+import '../models/temporary_closure.dart';
+import 'closure_form_screen.dart';
 import '../providers/locations_providers.dart';
 import '../providers/store_operations_controller.dart';
 
@@ -121,6 +124,8 @@ class _OperationsContent extends ConsumerWidget {
             ),
           ),
         ),
+        const SizedBox(height: 20),
+        _TemporaryClosuresCard(location: location),
       ],
     );
   }
@@ -176,4 +181,105 @@ class _OperationsContent extends ConsumerWidget {
           requestedValue: requested,
         );
   }
+}
+
+class _TemporaryClosuresCard extends StatelessWidget {
+  const _TemporaryClosuresCard({required this.location});
+  final Location location;
+
+  @override
+  Widget build(BuildContext context) {
+    late final List<TemporaryClosure> closures;
+    try {
+      closures = closuresFromExtras(location.hoursExtrasJson).toList()
+        ..sort(
+          (TemporaryClosure a, TemporaryClosure b) =>
+              a.start.compareTo(b.start),
+        );
+    } on UnsupportedClosureFormat catch (error) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                'Temporary Closures',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                error.toString(),
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Text(
+              'Temporary Closures',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Temporary closures affect regular online ordering. Catering availability is handled separately by the current backend.',
+            ),
+            const SizedBox(height: 12),
+            if (closures.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: Text('No temporary closures.'),
+              )
+            else
+              for (final TemporaryClosure closure in closures)
+                ListTile(
+                  key: Key('closure-${closure.id}'),
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(
+                    closure.reason.isEmpty
+                        ? 'Temporary closure'
+                        : closure.reason,
+                  ),
+                  subtitle: Text(
+                    '${_dateRange(closure)}\n${closure.active ? 'Active' : 'Inactive'}',
+                  ),
+                  isThreeLine: true,
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => _openForm(context, closure),
+                ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              key: const Key('add-closure'),
+              onPressed: () => _openForm(context, null),
+              icon: const Icon(Icons.add),
+              label: const Text('Add closure'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _dateRange(TemporaryClosure closure) {
+    final DateFormat format = DateFormat.yMMMd();
+    final String start = format.format(parseCalendarDate(closure.start)!);
+    final String end = format.format(parseCalendarDate(closure.end)!);
+    return closure.start == closure.end ? start : '$start – $end';
+  }
+
+  Future<void> _openForm(BuildContext context, TemporaryClosure? closure) =>
+      Navigator.push<void>(
+        context,
+        MaterialPageRoute<void>(
+          builder: (_) =>
+              ClosureFormScreen(location: location, closure: closure),
+        ),
+      );
 }

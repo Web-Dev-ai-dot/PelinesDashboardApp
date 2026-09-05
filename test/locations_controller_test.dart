@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pelines_admin_app/features/locations/data/location_selection_store.dart';
 import 'package:pelines_admin_app/features/locations/data/locations_repository.dart';
 import 'package:pelines_admin_app/features/locations/models/location.dart';
+import 'package:pelines_admin_app/features/locations/models/temporary_closure.dart';
 import 'package:pelines_admin_app/features/locations/providers/locations_providers.dart';
 
 void main() {
@@ -126,6 +127,14 @@ class _FakeRepository implements LocationsRepository {
     String locationId,
     bool isAcceptingOrders,
   ) => throw UnimplementedError();
+
+  @override
+  Future<Location> saveClosure({
+    required String locationId,
+    required DateTime originalUpdatedAt,
+    required TemporaryClosure closure,
+    required bool isNew,
+  }) => throw UnimplementedError();
 }
 
 class _MemoryStore implements LocationSelectionStore {

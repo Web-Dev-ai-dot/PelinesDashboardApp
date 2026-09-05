@@ -3,6 +3,12 @@ import 'package:dio/dio.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/api/api_exception.dart';
 import '../models/location.dart';
+import '../models/temporary_closure.dart';
+
+class LocationSettingsConflict implements Exception {
+  const LocationSettingsConflict(this.canonical);
+  final Location canonical;
+}
 
 abstract interface class LocationsRepository {
   Future<List<Location>> getLocations();
@@ -11,6 +17,12 @@ abstract interface class LocationsRepository {
     String locationId,
     bool isAcceptingOrders,
   );
+  Future<Location> saveClosure({
+    required String locationId,
+    required DateTime originalUpdatedAt,
+    required TemporaryClosure closure,
+    required bool isNew,
+  });
 }
 
 class ApiLocationsRepository implements LocationsRepository {
@@ -75,6 +87,49 @@ class ApiLocationsRepository implements LocationsRepository {
       data: <String, dynamic>{'isAcceptingOrders': isAcceptingOrders},
     ),
   );
+
+  @override
+  Future<Location> saveClosure({
+    required String locationId,
+    required DateTime originalUpdatedAt,
+    required TemporaryClosure closure,
+    required bool isNew,
+  }) async {
+    final Location canonical = await getLocation(locationId);
+    if (canonical.updatedAt != originalUpdatedAt) {
+      throw LocationSettingsConflict(canonical);
+    }
+    final List<TemporaryClosure> existing = closuresFromExtras(
+      canonical.hoursExtrasJson,
+    );
+    final List<Map<String, dynamic>> next = existing
+        .map((TemporaryClosure item) => item.toJson())
+        .toList();
+    if (isNew) {
+      if (existing.any((TemporaryClosure item) => item.id == closure.id)) {
+        throw LocationSettingsConflict(canonical);
+      }
+      next.add(closure.toJson());
+    } else {
+      final int index = existing.indexWhere(
+        (TemporaryClosure item) => item.id == closure.id,
+      );
+      if (index < 0) throw LocationSettingsConflict(canonical);
+      next[index] = closure.toJson();
+    }
+    final Map<String, dynamic> extras = <String, dynamic>{
+      ...?canonical.hoursExtrasJson,
+      'closures': next,
+    };
+    // updatedAt is checked immediately before this PATCH. The backend has no
+    // conditional update, so a small race remains until it supports If-Match.
+    return _locationRequest(
+      () => _client.dio.patch<dynamic>(
+        'locations/$locationId',
+        data: <String, dynamic>{'hoursExtrasJson': extras},
+      ),
+    );
+  }
 
   Future<Location> _locationRequest(
     Future<Response<dynamic>> Function() request,

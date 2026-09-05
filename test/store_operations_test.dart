@@ -9,6 +9,7 @@ import 'package:pelines_admin_app/core/api/api_client.dart';
 import 'package:pelines_admin_app/features/locations/data/location_selection_store.dart';
 import 'package:pelines_admin_app/features/locations/data/locations_repository.dart';
 import 'package:pelines_admin_app/features/locations/models/location.dart';
+import 'package:pelines_admin_app/features/locations/models/temporary_closure.dart';
 import 'package:pelines_admin_app/features/locations/presentation/store_operations_screen.dart';
 import 'package:pelines_admin_app/features/locations/providers/locations_providers.dart';
 import 'package:pelines_admin_app/features/locations/providers/store_operations_controller.dart';
@@ -388,6 +389,14 @@ class _FakeLocationsRepository implements LocationsRepository {
     if (patchFuture != null) return patchFuture!;
     return patchResult;
   }
+
+  @override
+  Future<Location> saveClosure({
+    required String locationId,
+    required DateTime originalUpdatedAt,
+    required TemporaryClosure closure,
+    required bool isNew,
+  }) => throw UnimplementedError();
 }
 
 class _MemoryStore implements LocationSelectionStore {
