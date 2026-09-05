@@ -47,13 +47,14 @@ class _CateringDeliveryScreenState
 
   @override
   Widget build(BuildContext context) {
-    final CateringDeliveryState operation = ref.watch(
-      cateringDeliveryProvider,
-    );
+    final CateringDeliveryState operation = ref.watch(cateringDeliveryProvider);
     return PopScope<void>(
       canPop: !_dirty || operation.isBusy,
       onPopInvokedWithResult: (bool didPop, void result) async {
-        if (!didPop && !operation.isBusy && await _discard() && context.mounted) {
+        if (!didPop &&
+            !operation.isBusy &&
+            await _discard() &&
+            context.mounted) {
           Navigator.pop(context);
         }
       },
@@ -62,7 +63,10 @@ class _CateringDeliveryScreenState
         body: ListView(
           padding: const EdgeInsets.all(20),
           children: <Widget>[
-            Text(widget.location.name, style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              widget.location.name,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: 8),
             const Text(
               'Catering Delivery controls delivery availability for catering orders only.',
@@ -85,7 +89,9 @@ class _CateringDeliveryScreenState
               key: const Key('catering-delivery-fee'),
               controller: _fee,
               enabled: !operation.isBusy,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               decoration: const InputDecoration(
                 prefixText: r'$ ',
                 labelText: 'Delivery fee',
@@ -94,18 +100,25 @@ class _CateringDeliveryScreenState
               onChanged: (_) => setState(() {}),
             ),
             const SizedBox(height: 20),
-            Text('Minimum order', style: Theme.of(context).textTheme.labelLarge),
+            Text(
+              'Minimum order',
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
             Text(
               money(widget.location.deliveryMinimumCents),
               key: const Key('catering-delivery-minimum'),
               style: Theme.of(context).textTheme.titleLarge,
             ),
-            const Text('This value is currently managed outside the mobile app.'),
+            const Text(
+              'This value is currently managed outside the mobile app.',
+            ),
             const SizedBox(height: 24),
             FilledButton(
               key: const Key('catering-delivery-save'),
               onPressed: operation.isBusy || !_dirty ? null : _save,
-              child: Text(operation.isBusy ? 'Saving…' : 'Save catering delivery'),
+              child: Text(
+                operation.isBusy ? 'Saving…' : 'Save catering delivery',
+              ),
             ),
             if (operation.isBusy)
               const Padding(
@@ -123,22 +136,26 @@ class _CateringDeliveryScreenState
     if (cents == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Enter a valid non-negative fee with no more than two decimals.'),
+          content: Text(
+            'Enter a valid non-negative fee with no more than two decimals.',
+          ),
         ),
       );
       return;
     }
     if (_enabledDirty && !await _confirmEnabledChange()) return;
     if (!mounted) return;
-    await ref.read(cateringDeliveryProvider.notifier).save(
-      locationId: widget.location.id,
-      originalUpdatedAt: widget.location.updatedAt,
-      originalEnabled: _initial.enabled,
-      enabled: _enabled,
-      originalFeeCents: widget.location.deliveryFeeCents,
-      feeCents: cents,
-      originalMinimumCents: widget.location.deliveryMinimumCents,
-    );
+    await ref
+        .read(cateringDeliveryProvider.notifier)
+        .save(
+          locationId: widget.location.id,
+          originalUpdatedAt: widget.location.updatedAt,
+          originalEnabled: _initial.enabled,
+          enabled: _enabled,
+          originalFeeCents: widget.location.deliveryFeeCents,
+          feeCents: cents,
+          originalMinimumCents: widget.location.deliveryMinimumCents,
+        );
     if (!mounted) return;
     final CateringDeliveryState result = ref.read(cateringDeliveryProvider);
     if (result.phase == CateringDeliveryPhase.success) {
@@ -148,7 +165,9 @@ class _CateringDeliveryScreenState
         context: context,
         builder: (BuildContext dialogContext) => AlertDialog(
           title: const Text('Store settings were changed elsewhere.'),
-          content: const Text('Reload before saving to avoid overwriting those changes.'),
+          content: const Text(
+            'Reload before saving to avoid overwriting those changes.',
+          ),
           actions: <Widget>[
             TextButton(
               onPressed: () => Navigator.pop(dialogContext, false),
@@ -164,7 +183,11 @@ class _CateringDeliveryScreenState
       if (reload == true && mounted) Navigator.pop(context);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result.message ?? 'Catering delivery could not be saved.')),
+        SnackBar(
+          content: Text(
+            result.message ?? 'Catering delivery could not be saved.',
+          ),
+        ),
       );
     }
   }
@@ -196,14 +219,17 @@ class _CateringDeliveryScreenState
             ),
           ],
         ),
-      ) ?? false;
+      ) ??
+      false;
 
   Future<bool> _discard() async =>
       await showDialog<bool>(
         context: context,
         builder: (BuildContext dialogContext) => AlertDialog(
           title: const Text('Discard changes?'),
-          content: const Text('Your unsaved catering delivery changes will be lost.'),
+          content: const Text(
+            'Your unsaved catering delivery changes will be lost.',
+          ),
           actions: <Widget>[
             TextButton(
               onPressed: () => Navigator.pop(dialogContext, false),
@@ -215,5 +241,6 @@ class _CateringDeliveryScreenState
             ),
           ],
         ),
-      ) ?? false;
+      ) ??
+      false;
 }

@@ -7,10 +7,12 @@ import '../models/temporary_closure.dart';
 import '../models/business_hours.dart';
 import '../models/regular_delivery.dart';
 import '../models/catering_delivery.dart';
+import '../models/auto_accept.dart';
 import '../../orders/presentation/order_ui_helpers.dart';
 import 'business_hours_screen.dart';
 import 'regular_delivery_screen.dart';
 import 'catering_delivery_screen.dart';
+import 'auto_accept_screen.dart';
 import 'closure_form_screen.dart';
 import '../providers/locations_providers.dart';
 import '../providers/store_operations_controller.dart';
@@ -139,6 +141,8 @@ class _OperationsContent extends ConsumerWidget {
         _RegularDeliveryCard(location: location),
         const SizedBox(height: 20),
         _CateringDeliveryCard(location: location),
+        const SizedBox(height: 20),
+        _AutoAcceptCard(location: location),
       ],
     );
   }
@@ -196,6 +200,79 @@ class _OperationsContent extends ConsumerWidget {
   }
 }
 
+class _AutoAcceptCard extends StatelessWidget {
+  const _AutoAcceptCard({required this.location});
+  final Location location;
+
+  @override
+  Widget build(BuildContext context) {
+    late final AutoAcceptSettings settings;
+    try {
+      settings = AutoAcceptSettings.fromJson(location.servicePrefsJson);
+    } on UnsupportedAutoAcceptFormat catch (error) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                'Auto-Accept Orders',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                error.toString(),
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    return Card(
+      key: const Key('auto-accept-card'),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Text(
+              'Auto-Accept Orders',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 12),
+            const Text('Regular orders'),
+            Text(
+              settings.regular
+                  ? 'Automatically accepted after payment'
+                  : 'Manual acceptance',
+            ),
+            const SizedBox(height: 10),
+            const Text('Catering orders'),
+            Text(
+              settings.catering
+                  ? 'Automatically accepted after payment'
+                  : 'Manual acceptance',
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton(
+              key: const Key('edit-auto-accept'),
+              onPressed: () => Navigator.push<void>(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => AutoAcceptScreen(location: location),
+                ),
+              ),
+              child: const Text('Edit auto-accept'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _CateringDeliveryCard extends StatelessWidget {
   const _CateringDeliveryCard({required this.location});
   final Location location;
@@ -214,9 +291,15 @@ class _CateringDeliveryCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Text('Catering Delivery', style: Theme.of(context).textTheme.titleLarge),
+              Text(
+                'Catering Delivery',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
               const SizedBox(height: 12),
-              Text(error.toString(), style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              Text(
+                error.toString(),
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
             ],
           ),
         ),
@@ -229,7 +312,10 @@ class _CateringDeliveryCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            Text('Catering Delivery', style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              'Catering Delivery',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
             const SizedBox(height: 6),
             Text(settings.enabled ? 'Enabled' : 'Disabled'),
             if (settings.usesDefault) const Text('Using default setting'),

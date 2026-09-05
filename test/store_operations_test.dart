@@ -414,9 +414,21 @@ class _FakeLocationsRepository implements LocationsRepository {
   }) => throw UnimplementedError();
   @override
   Future<Location> saveCateringDeliverySettings({
-    required String locationId, required DateTime originalUpdatedAt,
-    required bool originalEnabled, required bool enabled,
-    required int originalFeeCents, required int feeCents,
+    required String locationId,
+    required DateTime originalUpdatedAt,
+    required bool originalEnabled,
+    required bool enabled,
+    required int originalFeeCents,
+    required int feeCents,
+  }) => throw UnimplementedError();
+  @override
+  Future<Location> saveAutoAcceptSettings({
+    required String locationId,
+    required DateTime originalUpdatedAt,
+    required bool originalRegular,
+    required bool regular,
+    required bool originalCatering,
+    required bool catering,
   }) => throw UnimplementedError();
 }
 

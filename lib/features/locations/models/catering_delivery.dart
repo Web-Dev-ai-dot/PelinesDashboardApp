@@ -1,4 +1,3 @@
-
 export 'regular_delivery.dart' show moneyInput, parseMoneyCents;
 
 class UnsupportedCateringDeliveryFormat implements Exception {

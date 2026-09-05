@@ -7,10 +7,20 @@ import '../models/catering_delivery.dart';
 import '../models/location.dart';
 import 'locations_providers.dart';
 
-enum CateringDeliveryPhase { idle, submitting, reconciling, success, conflict, error }
+enum CateringDeliveryPhase {
+  idle,
+  submitting,
+  reconciling,
+  success,
+  conflict,
+  error,
+}
 
 class CateringDeliveryState {
-  const CateringDeliveryState({this.phase = CateringDeliveryPhase.idle, this.message});
+  const CateringDeliveryState({
+    this.phase = CateringDeliveryPhase.idle,
+    this.message,
+  });
   final CateringDeliveryPhase phase;
   final String? message;
   bool get isBusy =>
@@ -44,8 +54,12 @@ class CateringDeliveryController extends Notifier<CateringDeliveryState> {
       );
       return;
     }
-    final LocationsRepository repository = ref.read(locationsRepositoryProvider);
-    state = const CateringDeliveryState(phase: CateringDeliveryPhase.submitting);
+    final LocationsRepository repository = ref.read(
+      locationsRepositoryProvider,
+    );
+    state = const CateringDeliveryState(
+      phase: CateringDeliveryPhase.submitting,
+    );
     try {
       await repository.saveCateringDeliverySettings(
         locationId: locationId,
@@ -110,7 +124,9 @@ class CateringDeliveryController extends Notifier<CateringDeliveryState> {
     required int minimum,
     required bool ambiguous,
   }) async {
-    state = const CateringDeliveryState(phase: CateringDeliveryPhase.reconciling);
+    state = const CateringDeliveryState(
+      phase: CateringDeliveryPhase.reconciling,
+    );
     try {
       final Location canonical = await repository.getLocation(id);
       if (ref.read(currentLocationProvider).value?.id != id) {
@@ -123,23 +139,27 @@ class CateringDeliveryController extends Notifier<CateringDeliveryState> {
       final CateringDeliverySettings settings =
           CateringDeliverySettings.fromJson(canonical.cateringDeliveryJson);
       _adopt(canonical);
-      final bool enabledMatches = settings.enabled == enabled &&
+      final bool enabledMatches =
+          settings.enabled == enabled &&
           (enabled == originalEnabled ||
               canonical.cateringDeliveryJson?['enabled'] == enabled);
       final bool feeMatches =
           fee == originalFee || canonical.deliveryFeeCents == fee;
-      final bool matches = enabledMatches &&
+      final bool matches =
+          enabledMatches &&
           feeMatches &&
           canonical.deliveryMinimumCents == minimum;
       state = CateringDeliveryState(
-        phase: matches ? CateringDeliveryPhase.success : CateringDeliveryPhase.error,
+        phase: matches
+            ? CateringDeliveryPhase.success
+            : CateringDeliveryPhase.error,
         message: matches
             ? (ambiguous
-                ? 'Catering delivery was confirmed after reconnecting.'
-                : null)
+                  ? 'Catering delivery was confirmed after reconnecting.'
+                  : null)
             : (ambiguous
-                ? 'The change could not be confirmed. Reload and try again manually.'
-                : 'The server did not save the expected catering delivery settings.'),
+                  ? 'The change could not be confirmed. Reload and try again manually.'
+                  : 'The server did not save the expected catering delivery settings.'),
       );
     } catch (error) {
       state = CateringDeliveryState(
@@ -157,7 +177,9 @@ class CateringDeliveryController extends Notifier<CateringDeliveryState> {
   }
 
   bool _ambiguous(Object error) {
-    if (error is! ApiException || error.statusCode != null || error.cause is! DioException) {
+    if (error is! ApiException ||
+        error.statusCode != null ||
+        error.cause is! DioException) {
       return false;
     }
     final DioExceptionType type = (error.cause! as DioException).type;

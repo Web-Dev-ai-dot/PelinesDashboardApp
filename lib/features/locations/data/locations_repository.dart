@@ -7,6 +7,7 @@ import '../models/business_hours.dart';
 import '../models/temporary_closure.dart';
 import '../models/regular_delivery.dart';
 import '../models/catering_delivery.dart';
+import '../models/auto_accept.dart';
 
 class LocationSettingsConflict implements Exception {
   const LocationSettingsConflict(this.canonical);
@@ -44,6 +45,14 @@ abstract interface class LocationsRepository {
     required bool enabled,
     required int originalFeeCents,
     required int feeCents,
+  });
+  Future<Location> saveAutoAcceptSettings({
+    required String locationId,
+    required DateTime originalUpdatedAt,
+    required bool originalRegular,
+    required bool regular,
+    required bool originalCatering,
+    required bool catering,
   });
 }
 
@@ -214,8 +223,9 @@ class ApiLocationsRepository implements LocationsRepository {
     if (canonical.updatedAt != originalUpdatedAt) {
       throw LocationSettingsConflict(canonical);
     }
-    final CateringDeliverySettings current =
-        CateringDeliverySettings.fromJson(canonical.cateringDeliveryJson);
+    final CateringDeliverySettings current = CateringDeliverySettings.fromJson(
+      canonical.cateringDeliveryJson,
+    );
     final Map<String, dynamic> patch = <String, dynamic>{};
     if (enabled != originalEnabled) {
       patch['cateringDeliveryJson'] = current.withExplicitEnabled(enabled);
@@ -225,9 +235,39 @@ class ApiLocationsRepository implements LocationsRepository {
     }
     if (patch.isEmpty) return canonical;
     return _locationRequest(
+      () => _client.dio.patch<dynamic>('locations/$locationId', data: patch),
+    );
+  }
+
+  @override
+  Future<Location> saveAutoAcceptSettings({
+    required String locationId,
+    required DateTime originalUpdatedAt,
+    required bool originalRegular,
+    required bool regular,
+    required bool originalCatering,
+    required bool catering,
+  }) async {
+    final Location canonical = await getLocation(locationId);
+    if (canonical.updatedAt != originalUpdatedAt) {
+      throw LocationSettingsConflict(canonical);
+    }
+    final AutoAcceptSettings current = AutoAcceptSettings.fromJson(
+      canonical.servicePrefsJson,
+    );
+    final bool regularChanged = regular != originalRegular;
+    final bool cateringChanged = catering != originalCatering;
+    if (!regularChanged && !cateringChanged) return canonical;
+    final Map<String, dynamic> next = current.withChanges(
+      regularChanged: regularChanged,
+      regular: regular,
+      cateringChanged: cateringChanged,
+      catering: catering,
+    );
+    return _locationRequest(
       () => _client.dio.patch<dynamic>(
         'locations/$locationId',
-        data: patch,
+        data: <String, dynamic>{'servicePrefsJson': next},
       ),
     );
   }

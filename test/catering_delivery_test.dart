@@ -433,6 +433,16 @@ class _ControllerRepository implements LocationsRepository {
   }
 
   @override
+  Future<Location> saveAutoAcceptSettings({
+    required String locationId,
+    required DateTime originalUpdatedAt,
+    required bool originalRegular,
+    required bool regular,
+    required bool originalCatering,
+    required bool catering,
+  }) => throw UnimplementedError();
+
+  @override
   Future<Location> setAcceptingOrders(
     String locationId,
     bool isAcceptingOrders,
