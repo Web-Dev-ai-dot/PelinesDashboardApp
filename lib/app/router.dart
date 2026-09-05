@@ -13,6 +13,7 @@ import '../features/menu/models/menu_models.dart';
 import '../features/menu/presentation/menu_screens.dart';
 import '../features/menu/presentation/product_form_screen.dart';
 import '../features/menu/presentation/category_form_screen.dart';
+import '../features/menu/presentation/modifier_form_screen.dart';
 
 enum AuthRouteStatus { loading, authenticated, unauthenticated }
 
@@ -113,6 +114,44 @@ final routerProvider = Provider<GoRouter>((Ref ref) {
               categoryId: state.pathParameters['categoryId']!,
               productId: state.pathParameters['productId']!,
               categoryName: state.uri.queryParameters['category'] ?? 'Category',
+            ),
+          ),
+          GoRoute(
+            path: 'menu/:kind/categories/:categoryId/products/:productId/modifiers/new',
+            builder: (_, state) => ModifierFormScreen(
+              kind: MenuKind.fromJson(state.pathParameters['kind']),
+              categoryId: state.pathParameters['categoryId']!,
+              productId: state.pathParameters['productId']!,
+            ),
+          ),
+          GoRoute(
+            path: 'menu/:kind/categories/:categoryId/products/:productId/modifiers/:groupId/edit',
+            builder: (_, state) => ModifierFormScreen(
+              kind: MenuKind.fromJson(state.pathParameters['kind']),
+              categoryId: state.pathParameters['categoryId']!,
+              productId: state.pathParameters['productId']!,
+              groupId: state.pathParameters['groupId']!,
+            ),
+          ),
+          GoRoute(
+            path: 'menu/:kind/categories/:categoryId/products/:productId/modifiers/:groupId/options/new',
+            builder: (_, state) => ModifierFormScreen(
+              kind: MenuKind.fromJson(state.pathParameters['kind']),
+              categoryId: state.pathParameters['categoryId']!,
+              productId: state.pathParameters['productId']!,
+              groupId: state.pathParameters['groupId']!,
+              optionForm: true,
+            ),
+          ),
+          GoRoute(
+            path: 'menu/:kind/categories/:categoryId/products/:productId/modifiers/:groupId/options/:optionId/edit',
+            builder: (_, state) => ModifierFormScreen(
+              kind: MenuKind.fromJson(state.pathParameters['kind']),
+              categoryId: state.pathParameters['categoryId']!,
+              productId: state.pathParameters['productId']!,
+              groupId: state.pathParameters['groupId']!,
+              optionId: state.pathParameters['optionId']!,
+              optionForm: true,
             ),
           ),
           GoRoute(

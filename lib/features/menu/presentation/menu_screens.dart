@@ -317,28 +317,99 @@ class MenuProductDetailScreen extends ConsumerWidget {
               _Field('Serves', '${item.servesCount}'),
             if (item.disclaimer != null) _Field('Disclaimer', item.disclaimer!),
             _Field('Sort order', '${item.sortOrder}'),
-            if (item.modifierGroups.isNotEmpty) ...<Widget>[
-              const SizedBox(height: 16),
-              Text(
-                'Modifier groups',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              for (final group in item.modifierGroups)
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(group.name),
-                  subtitle: Text(
-                    group.options.isEmpty
-                        ? 'Options loaded in product detail only'
-                        : '${group.options.length} options${group.isRequired == true ? ' · Required' : ''}',
+            const SizedBox(height: 20),
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: Text(
+                    'Modifier Administration',
+                    style: Theme.of(context).textTheme.titleMedium,
                   ),
                 ),
-            ],
+                FilledButton.icon(
+                  onPressed: () => context.push(
+                    '/app/menu/${kind.name}/categories/$categoryId/products/$productId/modifiers/new',
+                  ),
+                  icon: const Icon(Icons.add),
+                  label: const Text('Add Group'),
+                ),
+              ],
+            ),
+            if (item.modifierGroups.isEmpty)
+              const MenuEmpty('No modifier groups.'),
+            for (final group in item.modifierGroups)
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        group.name,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      Text(_modifierRule(group)),
+                      if (group.options.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 12),
+                          child: Text('No options in this group.'),
+                        ),
+                      for (final option in group.options)
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(option.name),
+                          subtitle: Text(
+                            '${_signedMoney(option.priceDeltaCents)}${option.isDefault ? ' - Default' : ''}',
+                          ),
+                          trailing: IconButton(
+                            tooltip: 'Edit Option',
+                            icon: const Icon(Icons.edit_outlined),
+                            onPressed: () => context.push(
+                              '/app/menu/${kind.name}/categories/$categoryId/products/$productId/modifiers/${group.id}/options/${option.id}/edit',
+                            ),
+                          ),
+                        ),
+                      Wrap(
+                        spacing: 8,
+                        children: <Widget>[
+                          OutlinedButton.icon(
+                            onPressed: () => context.push(
+                              '/app/menu/${kind.name}/categories/$categoryId/products/$productId/modifiers/${group.id}/edit',
+                            ),
+                            icon: const Icon(Icons.edit_outlined),
+                            label: const Text('Edit Group'),
+                          ),
+                          OutlinedButton.icon(
+                            onPressed: () => context.push(
+                              '/app/menu/${kind.name}/categories/$categoryId/products/$productId/modifiers/${group.id}/options/new',
+                            ),
+                            icon: const Icon(Icons.add),
+                            label: const Text('Add Option'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
           ],
         ),
       ),
     );
   }
+}
+
+String _modifierRule(MenuModifierGroup group) {
+  final String requirement = group.isRequired == true ? 'Required' : 'Optional';
+  if (group.minSelect == group.maxSelect) {
+    return '$requirement - Choose ${group.maxSelect}';
+  }
+  return '$requirement - Choose ${group.minSelect}-${group.maxSelect}';
+}
+
+String _signedMoney(int cents) {
+  if (cents == 0) return money(0);
+  return '${cents > 0 ? '+' : '-'}${money(cents.abs())}';
 }
 
 class _Field extends StatelessWidget {

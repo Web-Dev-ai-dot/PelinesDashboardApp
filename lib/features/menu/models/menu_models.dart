@@ -122,6 +122,7 @@ class MenuProduct {
 class MenuModifierGroup {
   const MenuModifierGroup({
     required this.id,
+    required this.productId,
     required this.name,
     required this.sortOrder,
     required this.options,
@@ -132,6 +133,7 @@ class MenuModifierGroup {
   factory MenuModifierGroup.fromJson(Map<String, dynamic> json) =>
       MenuModifierGroup(
         id: _string(json, 'id'),
+        productId: _string(json, 'productId'),
         name: _string(json, 'name'),
         sortOrder: _int(json, 'sortOrder'),
         isRequired: json['isRequired'] as bool?,
@@ -145,6 +147,7 @@ class MenuModifierGroup {
             .toList(growable: false),
       );
   final String id;
+  final String productId;
   final String name;
   final int sortOrder;
   final bool? isRequired;
@@ -156,6 +159,7 @@ class MenuModifierGroup {
 class MenuModifierOption {
   const MenuModifierOption({
     required this.id,
+    required this.groupId,
     required this.name,
     required this.priceDeltaCents,
     required this.isDefault,
@@ -164,12 +168,14 @@ class MenuModifierOption {
   factory MenuModifierOption.fromJson(Map<String, dynamic> json) =>
       MenuModifierOption(
         id: _string(json, 'id'),
+        groupId: _string(json, 'groupId'),
         name: _string(json, 'name'),
         priceDeltaCents: _int(json, 'priceDeltaCents'),
         isDefault: _bool(json, 'isDefault'),
         sortOrder: _int(json, 'sortOrder'),
       );
   final String id;
+  final String groupId;
   final String name;
   final int priceDeltaCents;
   final bool isDefault;

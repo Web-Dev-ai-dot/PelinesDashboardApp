@@ -22,6 +22,64 @@ abstract interface class MenuRepository {
     String categoryId,
     CategoryWriteInput input,
   );
+  Future<List<MenuModifierGroup>> getModifierGroups(String productId);
+  Future<MenuModifierGroup> createModifierGroup(
+    String productId,
+    ModifierGroupWriteInput input,
+  );
+  Future<MenuModifierGroup> updateModifierGroup(
+    String groupId,
+    ModifierGroupWriteInput input,
+  );
+  Future<MenuModifierOption> createModifierOption(
+    String groupId,
+    ModifierOptionWriteInput input,
+  );
+  Future<MenuModifierOption> updateModifierOption(
+    String optionId,
+    ModifierOptionWriteInput input,
+  );
+}
+
+class ModifierGroupWriteInput {
+  const ModifierGroupWriteInput({
+    required this.name,
+    required this.isRequired,
+    required this.minSelect,
+    required this.maxSelect,
+    required this.sortOrder,
+  });
+  final String name;
+  final bool isRequired;
+  final int minSelect;
+  final int maxSelect;
+  final int sortOrder;
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'name': name,
+    'isRequired': isRequired,
+    'minSelect': minSelect,
+    'maxSelect': maxSelect,
+    'sortOrder': sortOrder,
+  };
+}
+
+class ModifierOptionWriteInput {
+  const ModifierOptionWriteInput({
+    required this.name,
+    required this.priceDeltaCents,
+    required this.isDefault,
+    required this.sortOrder,
+  });
+  final String name;
+  final int priceDeltaCents;
+  final bool isDefault;
+  final int sortOrder;
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'name': name,
+    'priceDeltaCents': priceDeltaCents,
+    'isDefault': isDefault,
+    'sortOrder': sortOrder,
+  };
 }
 
 class CategoryWriteInput {
@@ -104,6 +162,17 @@ int? parsePriceCents(String value) {
   final int dollars = int.parse(match.group(1)!);
   final String fraction = (match.group(2) ?? '').padRight(2, '0');
   return dollars * 100 + (fraction.isEmpty ? 0 : int.parse(fraction));
+}
+
+int? parseSignedPriceCents(String value) {
+  final RegExpMatch? match = RegExp(r'^(-)?(\d+)(?:\.(\d{1,2}))?$')
+      .firstMatch(value.trim());
+  if (match == null) return null;
+  final int dollars = int.parse(match.group(2)!);
+  final String fraction = (match.group(3) ?? '').padRight(2, '0');
+  final int cents =
+      dollars * 100 + (fraction.isEmpty ? 0 : int.parse(fraction));
+  return match.group(1) == '-' ? -cents : cents;
 }
 
 class ApiMenuRepository implements MenuRepository {
@@ -196,6 +265,85 @@ class ApiMenuRepository implements MenuRepository {
     String categoryId,
     CategoryWriteInput input,
   ) => _categoryWrite('categories/$categoryId', input: input);
+
+  @override
+  Future<List<MenuModifierGroup>> getModifierGroups(String productId) => _list(
+    'products/$productId/modifier-groups',
+    const <String, dynamic>{},
+    MenuModifierGroup.fromJson,
+    'modifier groups',
+  );
+
+  @override
+  Future<MenuModifierGroup> createModifierGroup(
+    String productId,
+    ModifierGroupWriteInput input,
+  ) => _modifierWrite(
+    'products/$productId/modifier-groups',
+    input.toJson(),
+    MenuModifierGroup.fromJson,
+    'modifier group',
+    create: true,
+  );
+
+  @override
+  Future<MenuModifierGroup> updateModifierGroup(
+    String groupId,
+    ModifierGroupWriteInput input,
+  ) => _modifierWrite(
+    'modifier-groups/$groupId',
+    input.toJson(),
+    MenuModifierGroup.fromJson,
+    'modifier group',
+  );
+
+  @override
+  Future<MenuModifierOption> createModifierOption(
+    String groupId,
+    ModifierOptionWriteInput input,
+  ) => _modifierWrite(
+    'modifier-groups/$groupId/options',
+    input.toJson(),
+    MenuModifierOption.fromJson,
+    'modifier option',
+    create: true,
+  );
+
+  @override
+  Future<MenuModifierOption> updateModifierOption(
+    String optionId,
+    ModifierOptionWriteInput input,
+  ) => _modifierWrite(
+    'modifier-options/$optionId',
+    input.toJson(),
+    MenuModifierOption.fromJson,
+    'modifier option',
+  );
+
+  Future<T> _modifierWrite<T>(
+    String path,
+    Map<String, dynamic> body,
+    T Function(Map<String, dynamic>) parse,
+    String label, {
+    bool create = false,
+  }) async {
+    try {
+      final Response<dynamic> response = create
+          ? await _client.dio.post<dynamic>(path, data: body)
+          : await _client.dio.patch<dynamic>(path, data: body);
+      if (response.data is! Map<String, dynamic>) {
+        throw FormatException('Invalid $label.');
+      }
+      return parse(response.data as Map<String, dynamic>);
+    } on DioException catch (error) {
+      throw _error(error, entity: label);
+    } on Object catch (error) {
+      throw ApiException(
+        message: 'The server returned an invalid $label.',
+        cause: error,
+      );
+    }
+  }
 
   Future<MenuCategory> _categoryWrite(
     String path, {

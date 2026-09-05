@@ -14,6 +14,7 @@ import 'package:pelines_admin_app/features/menu/data/menu_repository.dart';
 import 'package:pelines_admin_app/features/menu/models/menu_models.dart';
 import 'package:pelines_admin_app/features/menu/presentation/menu_screens.dart';
 import 'package:pelines_admin_app/features/menu/providers/menu_providers.dart';
+import 'package:pelines_admin_app/features/menu/providers/modifier_providers.dart';
 
 void main() {
   test('models preserve kinds, cents, nulls, availability and modifiers', () {
@@ -148,6 +149,93 @@ void main() {
     expect(parsePriceCents('-1'), isNull);
     expect(parsePriceCents('1.999'), isNull);
   });
+
+  test('signed modifier price parser is deterministic', () {
+    expect(parseSignedPriceCents('0'), 0);
+    expect(parseSignedPriceCents('1.5'), 150);
+    expect(parseSignedPriceCents('1.50'), 150);
+    expect(parseSignedPriceCents('-0.50'), -50);
+    expect(parseSignedPriceCents('1.999'), isNull);
+    expect(parseSignedPriceCents('NaN'), isNull);
+  });
+
+  test('modifier group POST sends exact granular body', () async {
+    final _Adapter adapter = _Adapter(jsonEncode(_modifierGroup()));
+    await _api(adapter).createModifierGroup(
+      'product-uuid',
+      const ModifierGroupWriteInput(
+        name: 'Size',
+        isRequired: true,
+        minSelect: 1,
+        maxSelect: 2,
+        sortOrder: 3,
+      ),
+    );
+    expect(adapter.options?.method, 'POST');
+    expect(adapter.options?.path, 'products/product-uuid/modifier-groups');
+    expect(adapter.options?.data, <String, dynamic>{
+      'name': 'Size',
+      'isRequired': true,
+      'minSelect': 1,
+      'maxSelect': 2,
+      'sortOrder': 3,
+    });
+  });
+
+  test('modifier group PATCH does not send options or parent', () async {
+    final _Adapter adapter = _Adapter(jsonEncode(_modifierGroup()));
+    await _api(adapter).updateModifierGroup(
+      'group',
+      const ModifierGroupWriteInput(
+        name: 'Size',
+        isRequired: false,
+        minSelect: 0,
+        maxSelect: 1,
+        sortOrder: 1,
+      ),
+    );
+    expect(adapter.options?.method, 'PATCH');
+    expect(adapter.options?.path, 'modifier-groups/group');
+    final body = adapter.options?.data as Map<dynamic, dynamic>;
+    expect(
+      body.keys,
+      unorderedEquals(<String>[
+        'name',
+        'isRequired',
+        'minSelect',
+        'maxSelect',
+        'sortOrder',
+      ]),
+    );
+  });
+
+  for (final bool create in <bool>[true, false]) {
+    test('modifier option ${create ? 'POST' : 'PATCH'} is granular', () async {
+      final _Adapter adapter = _Adapter(jsonEncode(_modifierOption()));
+      const input = ModifierOptionWriteInput(
+        name: 'Large',
+        priceDeltaCents: -50,
+        isDefault: true,
+        sortOrder: 2,
+      );
+      if (create) {
+        await _api(adapter).createModifierOption('group', input);
+      } else {
+        await _api(adapter).updateModifierOption('option', input);
+      }
+      expect(adapter.options?.method, create ? 'POST' : 'PATCH');
+      expect(
+        adapter.options?.path,
+        create ? 'modifier-groups/group/options' : 'modifier-options/option',
+      );
+      expect(adapter.options?.data, <String, dynamic>{
+        'name': 'Large',
+        'priceDeltaCents': -50,
+        'isDefault': true,
+        'sortOrder': 2,
+      });
+    });
+  }
 
   for (final bool create in <bool>[true, false]) {
     test(
@@ -436,6 +524,105 @@ void main() {
     expect(repository.categoryCreateCalls, 0);
   });
 
+  test('modifier group update timeout reconciles without retry', () async {
+    final repository = _Repository()..modifierWriteError = _timeout();
+    final container = ProviderContainer(
+      overrides: [
+        currentLocationProvider.overrideWith(_CurrentLocation.new),
+        menuRepositoryProvider.overrideWithValue(repository),
+      ],
+    );
+    addTearDown(container.dispose);
+    const context = (
+      locationId: 'location-a',
+      locationSlug: 'a',
+      kind: MenuKind.store,
+      categoryId: 'category-a',
+      productId: 'product-uuid',
+    );
+    const input = ModifierGroupWriteInput(
+      name: 'Sauce',
+      isRequired: true,
+      minSelect: 1,
+      maxSelect: 1,
+      sortOrder: 0,
+    );
+    expect(
+      await container
+          .read(modifierMutationProvider(context).notifier)
+          .saveGroup(input, groupId: 'group'),
+      isTrue,
+    );
+    expect(repository.modifierGroupUpdateCalls, 1);
+  });
+
+  test('modifier option create timeout is not retried', () async {
+    final repository = _Repository()..modifierWriteError = _timeout();
+    final container = ProviderContainer(
+      overrides: [
+        currentLocationProvider.overrideWith(_CurrentLocation.new),
+        menuRepositoryProvider.overrideWithValue(repository),
+      ],
+    );
+    addTearDown(container.dispose);
+    const context = (
+      locationId: 'location-a',
+      locationSlug: 'a',
+      kind: MenuKind.store,
+      categoryId: 'category-a',
+      productId: 'product-uuid',
+    );
+    const input = ModifierOptionWriteInput(
+      name: 'New option',
+      priceDeltaCents: 0,
+      isDefault: false,
+      sortOrder: 1,
+    );
+    expect(
+      await container
+          .read(modifierMutationProvider(context).notifier)
+          .saveOption(input, groupId: 'group'),
+      isFalse,
+    );
+    expect(repository.modifierOptionCreateCalls, 1);
+    expect(
+      container.read(modifierMutationProvider(context)).message,
+      contains('avoid a duplicate'),
+    );
+  });
+
+  test('wrong context blocks modifier write', () async {
+    final repository = _Repository();
+    final container = ProviderContainer(
+      overrides: [
+        currentLocationProvider.overrideWith(_CurrentLocation.new),
+        menuRepositoryProvider.overrideWithValue(repository),
+      ],
+    );
+    addTearDown(container.dispose);
+    const context = (
+      locationId: 'wrong',
+      locationSlug: 'wrong',
+      kind: MenuKind.store,
+      categoryId: 'category-a',
+      productId: 'product-uuid',
+    );
+    const input = ModifierGroupWriteInput(
+      name: 'Sauce',
+      isRequired: true,
+      minSelect: 1,
+      maxSelect: 1,
+      sortOrder: 0,
+    );
+    expect(
+      await container
+          .read(modifierMutationProvider(context).notifier)
+          .saveGroup(input),
+      isFalse,
+    );
+    expect(repository.modifierGroupCreateCalls, 0);
+  });
+
   testWidgets('landing follows Menu to category to product and Back', (
     tester,
   ) async {
@@ -571,6 +758,7 @@ Map<String, dynamic> _product({
   'modifierGroups': <Object>[
     <String, dynamic>{
       'id': 'group',
+      'productId': 'product-uuid',
       'name': 'Sauce',
       'sortOrder': 0,
       if (full) ...<String, dynamic>{
@@ -580,6 +768,7 @@ Map<String, dynamic> _product({
         'options': <Object>[
           <String, dynamic>{
             'id': 'option',
+            'groupId': 'group',
             'name': 'Hot',
             'priceDeltaCents': 150,
             'isDefault': false,
@@ -589,6 +778,26 @@ Map<String, dynamic> _product({
       },
     },
   ],
+};
+
+Map<String, dynamic> _modifierGroup() => <String, dynamic>{
+  'id': 'group',
+  'productId': 'product-uuid',
+  'name': 'Size',
+  'isRequired': true,
+  'minSelect': 1,
+  'maxSelect': 2,
+  'sortOrder': 3,
+  'options': <Object>[],
+};
+
+Map<String, dynamic> _modifierOption() => <String, dynamic>{
+  'id': 'option',
+  'groupId': 'group',
+  'name': 'Large',
+  'priceDeltaCents': -50,
+  'isDefault': true,
+  'sortOrder': 2,
 };
 
 Location _location(String id, String slug) => Location(
@@ -617,6 +826,11 @@ class _Repository implements MenuRepository {
   Object? categoryWriteError;
   int categoryCreateCalls = 0;
   int categoryUpdateCalls = 0;
+  Object? modifierWriteError;
+  int modifierGroupCreateCalls = 0;
+  int modifierGroupUpdateCalls = 0;
+  int modifierOptionCreateCalls = 0;
+  int modifierOptionUpdateCalls = 0;
   @override
   Future<List<MenuCategory>> getCategories({
     required String locationSlug,
@@ -665,6 +879,58 @@ class _Repository implements MenuRepository {
     categoryUpdateCalls++;
     if (categoryWriteError != null) throw categoryWriteError!;
     return MenuCategory.fromJson(_category());
+  }
+
+  @override
+  Future<List<MenuModifierGroup>> getModifierGroups(String productId) async =>
+      MenuProduct.fromJson(_product(full: true)).modifierGroups;
+
+  @override
+  Future<MenuModifierGroup> createModifierGroup(
+    String productId,
+    ModifierGroupWriteInput input,
+  ) async {
+    modifierGroupCreateCalls++;
+    if (modifierWriteError != null) throw modifierWriteError!;
+    return MenuProduct.fromJson(_product(full: true)).modifierGroups.single;
+  }
+
+  @override
+  Future<MenuModifierGroup> updateModifierGroup(
+    String groupId,
+    ModifierGroupWriteInput input,
+  ) async {
+    modifierGroupUpdateCalls++;
+    if (modifierWriteError != null) throw modifierWriteError!;
+    return MenuProduct.fromJson(_product(full: true)).modifierGroups.single;
+  }
+
+  @override
+  Future<MenuModifierOption> createModifierOption(
+    String groupId,
+    ModifierOptionWriteInput input,
+  ) async {
+    modifierOptionCreateCalls++;
+    if (modifierWriteError != null) throw modifierWriteError!;
+    return MenuProduct.fromJson(_product(full: true))
+        .modifierGroups
+        .single
+        .options
+        .single;
+  }
+
+  @override
+  Future<MenuModifierOption> updateModifierOption(
+    String optionId,
+    ModifierOptionWriteInput input,
+  ) async {
+    modifierOptionUpdateCalls++;
+    if (modifierWriteError != null) throw modifierWriteError!;
+    return MenuProduct.fromJson(_product(full: true))
+        .modifierGroups
+        .single
+        .options
+        .single;
   }
 }
 
