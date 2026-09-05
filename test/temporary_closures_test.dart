@@ -10,6 +10,7 @@ import 'package:pelines_admin_app/core/api/api_exception.dart';
 import 'package:pelines_admin_app/features/locations/data/location_selection_store.dart';
 import 'package:pelines_admin_app/features/locations/data/locations_repository.dart';
 import 'package:pelines_admin_app/features/locations/models/location.dart';
+import 'package:pelines_admin_app/features/locations/models/business_hours.dart';
 import 'package:pelines_admin_app/features/locations/models/temporary_closure.dart';
 import 'package:pelines_admin_app/features/locations/providers/closures_controller.dart';
 import 'package:pelines_admin_app/features/locations/providers/locations_providers.dart';
@@ -385,6 +386,12 @@ class _TimeoutRepository implements LocationsRepository {
     String locationId,
     bool isAcceptingOrders,
   ) => throw UnimplementedError();
+  @override
+  Future<Location> saveBusinessHours({
+    required String locationId,
+    required DateTime originalUpdatedAt,
+    required BusinessHoursSchedule schedule,
+  }) => throw UnimplementedError();
 }
 
 class _ContextRepository implements LocationsRepository {
@@ -413,6 +420,12 @@ class _ContextRepository implements LocationsRepository {
     String locationId,
     bool isAcceptingOrders,
   ) => throw UnimplementedError();
+  @override
+  Future<Location> saveBusinessHours({
+    required String locationId,
+    required DateTime originalUpdatedAt,
+    required BusinessHoursSchedule schedule,
+  }) => throw UnimplementedError();
 }
 
 class _MemoryStore implements LocationSelectionStore {

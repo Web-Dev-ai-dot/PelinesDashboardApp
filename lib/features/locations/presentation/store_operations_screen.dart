@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 
 import '../models/location.dart';
 import '../models/temporary_closure.dart';
+import '../models/business_hours.dart';
+import 'business_hours_screen.dart';
 import 'closure_form_screen.dart';
 import '../providers/locations_providers.dart';
 import '../providers/store_operations_controller.dart';
@@ -126,6 +128,8 @@ class _OperationsContent extends ConsumerWidget {
         ),
         const SizedBox(height: 20),
         _TemporaryClosuresCard(location: location),
+        const SizedBox(height: 20),
+        _BusinessHoursCard(location: location),
       ],
     );
   }
@@ -180,6 +184,79 @@ class _OperationsContent extends ConsumerWidget {
           observedValue: captured.isAcceptingOrders,
           requestedValue: requested,
         );
+  }
+}
+
+class _BusinessHoursCard extends StatelessWidget {
+  const _BusinessHoursCard({required this.location});
+  final Location location;
+
+  @override
+  Widget build(BuildContext context) {
+    final BusinessHoursSchedule? schedule = location.hoursJson == null
+        ? null
+        : BusinessHoursSchedule.fromJson(location.hoursJson!);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Text(
+              'Business Hours',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Business hours affect regular online ordering. Catering availability is handled separately.',
+            ),
+            const SizedBox(height: 12),
+            if (schedule == null)
+              const Text('Business hours are not configured.')
+            else
+              for (int index = 0; index < 7; index++)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    children: <Widget>[
+                      SizedBox(
+                        width: 92,
+                        child: Text(businessDayLabels[index].substring(0, 3)),
+                      ),
+                      Expanded(
+                        child: Text(_summary(context, schedule.days[index])),
+                      ),
+                    ],
+                  ),
+                ),
+            const SizedBox(height: 12),
+            OutlinedButton(
+              key: const Key('edit-business-hours'),
+              onPressed: () => Navigator.push<void>(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => BusinessHoursScreen(location: location),
+                ),
+              ),
+              child: const Text('Edit business hours'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _summary(BuildContext context, BusinessDayHours day) {
+    if (day.closed) return 'Closed';
+    String display(String value) {
+      final List<String> parts = value.split(':');
+      return TimeOfDay(
+        hour: int.parse(parts[0]),
+        minute: int.parse(parts[1]),
+      ).format(context);
+    }
+
+    return '${display(day.open)} – ${display(day.close)}';
   }
 }
 

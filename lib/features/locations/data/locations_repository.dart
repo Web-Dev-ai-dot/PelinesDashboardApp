@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/api/api_exception.dart';
 import '../models/location.dart';
+import '../models/business_hours.dart';
 import '../models/temporary_closure.dart';
 
 class LocationSettingsConflict implements Exception {
@@ -22,6 +23,11 @@ abstract interface class LocationsRepository {
     required DateTime originalUpdatedAt,
     required TemporaryClosure closure,
     required bool isNew,
+  });
+  Future<Location> saveBusinessHours({
+    required String locationId,
+    required DateTime originalUpdatedAt,
+    required BusinessHoursSchedule schedule,
   });
 }
 
@@ -127,6 +133,26 @@ class ApiLocationsRepository implements LocationsRepository {
       () => _client.dio.patch<dynamic>(
         'locations/$locationId',
         data: <String, dynamic>{'hoursExtrasJson': extras},
+      ),
+    );
+  }
+
+  @override
+  Future<Location> saveBusinessHours({
+    required String locationId,
+    required DateTime originalUpdatedAt,
+    required BusinessHoursSchedule schedule,
+  }) async {
+    final Location canonical = await getLocation(locationId);
+    if (canonical.updatedAt != originalUpdatedAt) {
+      throw LocationSettingsConflict(canonical);
+    }
+    final String? validation = schedule.validate();
+    if (validation != null) throw ArgumentError(validation);
+    return _locationRequest(
+      () => _client.dio.patch<dynamic>(
+        'locations/$locationId',
+        data: <String, dynamic>{'hoursJson': schedule.toJson()},
       ),
     );
   }

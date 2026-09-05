@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pelines_admin_app/features/locations/data/location_selection_store.dart';
 import 'package:pelines_admin_app/features/locations/data/locations_repository.dart';
 import 'package:pelines_admin_app/features/locations/models/location.dart';
+import 'package:pelines_admin_app/features/locations/models/business_hours.dart';
 import 'package:pelines_admin_app/features/locations/models/temporary_closure.dart';
 import 'package:pelines_admin_app/features/locations/providers/locations_providers.dart';
 
@@ -134,6 +135,13 @@ class _FakeRepository implements LocationsRepository {
     required DateTime originalUpdatedAt,
     required TemporaryClosure closure,
     required bool isNew,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<Location> saveBusinessHours({
+    required String locationId,
+    required DateTime originalUpdatedAt,
+    required BusinessHoursSchedule schedule,
   }) => throw UnimplementedError();
 }
 
