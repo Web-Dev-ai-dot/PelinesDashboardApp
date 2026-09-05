@@ -236,6 +236,12 @@ class _FakeRepository implements LocationsRepository {
     required bool enabled,
     required int feeCents,
   }) => throw UnimplementedError();
+  @override
+  Future<Location> saveCateringDeliverySettings({
+    required String locationId, required DateTime originalUpdatedAt,
+    required bool originalEnabled, required bool enabled,
+    required int originalFeeCents, required int feeCents,
+  }) => throw UnimplementedError();
 }
 
 class _MemoryStore implements LocationSelectionStore {

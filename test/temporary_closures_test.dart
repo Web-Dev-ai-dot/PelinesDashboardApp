@@ -399,6 +399,12 @@ class _TimeoutRepository implements LocationsRepository {
     required bool enabled,
     required int feeCents,
   }) => throw UnimplementedError();
+  @override
+  Future<Location> saveCateringDeliverySettings({
+    required String locationId, required DateTime originalUpdatedAt,
+    required bool originalEnabled, required bool enabled,
+    required int originalFeeCents, required int feeCents,
+  }) => throw UnimplementedError();
 }
 
 class _ContextRepository implements LocationsRepository {
@@ -439,6 +445,12 @@ class _ContextRepository implements LocationsRepository {
     required DateTime originalUpdatedAt,
     required bool enabled,
     required int feeCents,
+  }) => throw UnimplementedError();
+  @override
+  Future<Location> saveCateringDeliverySettings({
+    required String locationId, required DateTime originalUpdatedAt,
+    required bool originalEnabled, required bool enabled,
+    required int originalFeeCents, required int feeCents,
   }) => throw UnimplementedError();
 }
 

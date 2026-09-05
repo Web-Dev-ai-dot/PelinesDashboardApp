@@ -6,9 +6,11 @@ import '../models/location.dart';
 import '../models/temporary_closure.dart';
 import '../models/business_hours.dart';
 import '../models/regular_delivery.dart';
+import '../models/catering_delivery.dart';
 import '../../orders/presentation/order_ui_helpers.dart';
 import 'business_hours_screen.dart';
 import 'regular_delivery_screen.dart';
+import 'catering_delivery_screen.dart';
 import 'closure_form_screen.dart';
 import '../providers/locations_providers.dart';
 import '../providers/store_operations_controller.dart';
@@ -135,6 +137,8 @@ class _OperationsContent extends ConsumerWidget {
         _BusinessHoursCard(location: location),
         const SizedBox(height: 20),
         _RegularDeliveryCard(location: location),
+        const SizedBox(height: 20),
+        _CateringDeliveryCard(location: location),
       ],
     );
   }
@@ -189,6 +193,64 @@ class _OperationsContent extends ConsumerWidget {
           observedValue: captured.isAcceptingOrders,
           requestedValue: requested,
         );
+  }
+}
+
+class _CateringDeliveryCard extends StatelessWidget {
+  const _CateringDeliveryCard({required this.location});
+  final Location location;
+
+  @override
+  Widget build(BuildContext context) {
+    late final CateringDeliverySettings settings;
+    try {
+      settings = CateringDeliverySettings.fromJson(
+        location.cateringDeliveryJson,
+      );
+    } on UnsupportedCateringDeliveryFormat catch (error) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text('Catering Delivery', style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 12),
+              Text(error.toString(), style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            ],
+          ),
+        ),
+      );
+    }
+    return Card(
+      key: const Key('catering-delivery-card'),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Text('Catering Delivery', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 6),
+            Text(settings.enabled ? 'Enabled' : 'Disabled'),
+            if (settings.usesDefault) const Text('Using default setting'),
+            const SizedBox(height: 12),
+            Text('Delivery fee: ${money(location.deliveryFeeCents)}'),
+            Text('Minimum order: ${money(location.deliveryMinimumCents)}'),
+            const SizedBox(height: 12),
+            OutlinedButton(
+              key: const Key('edit-catering-delivery'),
+              onPressed: () => Navigator.push<void>(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => CateringDeliveryScreen(location: location),
+                ),
+              ),
+              child: const Text('Edit catering delivery'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

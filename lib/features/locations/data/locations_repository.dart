@@ -6,6 +6,7 @@ import '../models/location.dart';
 import '../models/business_hours.dart';
 import '../models/temporary_closure.dart';
 import '../models/regular_delivery.dart';
+import '../models/catering_delivery.dart';
 
 class LocationSettingsConflict implements Exception {
   const LocationSettingsConflict(this.canonical);
@@ -34,6 +35,14 @@ abstract interface class LocationsRepository {
     required String locationId,
     required DateTime originalUpdatedAt,
     required bool enabled,
+    required int feeCents,
+  });
+  Future<Location> saveCateringDeliverySettings({
+    required String locationId,
+    required DateTime originalUpdatedAt,
+    required bool originalEnabled,
+    required bool enabled,
+    required int originalFeeCents,
     required int feeCents,
   });
 }
@@ -188,6 +197,37 @@ class ApiLocationsRepository implements LocationsRepository {
       () => _client.dio.patch<dynamic>(
         'locations/$locationId',
         data: <String, dynamic>{'regularDeliveryJson': next.toJson()},
+      ),
+    );
+  }
+
+  @override
+  Future<Location> saveCateringDeliverySettings({
+    required String locationId,
+    required DateTime originalUpdatedAt,
+    required bool originalEnabled,
+    required bool enabled,
+    required int originalFeeCents,
+    required int feeCents,
+  }) async {
+    final Location canonical = await getLocation(locationId);
+    if (canonical.updatedAt != originalUpdatedAt) {
+      throw LocationSettingsConflict(canonical);
+    }
+    final CateringDeliverySettings current =
+        CateringDeliverySettings.fromJson(canonical.cateringDeliveryJson);
+    final Map<String, dynamic> patch = <String, dynamic>{};
+    if (enabled != originalEnabled) {
+      patch['cateringDeliveryJson'] = current.withExplicitEnabled(enabled);
+    }
+    if (feeCents != originalFeeCents) {
+      patch['deliveryFeeCents'] = feeCents;
+    }
+    if (patch.isEmpty) return canonical;
+    return _locationRequest(
+      () => _client.dio.patch<dynamic>(
+        'locations/$locationId',
+        data: patch,
       ),
     );
   }
