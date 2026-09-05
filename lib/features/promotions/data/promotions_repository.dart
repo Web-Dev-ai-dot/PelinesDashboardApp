@@ -6,6 +6,8 @@ import '../models/discount.dart';
 
 abstract interface class PromotionsRepository {
   Future<List<Discount>> getDiscounts();
+  Future<Discount> createPromotion(Map<String, dynamic> body);
+  Future<Discount> updatePromotion(String id, Map<String, dynamic> patch);
   Future<Discount> setActive(String id, bool isActive);
 }
 
@@ -47,19 +49,28 @@ class ApiPromotionsRepository implements PromotionsRepository {
   }
 
   @override
+  Future<Discount> createPromotion(Map<String, dynamic> body) =>
+      _write(() => _client.dio.post<dynamic>('discounts', data: body));
+
+  @override
+  Future<Discount> updatePromotion(String id, Map<String, dynamic> patch) =>
+      _write(() => _client.dio.patch<dynamic>('discounts/$id', data: patch));
+
+  @override
   Future<Discount> setActive(String id, bool isActive) async {
+    return updatePromotion(id, <String, dynamic>{'isActive': isActive});
+  }
+
+  Future<Discount> _write(Future<Response<dynamic>> Function() request) async {
     try {
-      final Response<dynamic> response = await _client.dio.patch<dynamic>(
-        'discounts/$id',
-        data: <String, dynamic>{'isActive': isActive},
-      );
+      final Response<dynamic> response = await request();
       final Object? data = response.data;
       if (data is! Map<String, dynamic>) {
         throw const FormatException('Invalid discount response.');
       }
       return Discount.fromJson(data);
     } on DioException catch (error) {
-      throw _apiError(error, 'update this promotion');
+      throw _apiError(error, 'save this promotion');
     } on FormatException catch (error) {
       throw ApiException(
         message: 'The Pelines server returned an invalid promotion.',
@@ -79,6 +90,7 @@ class ApiPromotionsRepository implements PromotionsRepository {
       401 => 'Your session has expired. Please sign in again.',
       403 => 'Administrator access is required.',
       404 => 'This promotion no longer exists.',
+      409 => 'A promotion with this code already exists.',
       _ => switch (error.type) {
         DioExceptionType.connectionTimeout ||
         DioExceptionType.receiveTimeout ||

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../locations/models/location.dart';
 import '../../locations/providers/locations_providers.dart';
@@ -144,6 +145,15 @@ class _Details extends ConsumerWidget {
             ),
           ),
         if (manageable) ...<Widget>[
+          OutlinedButton.icon(
+            key: const Key('edit-promotion'),
+            onPressed: operation.isBusy
+                ? null
+                : () => context.push('/app/promotions/${discount.id}/edit'),
+            icon: const Icon(Icons.edit_outlined),
+            label: const Text('Edit Promotion'),
+          ),
+          const SizedBox(height: 10),
           FilledButton(
             key: const Key('promotion-active-action'),
             onPressed: operation.isBusy

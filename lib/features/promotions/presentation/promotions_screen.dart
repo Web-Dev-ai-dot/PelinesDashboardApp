@@ -16,6 +16,14 @@ class PromotionsScreen extends ConsumerWidget {
     final AsyncValue<List<Discount>> promotions = ref.watch(promotionsProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('Promotions')),
+      floatingActionButton: location.value == null
+          ? null
+          : FloatingActionButton.extended(
+              key: const Key('add-promotion'),
+              onPressed: () => context.push('/app/promotions/new'),
+              icon: const Icon(Icons.add),
+              label: const Text('Add Promotion'),
+            ),
       body: location.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (Object error, StackTrace stack) => _ErrorView(

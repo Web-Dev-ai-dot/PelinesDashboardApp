@@ -6,6 +6,7 @@ import '../../auth/providers/auth_providers.dart';
 import '../../locations/providers/locations_providers.dart';
 import '../data/promotions_repository.dart';
 import '../models/discount.dart';
+import '../models/promotion_write.dart';
 
 final promotionsRepositoryProvider = Provider<PromotionsRepository>((Ref ref) {
   return ApiPromotionsRepository(ref.watch(apiClientProvider));
@@ -245,4 +246,275 @@ class PromotionMutationController extends Notifier<PromotionMutationState> {
 
   String _message(Object error, String fallback) =>
       error is ApiException ? error.message : fallback;
+}
+
+enum PromotionFormPhase {
+  idle,
+  preflight,
+  submitting,
+  reconciling,
+  success,
+  conflict,
+  error,
+}
+
+class PromotionFormMutationState {
+  const PromotionFormMutationState({
+    this.phase = PromotionFormPhase.idle,
+    this.message,
+    this.resultId,
+  });
+  final PromotionFormPhase phase;
+  final String? message;
+  final String? resultId;
+  bool get isBusy =>
+      phase == PromotionFormPhase.preflight ||
+      phase == PromotionFormPhase.submitting ||
+      phase == PromotionFormPhase.reconciling;
+}
+
+final promotionFormMutationProvider =
+    NotifierProvider<
+      PromotionFormMutationController,
+      PromotionFormMutationState
+    >(PromotionFormMutationController.new);
+
+class PromotionFormMutationController
+    extends Notifier<PromotionFormMutationState> {
+  @override
+  PromotionFormMutationState build() => const PromotionFormMutationState();
+
+  void reset() => state = const PromotionFormMutationState();
+
+  Future<void> create({
+    required String locationId,
+    required Map<String, dynamic> body,
+  }) async {
+    if (state.isBusy) return;
+    if (!_sameLocation(locationId)) return _locationChanged();
+    final PromotionsRepository repository = ref.read(
+      promotionsRepositoryProvider,
+    );
+    state = const PromotionFormMutationState(
+      phase: PromotionFormPhase.submitting,
+    );
+    String? returnedId;
+    try {
+      returnedId = (await repository.createPromotion(body)).id;
+    } catch (error) {
+      if (!_ambiguousFormError(error)) {
+        state = PromotionFormMutationState(
+          phase: PromotionFormPhase.error,
+          message: _formMessage(error, 'The promotion could not be created.'),
+        );
+        return;
+      }
+      await _reconcileCreate(repository, locationId, body);
+      return;
+    }
+    await _reconcileCreate(
+      repository,
+      locationId,
+      body,
+      returnedId: returnedId,
+    );
+  }
+
+  Future<void> edit({
+    required String discountId,
+    required String locationId,
+    required DateTime originalUpdatedAt,
+    required Map<String, dynamic> desired,
+  }) async {
+    if (state.isBusy) return;
+    if (!_sameLocation(locationId)) return _locationChanged();
+    final PromotionsRepository repository = ref.read(
+      promotionsRepositoryProvider,
+    );
+    state = const PromotionFormMutationState(
+      phase: PromotionFormPhase.preflight,
+    );
+    late List<Discount> values;
+    try {
+      values = await repository.getDiscounts();
+    } catch (error) {
+      return _error(error, 'The promotion could not be checked.');
+    }
+    _adoptForm(values);
+    if (!_sameLocation(locationId)) return _locationChanged();
+    final Discount? canonical = _findForm(values, discountId);
+    if (canonical == null) {
+      return _setFormError('This promotion no longer exists.');
+    }
+    if (canonical.locationId != locationId) {
+      return _setFormError(
+        'This promotion can no longer be edited for this location.',
+      );
+    }
+    if (canonical.updatedAt != originalUpdatedAt.toUtc()) {
+      state = const PromotionFormMutationState(
+        phase: PromotionFormPhase.conflict,
+        message: 'This promotion was changed elsewhere.',
+      );
+      return;
+    }
+    final Map<String, dynamic> patch = partialPromotionPatch(
+      discountEditableBody(canonical),
+      desired,
+    );
+    if (patch.isEmpty) {
+      state = PromotionFormMutationState(
+        phase: PromotionFormPhase.success,
+        resultId: discountId,
+      );
+      return;
+    }
+    state = const PromotionFormMutationState(
+      phase: PromotionFormPhase.submitting,
+    );
+    try {
+      await repository.updatePromotion(discountId, patch);
+    } catch (error) {
+      if (!_ambiguousFormError(error)) {
+        return _error(error, 'The promotion could not be saved.');
+      }
+      await _reconcileEdit(repository, discountId, locationId, patch);
+      return;
+    }
+    await _reconcileEdit(repository, discountId, locationId, patch);
+  }
+
+  Future<void> _reconcileCreate(
+    PromotionsRepository repository,
+    String locationId,
+    Map<String, dynamic> body, {
+    String? returnedId,
+  }) async {
+    state = const PromotionFormMutationState(
+      phase: PromotionFormPhase.reconciling,
+    );
+    try {
+      final List<Discount> values = await repository.getDiscounts();
+      _adoptForm(values);
+      if (!_sameLocation(locationId)) return _locationChanged();
+      final List<Discount> candidates = returnedId != null
+          ? values.where((Discount d) => d.id == returnedId).toList()
+          : values
+                .where(
+                  (Discount d) =>
+                      d.code == body['code'] && d.locationId == locationId,
+                )
+                .toList();
+      if (candidates.length == 1 && _matchesForm(candidates.single, body)) {
+        state = PromotionFormMutationState(
+          phase: PromotionFormPhase.success,
+          resultId: candidates.single.id,
+        );
+        return;
+      }
+      _setFormError(
+        returnedId == null
+            ? 'The create result is uncertain. Review promotions before retrying.'
+            : 'The created promotion could not be confirmed.',
+      );
+    } catch (error) {
+      _setFormError(
+        'The create result could not be confirmed. Review promotions before retrying.',
+      );
+    }
+  }
+
+  Future<void> _reconcileEdit(
+    PromotionsRepository repository,
+    String id,
+    String locationId,
+    Map<String, dynamic> patch,
+  ) async {
+    state = const PromotionFormMutationState(
+      phase: PromotionFormPhase.reconciling,
+    );
+    try {
+      final List<Discount> values = await repository.getDiscounts();
+      _adoptForm(values);
+      if (!_sameLocation(locationId)) return _locationChanged();
+      final Discount? canonical = _findForm(values, id);
+      if (canonical == null) {
+        return _setFormError('This promotion no longer exists.');
+      }
+      if (canonical.locationId != locationId) {
+        return _setFormError(
+          'This promotion can no longer be edited for this location.',
+        );
+      }
+      if (!_matchesForm(canonical, patch)) {
+        return _setFormError(
+          'The change could not be confirmed. Reload and try again manually.',
+        );
+      }
+      state = PromotionFormMutationState(
+        phase: PromotionFormPhase.success,
+        resultId: id,
+      );
+    } catch (error) {
+      _setFormError(
+        'The save result could not be confirmed. Reload before retrying.',
+      );
+    }
+  }
+
+  bool _matchesForm(Discount discount, Map<String, dynamic> expected) {
+    final Map<String, dynamic> actual = <String, dynamic>{
+      ...discountEditableBody(discount),
+      'locationId': discount.locationId,
+    };
+    for (final MapEntry<String, dynamic> entry in expected.entries) {
+      final Object? value = actual[entry.key];
+      if ((entry.key == 'startsAt' || entry.key == 'endsAt') &&
+          value != null &&
+          entry.value != null) {
+        if (DateTime.parse(value as String).toUtc() !=
+            DateTime.parse(entry.value as String).toUtc()) {
+          return false;
+        }
+      } else if (value != entry.value) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  void _adoptForm(List<Discount> values) =>
+      ref.read(promotionsProvider.notifier).adoptCanonical(values);
+  bool _sameLocation(String id) =>
+      ref.read(currentLocationProvider).value?.id == id;
+  Discount? _findForm(List<Discount> values, String id) {
+    for (final Discount value in values) {
+      if (value.id == id) return value;
+    }
+    return null;
+  }
+
+  void _locationChanged() => _setFormError(
+    'The selected location changed. Reopen this form before saving.',
+  );
+  void _setFormError(String message) => state = PromotionFormMutationState(
+    phase: PromotionFormPhase.error,
+    message: message,
+  );
+  void _error(Object error, String fallback) =>
+      _setFormError(_formMessage(error, fallback));
+  String _formMessage(Object error, String fallback) =>
+      error is ApiException ? error.message : fallback;
+  bool _ambiguousFormError(Object error) {
+    if (error is! ApiException ||
+        error.statusCode != null ||
+        error.cause is! DioException) {
+      return false;
+    }
+    final DioExceptionType type = (error.cause! as DioException).type;
+    return type == DioExceptionType.connectionTimeout ||
+        type == DioExceptionType.sendTimeout ||
+        type == DioExceptionType.receiveTimeout ||
+        type == DioExceptionType.connectionError;
+  }
 }

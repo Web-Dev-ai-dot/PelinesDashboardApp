@@ -377,6 +377,14 @@ class _FakePromotionsRepository implements PromotionsRepository {
   int patchCalls = 0;
 
   @override
+  Future<Discount> createPromotion(Map<String, dynamic> body) =>
+      throw UnimplementedError();
+
+  @override
+  Future<Discount> updatePromotion(String id, Map<String, dynamic> patch) =>
+      setActive(id, patch['isActive'] as bool);
+
+  @override
   Future<List<Discount>> getDiscounts() async {
     getCalls++;
     return List<Discount>.of(current);
