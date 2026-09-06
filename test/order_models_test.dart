@@ -17,10 +17,14 @@ void main() {
   );
 
   test('unknown enum values are retained without crashing', () {
-    final Map<String, dynamic> json = _orderJson()..['status'] = 'on_hold';
+    final Map<String, dynamic> json = _orderJson()
+      ..['status'] = 'on_hold'
+      ..['paymentStatus'] = 'chargeback_review';
     final OrderSummary order = OrderSummary.fromJson(json);
     expect(order.status, OrderStatus.unknown);
     expect(order.rawStatus, 'on_hold');
+    expect(order.paymentStatus, PaymentStatus.unknown);
+    expect(order.paymentStatus.isOperationallyPaid, isFalse);
   });
 
   test('parses detail, null product, modifiers, nulls and partial JSON', () {

@@ -76,6 +76,38 @@ void main() {
     expect(repository.patchCalls, 1);
   });
 
+  for (final PaymentStatus payment in <PaymentStatus>[
+    PaymentStatus.failed,
+    PaymentStatus.unpaid,
+    PaymentStatus.refunded,
+    PaymentStatus.unknown,
+  ]) {
+    test('${payment.name} payment blocks status PATCH in controller', () async {
+      final OrderDetail invalid = orderDetail(payment: payment);
+      final _FakeOrdersRepository repository = _FakeOrdersRepository(
+        patchResult: orderDetail(status: OrderStatus.confirmed),
+        getResult: invalid,
+      );
+      final ProviderContainer container = _container(repository);
+      addTearDown(container.dispose);
+      final subscription = container.listen(
+        orderMutationProvider(repository.orderId),
+        (_, _) {},
+      );
+      addTearDown(subscription.close);
+
+      await container
+          .read(orderMutationProvider(repository.orderId).notifier)
+          .acceptOrder(invalid);
+
+      expect(repository.patchCalls, 0);
+      expect(
+        container.read(orderMutationProvider(repository.orderId)).message,
+        contains('payment is not marked as paid'),
+      );
+    });
+  }
+
   test('non-network PATCH error remains visible and retryable', () async {
     final _FakeOrdersRepository repository = _FakeOrdersRepository(
       patchError: const ApiException(
@@ -381,6 +413,36 @@ void main() {
       }
     },
   );
+
+  for (final PaymentStatus payment in <PaymentStatus>[
+    PaymentStatus.failed,
+    PaymentStatus.unpaid,
+    PaymentStatus.refunded,
+    PaymentStatus.unknown,
+  ]) {
+    testWidgets('direct detail blocks actions for ${payment.name} payment', (
+      WidgetTester tester,
+    ) async {
+      final OrderDetail invalid = orderDetail(payment: payment);
+      final _FakeOrdersRepository repository = _FakeOrdersRepository(
+        patchResult: orderDetail(status: OrderStatus.confirmed),
+        getResult: invalid,
+      );
+      await _pumpDetail(tester, repository);
+
+      expect(find.text('Payment not completed'), findsOneWidget);
+      expect(
+        find.text(
+          'This order cannot be processed because its payment is not marked as paid.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Accept order'), findsNothing);
+      expect(find.byKey(const Key('order-primary-action')), findsNothing);
+      expect(find.text(invalid.orderNumber), findsWidgets);
+      expect(repository.patchCalls, 0);
+    });
+  }
 
   testWidgets('status changed while dialog is open prevents terminal PATCH', (
     WidgetTester tester,

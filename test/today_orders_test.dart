@@ -81,6 +81,47 @@ void main() {
     ]);
   });
 
+  test('only paid active orders enter the operational Today flow', () {
+    final DateTime now = DateTime.parse('2026-09-04T19:00:00Z');
+    final List<OrderSummary> result = filterTodayActiveOrders(<OrderSummary>[
+      _order('pending-paid', OrderStatus.pending, '2026-09-04T18:00:00Z'),
+      _order('confirmed-paid', OrderStatus.confirmed, '2026-09-04T18:01:00Z'),
+      _order('preparing-paid', OrderStatus.preparing, '2026-09-04T18:02:00Z'),
+      _order('ready-paid', OrderStatus.ready, '2026-09-04T18:03:00Z'),
+      _order(
+        'pending-failed',
+        OrderStatus.pending,
+        '2026-09-04T18:04:00Z',
+        payment: PaymentStatus.failed,
+      ),
+      _order(
+        'pending-unpaid',
+        OrderStatus.pending,
+        '2026-09-04T18:05:00Z',
+        payment: PaymentStatus.unpaid,
+      ),
+      _order(
+        'pending-refunded',
+        OrderStatus.pending,
+        '2026-09-04T18:06:00Z',
+        payment: PaymentStatus.refunded,
+      ),
+      _order(
+        'pending-unknown',
+        OrderStatus.pending,
+        '2026-09-04T18:07:00Z',
+        payment: PaymentStatus.unknown,
+      ),
+    ], now: now);
+
+    expect(result.map((OrderSummary order) => order.orderNumber), <String>[
+      'pending-paid',
+      'confirmed-paid',
+      'preparing-paid',
+      'ready-paid',
+    ]);
+  });
+
   test(
     'changing CurrentLocation reloads orders without mixing UUIDs',
     () async {
@@ -113,6 +154,7 @@ OrderSummary _order(
   OrderStatus status,
   String created, {
   String? scheduled,
+  PaymentStatus payment = PaymentStatus.paid,
 }) => OrderSummary(
   id: '$number-id',
   orderNumber: number,
@@ -120,7 +162,7 @@ OrderSummary _order(
   orderType: OrderType.online,
   status: status,
   rawStatus: status.name,
-  paymentStatus: PaymentStatus.paid,
+  paymentStatus: payment,
   fulfillmentType: FulfillmentType.pickup,
   contactName: 'Customer',
   scheduledFor: scheduled == null ? null : DateTime.parse(scheduled),

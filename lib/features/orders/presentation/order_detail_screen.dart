@@ -112,10 +112,9 @@ class _DetailBody extends ConsumerWidget {
           ..showSnackBar(SnackBar(content: Text(next.message!)));
       }
     });
-    final OrderStatusAction? action = OrderStatusAction.forOrder(
-      order.status,
-      order.fulfillmentType,
-    );
+    final OrderStatusAction? action = order.paymentStatus.isOperationallyPaid
+        ? OrderStatusAction.forOrder(order.status, order.fulfillmentType)
+        : null;
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
       children: <Widget>[
@@ -136,6 +135,28 @@ class _DetailBody extends ConsumerWidget {
         ),
         const SizedBox(height: 4),
         Text('Placed ${PelinesTime.formatDateTime(order.createdAt)}'),
+        if (!order.paymentStatus.isOperationallyPaid) ...<Widget>[
+          const SizedBox(height: 16),
+          Card(
+            color: Theme.of(context).colorScheme.errorContainer,
+            child: const Padding(
+              padding: EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    'Payment not completed',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'This order cannot be processed because its payment is not marked as paid.',
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
         const SizedBox(height: 16),
         _Section(
           title: 'Fulfillment',

@@ -32,6 +32,8 @@ enum PaymentStatus {
     'failed' => failed,
     _ => unknown,
   };
+
+  bool get isOperationallyPaid => this == paid;
 }
 
 enum OrderType {

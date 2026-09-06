@@ -330,6 +330,15 @@ class OrderMutationController extends Notifier<OrderMutationState> {
         )) {
       return;
     }
+    if (!order.paymentStatus.isOperationallyPaid) {
+      state = OrderMutationState(
+        phase: OrderMutationPhase.error,
+        canonicalOrder: order,
+        action: action,
+        message: 'This order cannot be processed because its payment is not marked as paid.',
+      );
+      return;
+    }
 
     state = OrderMutationState(
       phase: OrderMutationPhase.submitting,
@@ -683,7 +692,11 @@ List<OrderSummary> calendarRelevantOrders(List<OrderSummary> orders) {
     OrderStatus.ready,
   };
   return List<OrderSummary>.unmodifiable(
-    orders.where((OrderSummary order) => operational.contains(order.status)),
+    orders.where(
+      (OrderSummary order) =>
+          operational.contains(order.status) &&
+          order.paymentStatus.isOperationallyPaid,
+    ),
   );
 }
 
@@ -754,6 +767,7 @@ List<OrderSummary> filterTodayActiveOrders(
   final List<OrderSummary> result = orders
       .where(
         (OrderSummary order) =>
+            order.paymentStatus.isOperationallyPaid &&
             active.contains(order.status) &&
             PelinesTime.isToday(order.operationalAt, now: now),
       )

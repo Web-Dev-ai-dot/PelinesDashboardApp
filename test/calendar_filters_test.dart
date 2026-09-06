@@ -25,6 +25,21 @@ void main() {
     ]);
   });
 
+  test('calendar includes paid scheduled orders and excludes failed ones', () {
+    final List<OrderSummary> result = calendarRelevantOrders(<OrderSummary>[
+      _order('paid', scheduled: '2026-09-05T18:00:00Z'),
+      _order(
+        'failed',
+        scheduled: '2026-09-05T18:00:00Z',
+        payment: PaymentStatus.failed,
+      ),
+    ]);
+
+    expect(result.map((OrderSummary order) => order.orderNumber), <String>[
+      'paid',
+    ]);
+  });
+
   test('groups UTC instants by Pacific day and sorts by instant', () {
     final List<OrderSummary> orders = <OrderSummary>[
       _order('later', scheduled: '2026-09-05T07:30:00Z'),
