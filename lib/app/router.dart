@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../features/account/presentation/admin_home_screen.dart';
+import '../features/account/presentation/account_screen.dart';
 import '../features/auth/models/admin_session.dart';
 import '../features/auth/presentation/login_screen.dart';
 import '../features/auth/providers/auth_providers.dart';
@@ -80,6 +81,7 @@ final routerProvider = Provider<GoRouter>((Ref ref) {
             path: 'store-operations',
             builder: (_, _) => const StoreOperationsScreen(),
           ),
+          GoRoute(path: 'account', builder: (_, _) => const AccountScreen()),
           GoRoute(
             path: 'promotions',
             builder: (_, _) => const PromotionsScreen(),

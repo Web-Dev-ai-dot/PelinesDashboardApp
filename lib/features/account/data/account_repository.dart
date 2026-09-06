@@ -6,6 +6,7 @@ import '../models/profile.dart';
 
 abstract interface class AccountRepository {
   Future<Profile> getMe();
+  Future<Profile> updateMe(Map<String, dynamic> patch);
 }
 
 class ApiAccountRepository implements AccountRepository {
@@ -15,8 +16,21 @@ class ApiAccountRepository implements AccountRepository {
 
   @override
   Future<Profile> getMe() async {
+    return _profileRequest(() => _client.dio.get<dynamic>('me'), loading: true);
+  }
+
+  @override
+  Future<Profile> updateMe(Map<String, dynamic> patch) => _profileRequest(
+    () => _client.dio.patch<dynamic>('me', data: patch),
+    loading: false,
+  );
+
+  Future<Profile> _profileRequest(
+    Future<Response<dynamic>> Function() request, {
+    required bool loading,
+  }) async {
     try {
-      final Response<dynamic> response = await _client.dio.get<dynamic>('me');
+      final Response<dynamic> response = await request();
       final Object? data = response.data;
       if (data is! Map<String, dynamic>) {
         throw const FormatException('Invalid /me response.');
@@ -34,10 +48,19 @@ class ApiAccountRepository implements AccountRepository {
           'The Pelines server timed out. Please try again.',
         _ when error.type == DioExceptionType.connectionError =>
           'Could not connect to the Pelines server.',
-        _ => 'The Pelines server could not load your profile.',
+        404 => 'Your Pelines profile could not be found.',
+        _ =>
+          loading
+              ? 'The Pelines server could not load your profile.'
+              : 'The Pelines server could not update your profile.',
       };
       throw ApiException(message: message, statusCode: status, cause: error);
     } on FormatException catch (error) {
+      throw ApiException(
+        message: 'The Pelines server returned an invalid profile.',
+        cause: error,
+      );
+    } on TypeError catch (error) {
       throw ApiException(
         message: 'The Pelines server returned an invalid profile.',
         cause: error,

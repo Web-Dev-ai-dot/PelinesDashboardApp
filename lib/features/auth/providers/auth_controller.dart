@@ -59,6 +59,18 @@ class AuthController extends AsyncNotifier<AdminSession?> {
     });
   }
 
+  void adoptCanonicalProfile(Profile profile) {
+    final AdminSession? current = state.value;
+    if (current == null ||
+        current.profile.id != profile.id ||
+        profile.role != ProfileRole.admin) {
+      return;
+    }
+    state = AsyncData<AdminSession?>(
+      AdminSession(profile: profile, email: current.email),
+    );
+  }
+
   Future<AdminSession> _loadAdminProfile() async {
     try {
       final Profile profile = await _account.getMe();

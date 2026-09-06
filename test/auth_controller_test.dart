@@ -100,4 +100,7 @@ class _FakeAccountRepository implements AccountRepository {
 
   @override
   Future<Profile> getMe() async => profile;
+
+  @override
+  Future<Profile> updateMe(Map<String, dynamic> patch) async => profile;
 }
