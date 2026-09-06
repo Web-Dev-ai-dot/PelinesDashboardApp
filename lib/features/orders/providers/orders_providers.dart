@@ -311,6 +311,11 @@ class OrderMutationController extends Notifier<OrderMutationState> {
     );
   }
 
+  void adoptRefreshedOrder(OrderDetail order) {
+    if (state.isBusy || order.id != orderId) return;
+    state = OrderMutationState(canonicalOrder: order);
+  }
+
   Future<void> performCurrentAction(OrderDetail order) async {
     final OrderStatusAction? action = OrderStatusAction.forOrder(
       order.status,
@@ -345,6 +350,8 @@ class OrderMutationController extends Notifier<OrderMutationState> {
       canonicalOrder: order,
       action: action,
     );
+    final OrderDetail? canonical = await _preflight(order, action);
+    if (canonical == null) return;
     try {
       final OrderDetail provisional = await ref
           .read(ordersRepositoryProvider)
@@ -360,13 +367,15 @@ class OrderMutationController extends Notifier<OrderMutationState> {
         await ref.read(authControllerProvider.notifier).signOut();
       }
       if (_isAmbiguousNetworkError(error) ||
-          action == OrderStatusAction.completeOrder &&
+          error.statusCode != null &&
+              error.statusCode! >= 400 &&
+              error.statusCode! < 500 &&
               error.statusCode != 401) {
-        await _reconcileAmbiguous(order, action, error);
+        await _reconcileAmbiguous(canonical, action, error);
       } else {
         state = OrderMutationState(
           phase: OrderMutationPhase.error,
-          canonicalOrder: order,
+          canonicalOrder: canonical,
           action: action,
           message: error.message,
         );
@@ -374,10 +383,96 @@ class OrderMutationController extends Notifier<OrderMutationState> {
     } on Object {
       state = OrderMutationState(
         phase: OrderMutationPhase.error,
-        canonicalOrder: order,
+        canonicalOrder: canonical,
         action: action,
         message: 'The order could not be updated.',
       );
+    }
+  }
+
+  Future<OrderDetail?> _preflight(
+    OrderDetail original,
+    OrderStatusAction action,
+  ) async {
+    try {
+      final OrderDetail canonical = await ref
+          .read(ordersRepositoryProvider)
+          .getOrderById(orderId);
+      if (canonical.id != orderId || canonical.id != original.id) {
+        state = OrderMutationState(
+          phase: OrderMutationPhase.error,
+          canonicalOrder: original,
+          action: action,
+          message: 'Unable to verify the order identity. Refresh before trying again.',
+        );
+        return null;
+      }
+      final Location? currentLocation = await ref.read(
+        currentLocationProvider.future,
+      );
+      if (currentLocation?.id != original.locationId ||
+          canonical.locationId != original.locationId) {
+        state = OrderMutationState(
+          phase: OrderMutationPhase.error,
+          canonicalOrder: canonical,
+          action: action,
+          message: 'Location context changed. Return to the current location before processing this order.',
+        );
+        return null;
+      }
+      if (!canonical.paymentStatus.isOperationallyPaid) {
+        state = OrderMutationState(
+          phase: OrderMutationPhase.error,
+          canonicalOrder: canonical,
+          action: action,
+          message: 'This order cannot be processed because its payment is not marked as paid.',
+        );
+        return null;
+      }
+      if (canonical.status != action.source) {
+        state = OrderMutationState(
+          phase: OrderMutationPhase.error,
+          canonicalOrder: canonical,
+          action: action,
+          message:
+              'Order updated elsewhere\nThis order is now ${_statusLabel(canonical.status)}.',
+        );
+        return null;
+      }
+      if (!OrderStatusAction.allows(
+        canonical.status,
+        action.target,
+        fulfillment: canonical.fulfillmentType,
+      )) {
+        state = OrderMutationState(
+          phase: OrderMutationPhase.error,
+          canonicalOrder: canonical,
+          action: action,
+          message: 'This status transition is no longer available.',
+        );
+        return null;
+      }
+      return canonical;
+    } on ApiException catch (error) {
+      if (error.statusCode == 401) {
+        await ref.read(authControllerProvider.notifier).signOut();
+      }
+      state = OrderMutationState(
+        phase: OrderMutationPhase.error,
+        canonicalOrder: original,
+        action: action,
+        message:
+            'Unable to refresh the order before updating it. ${error.message}',
+      );
+      return null;
+    } on Object {
+      state = OrderMutationState(
+        phase: OrderMutationPhase.error,
+        canonicalOrder: original,
+        action: action,
+        message: 'Unable to refresh the order before updating it.',
+      );
+      return null;
     }
   }
 
@@ -386,13 +481,14 @@ class OrderMutationController extends Notifier<OrderMutationState> {
       final OrderDetail canonical = await ref
           .read(ordersRepositoryProvider)
           .getOrderById(orderId);
+      final bool applied = canonical.status == action.target;
       state = OrderMutationState(
-        phase: OrderMutationPhase.success,
+        phase: applied ? OrderMutationPhase.success : OrderMutationPhase.error,
         canonicalOrder: canonical,
         action: action,
-        message: canonical.status == action.target
+        message: applied
             ? action.successMessageFor(canonical.fulfillmentType)
-            : 'Order status changed on the server.',
+            : 'Order status changed while the request was being processed.',
       );
       ref.invalidate(orderDetailProvider(orderId));
       ref.invalidate(todayOrdersProvider);
@@ -439,7 +535,7 @@ class OrderMutationController extends Notifier<OrderMutationState> {
             ? action.successMessageFor(canonical.fulfillmentType)
             : unchanged
             ? '${patchError.message} You can try again.'
-            : 'Order status changed on the server.',
+            : 'Order status changed while the request was being processed.',
         terminalRetryAllowed: terminalRetryAllowed,
       );
       ref.invalidate(orderDetailProvider(orderId));
@@ -453,8 +549,7 @@ class OrderMutationController extends Notifier<OrderMutationState> {
         phase: OrderMutationPhase.error,
         canonicalOrder: original,
         action: action,
-        message:
-            '${patchError.message} The current order status could not be verified.',
+        message: 'Unable to confirm the order status.\nRefresh the order before trying again.',
       );
     }
   }
@@ -467,6 +562,11 @@ class OrderMutationController extends Notifier<OrderMutationState> {
         cause.type == DioExceptionType.receiveTimeout ||
         cause.type == DioExceptionType.connectionError;
   }
+}
+
+String _statusLabel(OrderStatus status) {
+  final String value = status.name;
+  return '${value[0].toUpperCase()}${value.substring(1)}';
 }
 
 class TodayOrdersState {

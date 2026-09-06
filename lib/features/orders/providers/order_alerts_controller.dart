@@ -21,6 +21,17 @@ final orderAlertsProvider =
       OrderAlertsController.new,
     );
 
+final appResumeTickProvider = NotifierProvider<AppResumeTick, int>(
+  AppResumeTick.new,
+);
+
+class AppResumeTick extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  void resumed() => state++;
+}
+
 class OrderAlertsState {
   const OrderAlertsState({
     this.locationId,

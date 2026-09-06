@@ -6,31 +6,60 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/api/api_exception.dart';
 import '../../../core/time/pelines_time.dart';
+import '../../locations/models/location.dart';
+import '../../locations/providers/locations_providers.dart';
 import '../models/order_models.dart';
 import '../models/order_status_action.dart';
 import '../providers/order_alerts_controller.dart';
 import '../providers/orders_providers.dart';
 import 'order_ui_helpers.dart';
 
-class OrderDetailScreen extends ConsumerWidget {
+class OrderDetailScreen extends ConsumerStatefulWidget {
   const OrderDetailScreen({required this.orderId, super.key});
   final String orderId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<OrderDetailScreen> createState() => _OrderDetailScreenState();
+}
+
+class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
+  OrderDetail? _lastOrder;
+  int? _lastResumeTick;
+
+  @override
+  Widget build(BuildContext context) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(orderAlertsProvider.notifier).acknowledge(orderId);
+      ref.read(orderAlertsProvider.notifier).acknowledge(widget.orderId);
     });
     final AsyncValue<OrderDetail> detail = ref.watch(
-      orderDetailProvider(orderId),
+      orderDetailProvider(widget.orderId),
     );
-    final OrderNotesState notes = ref.watch(orderNotesProvider(orderId));
+    if (detail.value != null && !identical(_lastOrder, detail.value)) {
+      final OrderDetail refreshed = detail.value!;
+      _lastOrder = refreshed;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref
+            .read(orderMutationProvider(widget.orderId).notifier)
+            .adoptRefreshedOrder(refreshed);
+      });
+    }
+    final int resumeTick = ref.watch(appResumeTickProvider);
+    if (_lastResumeTick == null) {
+      _lastResumeTick = resumeTick;
+    } else if (_lastResumeTick != resumeTick) {
+      _lastResumeTick = resumeTick;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.invalidate(orderDetailProvider(widget.orderId));
+      });
+    }
+    final OrderNotesState notes = ref.watch(orderNotesProvider(widget.orderId));
+    final OrderDetail? displayed = detail.value ?? _lastOrder;
 
     Future<void> leave() async {
       if (notes.isDirty) {
         final bool discard = await _confirmDiscardNotes(context);
         if (!discard || !context.mounted) return;
-        ref.read(orderNotesProvider(orderId).notifier).discardDraft();
+        ref.read(orderNotesProvider(widget.orderId).notifier).discardDraft();
         await WidgetsBinding.instance.endOfFrame;
       }
       if (context.mounted) await Navigator.of(context).maybePop();
@@ -44,22 +73,47 @@ class OrderDetailScreen extends ConsumerWidget {
       child: Scaffold(
         appBar: AppBar(
           leading: BackButton(onPressed: leave),
-          title: Text(detail.value?.orderNumber ?? 'Order'),
+          title: Text(displayed?.orderNumber ?? 'Order'),
         ),
-        body: detail.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (Object error, StackTrace stack) {
-            final bool missing =
-                error is ApiException && error.statusCode == 404;
-            return _DetailError(
-              message: missing ? 'Order no longer available' : error.toString(),
-              onRetry: missing
-                  ? null
-                  : () => ref.invalidate(orderDetailProvider(orderId)),
-            );
-          },
-          data: (OrderDetail order) => _DetailBody(initialOrder: order),
-        ),
+        body: displayed != null
+            ? Column(
+                children: <Widget>[
+                  if (detail.hasError)
+                    MaterialBanner(
+                      key: const Key('detail-refresh-warning'),
+                      content: const Text(
+                        'The latest order status could not be loaded. Showing saved details.',
+                      ),
+                      actions: <Widget>[
+                        TextButton(
+                          onPressed: () => ref.invalidate(
+                            orderDetailProvider(widget.orderId),
+                          ),
+                          child: const Text('Retry'),
+                        ),
+                      ],
+                    ),
+                  Expanded(child: _DetailBody(initialOrder: displayed)),
+                ],
+              )
+            : detail.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (Object error, StackTrace stack) {
+                  final bool missing =
+                      error is ApiException && error.statusCode == 404;
+                  return _DetailError(
+                    message: missing
+                        ? 'Order no longer available'
+                        : error.toString(),
+                    onRetry: missing
+                        ? null
+                        : () => ref.invalidate(
+                            orderDetailProvider(widget.orderId),
+                          ),
+                  );
+                },
+                data: (OrderDetail order) => _DetailBody(initialOrder: order),
+              ),
       ),
     );
   }
@@ -100,7 +154,12 @@ class _DetailBody extends ConsumerWidget {
     final OrderNotesState notes = ref.watch(
       orderNotesProvider(initialOrder.id),
     );
+    final AsyncValue<Location?> currentLocation = ref.watch(
+      currentLocationProvider,
+    );
     final OrderDetail order = mutation.canonicalOrder ?? initialOrder;
+    final bool locationContextChanged =
+        currentLocation.value?.id != order.locationId;
     ref.listen<OrderMutationState>(orderMutationProvider(initialOrder.id), (
       OrderMutationState? previous,
       OrderMutationState next,
@@ -157,6 +216,19 @@ class _DetailBody extends ConsumerWidget {
                     'This order cannot be processed because its payment is not marked as paid.',
                   ),
                 ],
+              ),
+            ),
+          ),
+        ],
+        if (locationContextChanged) ...<Widget>[
+          const SizedBox(height: 16),
+          Card(
+            key: const Key('location-context-warning'),
+            color: Theme.of(context).colorScheme.errorContainer,
+            child: const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text(
+                'Location context changed. This order is read-only until you return to its location.',
               ),
             ),
           ),
@@ -242,7 +314,7 @@ class _DetailBody extends ConsumerWidget {
                 ),
             ],
           ),
-        if (action != null)
+        if (action != null && !locationContextChanged)
           _OrderActions(
             action: action,
             mutation: mutation,

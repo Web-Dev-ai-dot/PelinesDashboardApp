@@ -10,17 +10,151 @@ import 'package:pelines_admin_app/features/locations/providers/locations_provide
 import 'package:pelines_admin_app/features/orders/data/orders_repository.dart';
 import 'package:pelines_admin_app/features/orders/models/order_models.dart';
 import 'package:pelines_admin_app/features/orders/presentation/order_detail_screen.dart';
+import 'package:pelines_admin_app/features/orders/providers/order_alerts_controller.dart';
 import 'package:pelines_admin_app/features/orders/providers/orders_providers.dart';
 
 import 'order_test_data.dart';
 
 void main() {
+  for (final (OrderStatus source, OrderStatus target)
+      in <(OrderStatus, OrderStatus)>[
+        (OrderStatus.pending, OrderStatus.confirmed),
+        (OrderStatus.confirmed, OrderStatus.preparing),
+        (OrderStatus.preparing, OrderStatus.ready),
+        (OrderStatus.ready, OrderStatus.delivered),
+      ]) {
+    test(
+      'preflight and final GET protect ${source.name} to ${target.name}',
+      () async {
+        final OrderDetail before = orderDetail(status: source);
+        final OrderDetail after = orderDetail(status: target);
+        final _FakeOrdersRepository repository = _FakeOrdersRepository(
+          patchResult: after,
+          getResult: after,
+          getResults: <OrderDetail>[before, after],
+        );
+        final ProviderContainer container = _container(repository);
+        addTearDown(container.dispose);
+        await container.read(currentLocationProvider.future);
+
+        await container
+            .read(orderMutationProvider(repository.orderId).notifier)
+            .performCurrentAction(before);
+
+        expect(repository.getCalls, 2);
+        expect(repository.patchCalls, 1);
+        expect(repository.requestedStatuses, <OrderStatus>[target]);
+        expect(
+          container.read(orderMutationProvider(repository.orderId)).phase,
+          OrderMutationPhase.success,
+        );
+      },
+    );
+  }
+
+  for (final OrderStatus remote in <OrderStatus>[
+    OrderStatus.confirmed,
+    OrderStatus.preparing,
+    OrderStatus.cancelled,
+  ]) {
+    test('remote ${remote.name} is adopted before PATCH', () async {
+      final OrderDetail canonical = orderDetail(status: remote);
+      final _FakeOrdersRepository repository = _FakeOrdersRepository(
+        patchResult: canonical,
+        getResult: canonical,
+        getResults: <OrderDetail>[canonical],
+      );
+      final ProviderContainer container = _container(repository);
+      addTearDown(container.dispose);
+      await container.read(currentLocationProvider.future);
+
+      await container
+          .read(orderMutationProvider(repository.orderId).notifier)
+          .acceptOrder(orderDetail());
+
+      final OrderMutationState result = container.read(
+        orderMutationProvider(repository.orderId),
+      );
+      expect(repository.patchCalls, 0);
+      expect(result.canonicalOrder?.status, remote);
+      expect(result.message, contains('Order updated elsewhere'));
+    });
+  }
+
+  test('canonical refunded payment blocks a locally paid order', () async {
+    final OrderDetail refunded = orderDetail(payment: PaymentStatus.refunded);
+    final _FakeOrdersRepository repository = _FakeOrdersRepository(
+      patchResult: orderDetail(status: OrderStatus.confirmed),
+      getResult: refunded,
+      getResults: <OrderDetail>[refunded],
+    );
+    final ProviderContainer container = _container(repository);
+    addTearDown(container.dispose);
+    await container.read(currentLocationProvider.future);
+    await container
+        .read(orderMutationProvider(repository.orderId).notifier)
+        .acceptOrder(orderDetail());
+    expect(repository.patchCalls, 0);
+    expect(
+      container.read(orderMutationProvider(repository.orderId)).message,
+      contains('payment is not marked as paid'),
+    );
+  });
+
+  test('post-PATCH mismatch adopts canonical without false success', () async {
+    final _FakeOrdersRepository repository = _FakeOrdersRepository(
+      patchResult: orderDetail(status: OrderStatus.confirmed),
+      getResult: orderDetail(),
+      getResults: <OrderDetail>[orderDetail(), orderDetail()],
+    );
+    final ProviderContainer container = _container(repository);
+    addTearDown(container.dispose);
+    await container.read(currentLocationProvider.future);
+    await container
+        .read(orderMutationProvider(repository.orderId).notifier)
+        .acceptOrder(orderDetail());
+    final OrderMutationState result = container.read(
+      orderMutationProvider(repository.orderId),
+    );
+    expect(result.phase, OrderMutationPhase.error);
+    expect(result.canonicalOrder?.status, OrderStatus.pending);
+    expect(result.message, contains('while the request was being processed'));
+    expect(repository.patchCalls, 1);
+  });
+
+  test('timeout with failed recovery GET reports uncertain state', () async {
+    final _FakeOrdersRepository repository = _FakeOrdersRepository(
+      patchError: _networkError(),
+      getResult: orderDetail(),
+      getResults: <OrderDetail>[orderDetail()],
+      getError: const ApiException(message: 'Refresh failed.'),
+      getErrorCall: 2,
+    );
+    final ProviderContainer container = _container(repository);
+    addTearDown(container.dispose);
+    await container.read(currentLocationProvider.future);
+    await container
+        .read(orderMutationProvider(repository.orderId).notifier)
+        .acceptOrder(orderDetail());
+    final OrderMutationState result = container.read(
+      orderMutationProvider(repository.orderId),
+    );
+    expect(repository.patchCalls, 1);
+    expect(repository.getCalls, 2);
+    expect(result.message, contains('Unable to confirm the order status'));
+    expect(result.message, contains('Refresh the order before trying again'));
+  });
+
   test(
     'success uses PATCH response, reconciles detail, and refreshes Today',
     () async {
       final _FakeOrdersRepository repository = _FakeOrdersRepository(
         patchResult: orderDetail(status: OrderStatus.confirmed),
         getResult: orderDetail(status: OrderStatus.confirmed),
+        getResults: <OrderDetail>[
+          orderDetail(),
+          orderDetail(status: OrderStatus.confirmed),
+        ],
       );
       final ProviderContainer container = _container(repository);
       addTearDown(container.dispose);
@@ -41,7 +175,7 @@ void main() {
       expect(state.phase, OrderMutationPhase.success);
       expect(state.canonicalOrder?.status, OrderStatus.confirmed);
       expect(repository.patchCalls, 1);
-      expect(repository.getCalls, 1);
+      expect(repository.getCalls, 2);
       expect(repository.listLocationIds, <String>['location-id']);
     },
   );
@@ -51,6 +185,10 @@ void main() {
     final _FakeOrdersRepository repository = _FakeOrdersRepository(
       patchFuture: patch.future,
       getResult: orderDetail(status: OrderStatus.confirmed),
+      getResults: <OrderDetail>[
+        orderDetail(),
+        orderDetail(status: OrderStatus.confirmed),
+      ],
     );
     final ProviderContainer container = _container(repository);
     addTearDown(container.dispose);
@@ -66,6 +204,7 @@ void main() {
 
     final Future<void> first = controller.acceptOrder(orderDetail());
     final Future<void> second = controller.acceptOrder(orderDetail());
+    await Future<void>.delayed(Duration.zero);
     expect(
       container.read(orderMutationProvider(repository.orderId)).isBusy,
       isTrue,
@@ -115,6 +254,7 @@ void main() {
         statusCode: 403,
       ),
       getResult: orderDetail(),
+      getResults: <OrderDetail>[orderDetail(), orderDetail()],
     );
     final ProviderContainer container = _container(repository);
     addTearDown(container.dispose);
@@ -135,7 +275,7 @@ void main() {
     expect(state.phase, OrderMutationPhase.error);
     expect(state.canonicalOrder?.status, OrderStatus.pending);
     expect(state.message, contains('Administrator'));
-    expect(repository.getCalls, 0);
+    expect(repository.getCalls, 2);
   });
 
   for (final (OrderStatus serverStatus, OrderMutationPhase phase)
@@ -148,6 +288,10 @@ void main() {
       final _FakeOrdersRepository repository = _FakeOrdersRepository(
         patchError: _networkError(),
         getResult: orderDetail(status: serverStatus),
+        getResults: <OrderDetail>[
+          orderDetail(),
+          orderDetail(status: serverStatus),
+        ],
       );
       final ProviderContainer container = _container(repository);
       addTearDown(container.dispose);
@@ -168,45 +312,49 @@ void main() {
       expect(state.phase, phase);
       expect(state.canonicalOrder?.status, serverStatus);
       expect(repository.patchCalls, 1);
-      expect(repository.getCalls, 1);
+      expect(repository.getCalls, 2);
       if (serverStatus == OrderStatus.pending) {
         expect(state.message, contains('try again'));
       } else if (serverStatus == OrderStatus.preparing) {
-        expect(state.message, 'Order status changed on the server.');
+        expect(
+          state.message,
+          'Order status changed while the request was being processed.',
+        );
       }
     });
   }
 
-  test(
-    'location change during mutation refreshes only the new location',
-    () async {
-      final Completer<OrderDetail> patch = Completer<OrderDetail>();
-      final _FakeOrdersRepository repository = _FakeOrdersRepository(
-        patchFuture: patch.future,
-        getResult: orderDetail(status: OrderStatus.confirmed),
-      );
-      final ProviderContainer container = _container(repository);
-      addTearDown(container.dispose);
-      await container.read(currentLocationProvider.future);
-      final subscription = container.listen(
-        orderMutationProvider(repository.orderId),
-        (_, _) {},
-      );
-      addTearDown(subscription.close);
-      final Future<void> mutation = container
-          .read(orderMutationProvider(repository.orderId).notifier)
-          .acceptOrder(orderDetail());
-      final _FakeCurrentLocation current = container.read(
-        currentLocationProvider.notifier,
-      ) as _FakeCurrentLocation;
-      current.change(_location('second-location'));
-      await Future<void>.delayed(Duration.zero);
-      patch.complete(orderDetail(status: OrderStatus.confirmed));
-      await mutation;
+  test('location change during preflight blocks PATCH', () async {
+    final _FakeOrdersRepository repository = _FakeOrdersRepository(
+      patchResult: orderDetail(status: OrderStatus.confirmed),
+      getResult: orderDetail(status: OrderStatus.confirmed),
+      getResults: <OrderDetail>[orderDetail()],
+    );
+    final ProviderContainer container = _container(repository);
+    addTearDown(container.dispose);
+    await container.read(currentLocationProvider.future);
+    final subscription = container.listen(
+      orderMutationProvider(repository.orderId),
+      (_, _) {},
+    );
+    addTearDown(subscription.close);
+    final Future<void> mutation = container
+        .read(orderMutationProvider(repository.orderId).notifier)
+        .acceptOrder(orderDetail());
+    final _FakeCurrentLocation current = container.read(
+      currentLocationProvider.notifier,
+    ) as _FakeCurrentLocation;
+    current.change(_location('second-location'));
+    await Future<void>.delayed(Duration.zero);
+    await mutation;
 
-      expect(repository.listLocationIds, <String>['second-location']);
-    },
-  );
+    expect(repository.patchCalls, 0);
+    expect(repository.listLocationIds, isEmpty);
+    expect(
+      container.read(orderMutationProvider(repository.orderId)).message,
+      contains('Location context changed'),
+    );
+  });
 
   test(
     'terminal success reconciles delivered timestamp and refreshes Today',
@@ -221,6 +369,10 @@ void main() {
           status: OrderStatus.delivered,
           deliveredAt: deliveredAt,
         ),
+        getResults: <OrderDetail>[
+          orderDetail(status: OrderStatus.ready),
+          orderDetail(status: OrderStatus.delivered, deliveredAt: deliveredAt),
+        ],
       );
       final ProviderContainer container = _container(repository);
       addTearDown(container.dispose);
@@ -263,6 +415,15 @@ void main() {
                 ? DateTime.parse('2026-09-04T19:00:00Z')
                 : null,
           ),
+          getResults: <OrderDetail>[
+            orderDetail(status: OrderStatus.ready),
+            orderDetail(
+              status: serverStatus,
+              deliveredAt: serverStatus == OrderStatus.delivered
+                  ? DateTime.parse('2026-09-04T19:00:00Z')
+                  : null,
+            ),
+          ],
         );
         final ProviderContainer container = _container(repository);
         addTearDown(container.dispose);
@@ -284,7 +445,7 @@ void main() {
         expect(state.canonicalOrder?.status, serverStatus);
         expect(state.terminalRetryAllowed, retry);
         expect(repository.patchCalls, 1);
-        expect(repository.getCalls, 1);
+        expect(repository.getCalls, 2);
       },
     );
   }
@@ -296,6 +457,11 @@ void main() {
       final _FakeOrdersRepository repository = _FakeOrdersRepository(
         patchFuture: patch.future,
         getResult: orderDetail(),
+        getResults: <OrderDetail>[
+          orderDetail(),
+          orderDetail(),
+          orderDetail(status: OrderStatus.confirmed),
+        ],
       );
       await tester.pumpWidget(
         ProviderScope(
@@ -333,6 +499,94 @@ void main() {
     },
   );
 
+  testWidgets('detail refreshes canonical status on app resume', (
+    WidgetTester tester,
+  ) async {
+    final _FakeOrdersRepository repository = _FakeOrdersRepository(
+      getResult: orderDetail(status: OrderStatus.preparing),
+      getResults: <OrderDetail>[
+        orderDetail(status: OrderStatus.confirmed),
+        orderDetail(status: OrderStatus.preparing),
+      ],
+    );
+    await _pumpDetail(tester, repository);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('order-primary-action')),
+      500,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Start preparing'), findsOneWidget);
+
+    final ProviderContainer container = ProviderScope.containerOf(
+      tester.element(find.byType(OrderDetailScreen)),
+    );
+    container.read(appResumeTickProvider.notifier).resumed();
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('order-primary-action')),
+      500,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Mark ready'), findsOneWidget);
+    expect(find.text('Start preparing'), findsNothing);
+    expect(repository.getCalls, 2);
+  });
+
+  testWidgets('failed detail refresh keeps data and shows retry warning', (
+    WidgetTester tester,
+  ) async {
+    final _FakeOrdersRepository repository = _FakeOrdersRepository(
+      getResult: orderDetail(status: OrderStatus.confirmed),
+      getResults: <OrderDetail>[orderDetail(status: OrderStatus.confirmed)],
+      getError: const ApiException(message: 'Refresh failed.'),
+      getErrorCall: 2,
+      getErrorFromCall: true,
+    );
+    await _pumpDetail(tester, repository);
+    final ProviderContainer container = ProviderScope.containerOf(
+      tester.element(find.byType(OrderDetailScreen)),
+    );
+    container.read(appResumeTickProvider.notifier).resumed();
+    await tester.pumpAndSettle();
+
+    expect(repository.getCalls, greaterThanOrEqualTo(2));
+    expect(
+      container.read(orderDetailProvider(repository.orderId)).hasError,
+      isTrue,
+    );
+    expect(find.byKey(const Key('detail-refresh-warning')), findsOneWidget);
+    expect(find.text(orderDetail().orderNumber), findsWidgets);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('order-primary-action')),
+      500,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Start preparing'), findsOneWidget);
+    expect(find.text('Retry'), findsOneWidget);
+  });
+
+  testWidgets('location change makes an open detail read-only', (
+    WidgetTester tester,
+  ) async {
+    final _FakeOrdersRepository repository = _FakeOrdersRepository(
+      getResult: orderDetail(),
+    );
+    await _pumpDetail(tester, repository);
+    final ProviderContainer container = ProviderScope.containerOf(
+      tester.element(find.byType(OrderDetailScreen)),
+    );
+    final _FakeCurrentLocation current = container.read(
+      currentLocationProvider.notifier,
+    ) as _FakeCurrentLocation;
+    current.change(_location('second-location'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('location-context-warning')), findsOneWidget);
+    expect(find.byKey(const Key('order-primary-action')), findsNothing);
+    expect(repository.patchCalls, 0);
+  });
+
   for (final (FulfillmentType fulfillment, String label)
       in <(FulfillmentType, String)>[
         (FulfillmentType.pickup, 'Mark picked up'),
@@ -352,6 +606,15 @@ void main() {
             status: OrderStatus.ready,
             fulfillment: fulfillment,
           ),
+          getResults: <OrderDetail>[
+            orderDetail(status: OrderStatus.ready, fulfillment: fulfillment),
+            orderDetail(status: OrderStatus.ready, fulfillment: fulfillment),
+            orderDetail(
+              status: OrderStatus.delivered,
+              fulfillment: fulfillment,
+              deliveredAt: deliveredAt,
+            ),
+          ],
         );
         await _pumpDetail(tester, repository);
         await tester.scrollUntilVisible(
@@ -380,11 +643,6 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(find.byKey(const Key('order-primary-action')));
         await tester.pumpAndSettle();
-        repository.getResult = orderDetail(
-          status: OrderStatus.delivered,
-          fulfillment: fulfillment,
-          deliveredAt: deliveredAt,
-        );
         await tester.tap(find.byKey(const Key('completion-confirm')));
         await tester.pumpAndSettle();
         expect(repository.patchCalls, 1);
@@ -535,15 +793,24 @@ class _FakeOrdersRepository implements OrdersRepository {
     this.patchFuture,
     this.patchError,
     required this.getResult,
-  });
+    List<OrderDetail>? getResults,
+    this.getError,
+    this.getErrorCall,
+    this.getErrorFromCall = false,
+  }) : getResults = getResults ?? <OrderDetail>[];
 
   final OrderDetail? patchResult;
   final Future<OrderDetail>? patchFuture;
   final Object? patchError;
   OrderDetail getResult;
+  final List<OrderDetail> getResults;
+  final Object? getError;
+  final int? getErrorCall;
+  final bool getErrorFromCall;
   int patchCalls = 0;
   int getCalls = 0;
   final List<String> listLocationIds = <String>[];
+  final List<OrderStatus> requestedStatuses = <OrderStatus>[];
   String get orderId => getResult.id;
 
   @override
@@ -552,6 +819,7 @@ class _FakeOrdersRepository implements OrdersRepository {
     required OrderStatus status,
   }) async {
     patchCalls++;
+    requestedStatuses.add(status);
     if (patchError != null) throw patchError!;
     if (patchFuture != null) return patchFuture!;
     return patchResult!;
@@ -566,6 +834,12 @@ class _FakeOrdersRepository implements OrdersRepository {
   @override
   Future<OrderDetail> getOrderById(String id) async {
     getCalls++;
+    if (getError != null &&
+        (getCalls == getErrorCall ||
+            getErrorFromCall && getCalls >= (getErrorCall ?? 1))) {
+      throw getError!;
+    }
+    if (getResults.isNotEmpty) return getResults.removeAt(0);
     return getResult;
   }
 

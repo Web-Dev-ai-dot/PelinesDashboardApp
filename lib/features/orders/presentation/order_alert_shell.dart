@@ -47,6 +47,7 @@ class _OrderAlertShellState extends ConsumerState<OrderAlertShell>
     _isResumed = state == AppLifecycleState.resumed;
     if (_isResumed) {
       _startPolling();
+      ref.read(appResumeTickProvider.notifier).resumed();
       unawaited(ref.read(todayOrdersProvider.notifier).refresh());
     } else {
       _timer?.cancel();
