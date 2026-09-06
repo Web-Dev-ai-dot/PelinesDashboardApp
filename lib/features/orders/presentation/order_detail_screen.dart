@@ -8,6 +8,7 @@ import '../../../core/api/api_exception.dart';
 import '../../../core/time/pelines_time.dart';
 import '../models/order_models.dart';
 import '../models/order_status_action.dart';
+import '../providers/order_alerts_controller.dart';
 import '../providers/orders_providers.dart';
 import 'order_ui_helpers.dart';
 
@@ -17,6 +18,9 @@ class OrderDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(orderAlertsProvider.notifier).acknowledge(orderId);
+    });
     final AsyncValue<OrderDetail> detail = ref.watch(
       orderDetailProvider(orderId),
     );

@@ -11,6 +11,7 @@ import '../features/locations/presentation/store_operations_screen.dart';
 import '../features/orders/presentation/order_detail_screen.dart';
 import '../features/orders/presentation/historical_orders_screen.dart';
 import '../features/orders/presentation/orders_calendar_screen.dart';
+import '../features/orders/presentation/order_alert_shell.dart';
 import '../features/menu/models/menu_models.dart';
 import '../features/menu/presentation/menu_screens.dart';
 import '../features/menu/presentation/product_form_screen.dart';
@@ -71,149 +72,166 @@ final routerProvider = Provider<GoRouter>((Ref ref) {
         builder: (BuildContext context, GoRouterState state) =>
             const LoginScreen(),
       ),
-      GoRoute(
-        path: '/app',
-        builder: (BuildContext context, GoRouterState state) =>
-            const AdminHomeScreen(),
+      ShellRoute(
+        builder: (BuildContext context, GoRouterState state, Widget child) =>
+            OrderAlertShell(child: child),
         routes: <RouteBase>[
-          GoRoute(path: 'menu', builder: (_, _) => const MenuLandingScreen()),
           GoRoute(
-            path: 'store-operations',
-            builder: (_, _) => const StoreOperationsScreen(),
-          ),
-          GoRoute(path: 'account', builder: (_, _) => const AccountScreen()),
-          GoRoute(
-            path: 'promotions',
-            builder: (_, _) => const PromotionsScreen(),
-          ),
-          GoRoute(
-            path: 'promotions/new',
-            builder: (_, _) => const PromotionFormScreen(),
-          ),
-          GoRoute(
-            path: 'promotions/:id/edit',
-            builder: (_, state) =>
-                PromotionFormScreen(discountId: state.pathParameters['id']!),
-          ),
-          GoRoute(
-            path: 'promotions/:id',
-            builder: (_, state) =>
-                PromotionDetailScreen(discountId: state.pathParameters['id']!),
-          ),
-          GoRoute(
-            path: 'menu/:kind',
-            builder: (_, state) => MenuCategoriesScreen(
-              kind: MenuKind.fromJson(state.pathParameters['kind']),
-            ),
-          ),
-          GoRoute(
-            path: 'menu/:kind/categories/new',
-            builder: (_, state) => CategoryFormScreen(
-              kind: MenuKind.fromJson(state.pathParameters['kind']),
-            ),
-          ),
-          GoRoute(
-            path: 'menu/:kind/categories/:categoryId/edit',
-            builder: (_, state) => CategoryFormScreen(
-              kind: MenuKind.fromJson(state.pathParameters['kind']),
-              categoryId: state.pathParameters['categoryId']!,
-            ),
-          ),
-          GoRoute(
-            path: 'menu/:kind/categories/:categoryId',
-            builder: (_, state) => MenuProductsScreen(
-              kind: MenuKind.fromJson(state.pathParameters['kind']),
-              categoryId: state.pathParameters['categoryId']!,
-              categoryName: state.uri.queryParameters['name'] ?? 'Products',
-            ),
-          ),
-          GoRoute(
-            path: 'menu/:kind/categories/:categoryId/products/new',
-            builder: (_, state) => ProductFormScreen(
-              kind: MenuKind.fromJson(state.pathParameters['kind']),
-              categoryId: state.pathParameters['categoryId']!,
-              categoryName: state.uri.queryParameters['category'] ?? 'Category',
-            ),
-          ),
-          GoRoute(
-            path: 'menu/:kind/categories/:categoryId/products/:productId/edit',
-            builder: (_, state) => ProductFormScreen(
-              kind: MenuKind.fromJson(state.pathParameters['kind']),
-              categoryId: state.pathParameters['categoryId']!,
-              productId: state.pathParameters['productId']!,
-              categoryName: state.uri.queryParameters['category'] ?? 'Category',
-            ),
-          ),
-          GoRoute(
-            path: 'menu/:kind/categories/:categoryId/products/:productId/modifiers/new',
-            builder: (_, state) => ModifierFormScreen(
-              kind: MenuKind.fromJson(state.pathParameters['kind']),
-              categoryId: state.pathParameters['categoryId']!,
-              productId: state.pathParameters['productId']!,
-            ),
-          ),
-          GoRoute(
-            path: 'menu/:kind/categories/:categoryId/products/:productId/modifiers/:groupId/edit',
-            builder: (_, state) => ModifierFormScreen(
-              kind: MenuKind.fromJson(state.pathParameters['kind']),
-              categoryId: state.pathParameters['categoryId']!,
-              productId: state.pathParameters['productId']!,
-              groupId: state.pathParameters['groupId']!,
-            ),
-          ),
-          GoRoute(
-            path: 'menu/:kind/categories/:categoryId/products/:productId/modifiers/:groupId/options/new',
-            builder: (_, state) => ModifierFormScreen(
-              kind: MenuKind.fromJson(state.pathParameters['kind']),
-              categoryId: state.pathParameters['categoryId']!,
-              productId: state.pathParameters['productId']!,
-              groupId: state.pathParameters['groupId']!,
-              optionForm: true,
-            ),
-          ),
-          GoRoute(
-            path: 'menu/:kind/categories/:categoryId/products/:productId/modifiers/:groupId/options/:optionId/edit',
-            builder: (_, state) => ModifierFormScreen(
-              kind: MenuKind.fromJson(state.pathParameters['kind']),
-              categoryId: state.pathParameters['categoryId']!,
-              productId: state.pathParameters['productId']!,
-              groupId: state.pathParameters['groupId']!,
-              optionId: state.pathParameters['optionId']!,
-              optionForm: true,
-            ),
-          ),
-          GoRoute(
-            path: 'menu/:kind/categories/:categoryId/products/:productId',
-            builder: (_, state) => MenuProductDetailScreen(
-              kind: MenuKind.fromJson(state.pathParameters['kind']),
-              categoryId: state.pathParameters['categoryId']!,
-              productId: state.pathParameters['productId']!,
-              categoryName: state.uri.queryParameters['category'] ?? 'Category',
-            ),
-          ),
-          GoRoute(
-            path: 'orders/calendar',
+            path: '/app',
             builder: (BuildContext context, GoRouterState state) =>
-                const OrdersCalendarScreen(),
-          ),
-          GoRoute(
-            path: 'orders/completed',
-            builder: (BuildContext context, GoRouterState state) =>
-                const HistoricalOrdersScreen(
-                  kind: HistoricalOrdersKind.completed,
+                const AdminHomeScreen(),
+            routes: <RouteBase>[
+              GoRoute(
+                path: 'menu',
+                builder: (_, _) => const MenuLandingScreen(),
+              ),
+              GoRoute(
+                path: 'store-operations',
+                builder: (_, _) => const StoreOperationsScreen(),
+              ),
+              GoRoute(
+                path: 'account',
+                builder: (_, _) => const AccountScreen(),
+              ),
+              GoRoute(
+                path: 'promotions',
+                builder: (_, _) => const PromotionsScreen(),
+              ),
+              GoRoute(
+                path: 'promotions/new',
+                builder: (_, _) => const PromotionFormScreen(),
+              ),
+              GoRoute(
+                path: 'promotions/:id/edit',
+                builder: (_, state) => PromotionFormScreen(
+                  discountId: state.pathParameters['id']!,
                 ),
-          ),
-          GoRoute(
-            path: 'orders/cancelled',
-            builder: (BuildContext context, GoRouterState state) =>
-                const HistoricalOrdersScreen(
-                  kind: HistoricalOrdersKind.cancelled,
+              ),
+              GoRoute(
+                path: 'promotions/:id',
+                builder: (_, state) => PromotionDetailScreen(
+                  discountId: state.pathParameters['id']!,
                 ),
-          ),
-          GoRoute(
-            path: 'orders/:id',
-            builder: (BuildContext context, GoRouterState state) =>
-                OrderDetailScreen(orderId: state.pathParameters['id']!),
+              ),
+              GoRoute(
+                path: 'menu/:kind',
+                builder: (_, state) => MenuCategoriesScreen(
+                  kind: MenuKind.fromJson(state.pathParameters['kind']),
+                ),
+              ),
+              GoRoute(
+                path: 'menu/:kind/categories/new',
+                builder: (_, state) => CategoryFormScreen(
+                  kind: MenuKind.fromJson(state.pathParameters['kind']),
+                ),
+              ),
+              GoRoute(
+                path: 'menu/:kind/categories/:categoryId/edit',
+                builder: (_, state) => CategoryFormScreen(
+                  kind: MenuKind.fromJson(state.pathParameters['kind']),
+                  categoryId: state.pathParameters['categoryId']!,
+                ),
+              ),
+              GoRoute(
+                path: 'menu/:kind/categories/:categoryId',
+                builder: (_, state) => MenuProductsScreen(
+                  kind: MenuKind.fromJson(state.pathParameters['kind']),
+                  categoryId: state.pathParameters['categoryId']!,
+                  categoryName: state.uri.queryParameters['name'] ?? 'Products',
+                ),
+              ),
+              GoRoute(
+                path: 'menu/:kind/categories/:categoryId/products/new',
+                builder: (_, state) => ProductFormScreen(
+                  kind: MenuKind.fromJson(state.pathParameters['kind']),
+                  categoryId: state.pathParameters['categoryId']!,
+                  categoryName:
+                      state.uri.queryParameters['category'] ?? 'Category',
+                ),
+              ),
+              GoRoute(
+                path: 'menu/:kind/categories/:categoryId/products/:productId/edit',
+                builder: (_, state) => ProductFormScreen(
+                  kind: MenuKind.fromJson(state.pathParameters['kind']),
+                  categoryId: state.pathParameters['categoryId']!,
+                  productId: state.pathParameters['productId']!,
+                  categoryName:
+                      state.uri.queryParameters['category'] ?? 'Category',
+                ),
+              ),
+              GoRoute(
+                path: 'menu/:kind/categories/:categoryId/products/:productId/modifiers/new',
+                builder: (_, state) => ModifierFormScreen(
+                  kind: MenuKind.fromJson(state.pathParameters['kind']),
+                  categoryId: state.pathParameters['categoryId']!,
+                  productId: state.pathParameters['productId']!,
+                ),
+              ),
+              GoRoute(
+                path: 'menu/:kind/categories/:categoryId/products/:productId/modifiers/:groupId/edit',
+                builder: (_, state) => ModifierFormScreen(
+                  kind: MenuKind.fromJson(state.pathParameters['kind']),
+                  categoryId: state.pathParameters['categoryId']!,
+                  productId: state.pathParameters['productId']!,
+                  groupId: state.pathParameters['groupId']!,
+                ),
+              ),
+              GoRoute(
+                path: 'menu/:kind/categories/:categoryId/products/:productId/modifiers/:groupId/options/new',
+                builder: (_, state) => ModifierFormScreen(
+                  kind: MenuKind.fromJson(state.pathParameters['kind']),
+                  categoryId: state.pathParameters['categoryId']!,
+                  productId: state.pathParameters['productId']!,
+                  groupId: state.pathParameters['groupId']!,
+                  optionForm: true,
+                ),
+              ),
+              GoRoute(
+                path: 'menu/:kind/categories/:categoryId/products/:productId/modifiers/:groupId/options/:optionId/edit',
+                builder: (_, state) => ModifierFormScreen(
+                  kind: MenuKind.fromJson(state.pathParameters['kind']),
+                  categoryId: state.pathParameters['categoryId']!,
+                  productId: state.pathParameters['productId']!,
+                  groupId: state.pathParameters['groupId']!,
+                  optionId: state.pathParameters['optionId']!,
+                  optionForm: true,
+                ),
+              ),
+              GoRoute(
+                path: 'menu/:kind/categories/:categoryId/products/:productId',
+                builder: (_, state) => MenuProductDetailScreen(
+                  kind: MenuKind.fromJson(state.pathParameters['kind']),
+                  categoryId: state.pathParameters['categoryId']!,
+                  productId: state.pathParameters['productId']!,
+                  categoryName:
+                      state.uri.queryParameters['category'] ?? 'Category',
+                ),
+              ),
+              GoRoute(
+                path: 'orders/calendar',
+                builder: (BuildContext context, GoRouterState state) =>
+                    const OrdersCalendarScreen(),
+              ),
+              GoRoute(
+                path: 'orders/completed',
+                builder: (BuildContext context, GoRouterState state) =>
+                    const HistoricalOrdersScreen(
+                      kind: HistoricalOrdersKind.completed,
+                    ),
+              ),
+              GoRoute(
+                path: 'orders/cancelled',
+                builder: (BuildContext context, GoRouterState state) =>
+                    const HistoricalOrdersScreen(
+                      kind: HistoricalOrdersKind.cancelled,
+                    ),
+              ),
+              GoRoute(
+                path: 'orders/:id',
+                builder: (BuildContext context, GoRouterState state) =>
+                    OrderDetailScreen(orderId: state.pathParameters['id']!),
+              ),
+            ],
           ),
         ],
       ),

@@ -1,11 +1,10 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../locations/models/location.dart';
 import '../models/order_models.dart';
+import '../providers/order_alerts_controller.dart';
 import '../providers/orders_providers.dart';
 import 'order_ui_helpers.dart';
 
@@ -22,43 +21,8 @@ class TodayOrdersView extends ConsumerStatefulWidget {
   ConsumerState<TodayOrdersView> createState() => _TodayOrdersViewState();
 }
 
-class _TodayOrdersViewState extends ConsumerState<TodayOrdersView>
-    with WidgetsBindingObserver {
-  Timer? _timer;
+class _TodayOrdersViewState extends ConsumerState<TodayOrdersView> {
   OrderStatus? _filter;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    _startPolling();
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      _startPolling();
-      unawaited(ref.read(todayOrdersProvider.notifier).refresh());
-    } else {
-      _timer?.cancel();
-      _timer = null;
-    }
-  }
-
-  void _startPolling() {
-    _timer?.cancel();
-    _timer = Timer.periodic(
-      const Duration(seconds: 15),
-      (_) => unawaited(ref.read(todayOrdersProvider.notifier).refresh()),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -202,15 +166,18 @@ class _Filters extends StatelessWidget {
   );
 }
 
-class _OrderCard extends StatelessWidget {
+class _OrderCard extends ConsumerWidget {
   const _OrderCard({required this.order});
   final OrderSummary order;
   @override
-  Widget build(BuildContext context) => Card(
+  Widget build(BuildContext context, WidgetRef ref) => Card(
     margin: const EdgeInsets.only(bottom: 12),
     clipBehavior: Clip.antiAlias,
     child: InkWell(
-      onTap: () => context.push('/app/orders/${order.id}'),
+      onTap: () {
+        ref.read(orderAlertsProvider.notifier).acknowledge(order.id);
+        context.push('/app/orders/${order.id}');
+      },
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(

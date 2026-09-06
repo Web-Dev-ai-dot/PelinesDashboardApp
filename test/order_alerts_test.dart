@@ -1,0 +1,357 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:pelines_admin_app/features/auth/models/admin_session.dart';
+import 'package:pelines_admin_app/features/auth/providers/auth_controller.dart';
+import 'package:pelines_admin_app/features/auth/providers/auth_providers.dart';
+import 'package:pelines_admin_app/features/locations/models/location.dart';
+import 'package:pelines_admin_app/features/locations/providers/locations_providers.dart';
+import 'package:pelines_admin_app/features/orders/data/order_alert_sound.dart';
+import 'package:pelines_admin_app/features/orders/data/order_alert_store.dart';
+import 'package:pelines_admin_app/features/orders/models/order_models.dart';
+import 'package:pelines_admin_app/features/orders/presentation/order_alert_shell.dart';
+import 'package:pelines_admin_app/features/orders/providers/order_alerts_controller.dart';
+import 'package:pelines_admin_app/features/orders/providers/orders_providers.dart';
+
+void main() {
+  test('first load seeds without sound and later pending/confirmed alert once per batch', () async {
+    final _MemoryStore store = _MemoryStore();
+    final _FakeSound sound = _FakeSound();
+    final ProviderContainer container = _container(store, sound);
+    addTearDown(container.dispose);
+    await container.read(orderAlertsProvider.future);
+    final OrderAlertsController controller = container.read(
+      orderAlertsProvider.notifier,
+    );
+
+    await controller.processSnapshot(
+      locationId: 'a',
+      orders: <OrderSummary>[_order('A')],
+      mayPlaySound: true,
+    );
+    expect(container.read(orderAlertsProvider).value!.unseenCount, 0);
+    expect(sound.playCalls, 0);
+
+    await controller.processSnapshot(
+      locationId: 'a',
+      orders: <OrderSummary>[
+        _order('A'),
+        _order('B', status: OrderStatus.confirmed),
+        _order('C'),
+        _order('D'),
+      ],
+      mayPlaySound: true,
+    );
+    expect(container.read(orderAlertsProvider).value!.unseenIds, <String>[
+      'B',
+      'C',
+      'D',
+    ]);
+    expect(sound.playCalls, 1);
+
+    await controller.processSnapshot(
+      locationId: 'a',
+      orders: <OrderSummary>[
+        _order('A'),
+        _order('B', status: OrderStatus.confirmed),
+        _order('C'),
+        _order('D'),
+      ],
+      mayPlaySound: true,
+    );
+    expect(sound.playCalls, 1);
+  });
+
+  test('noneligible orders never become unseen or play sound', () async {
+    final _MemoryStore store = _MemoryStore();
+    final _FakeSound sound = _FakeSound();
+    final ProviderContainer container = _container(store, sound);
+    addTearDown(container.dispose);
+    await container.read(orderAlertsProvider.future);
+    final OrderAlertsController controller = container.read(
+      orderAlertsProvider.notifier,
+    );
+    await controller.processSnapshot(
+      locationId: 'a',
+      orders: <OrderSummary>[_order('seed')],
+      mayPlaySound: true,
+    );
+    await controller.processSnapshot(
+      locationId: 'a',
+      orders: <OrderSummary>[
+        _order('failed', payment: PaymentStatus.failed),
+        _order('unpaid', payment: PaymentStatus.unpaid),
+        _order('refunded', payment: PaymentStatus.refunded),
+        _order('cancelled', status: OrderStatus.cancelled),
+        _order('delivered', status: OrderStatus.delivered),
+      ],
+      mayPlaySound: true,
+    );
+    expect(container.read(orderAlertsProvider).value!.unseenIds, isEmpty);
+    expect(sound.playCalls, 0);
+  });
+
+  test(
+    'acknowledgement persists and stale unseen orders are removed',
+    () async {
+      final _MemoryStore store = _MemoryStore();
+      final _FakeSound sound = _FakeSound();
+      final ProviderContainer container = _container(store, sound);
+      await container.read(orderAlertsProvider.future);
+      final OrderAlertsController controller = container.read(
+        orderAlertsProvider.notifier,
+      );
+      await controller.processSnapshot(
+        locationId: 'a',
+        orders: <OrderSummary>[_order('A')],
+        mayPlaySound: true,
+      );
+      await controller.processSnapshot(
+        locationId: 'a',
+        orders: <OrderSummary>[_order('A'), _order('B'), _order('C')],
+        mayPlaySound: true,
+      );
+      await controller.acknowledge('B');
+      expect(container.read(orderAlertsProvider).value!.unseenIds, <String>[
+        'C',
+      ]);
+      container.dispose();
+
+      final _FakeSound restartedSound = _FakeSound();
+      final ProviderContainer restarted = _container(store, restartedSound);
+      addTearDown(restarted.dispose);
+      await restarted.read(orderAlertsProvider.future);
+      await restarted
+          .read(orderAlertsProvider.notifier)
+          .processSnapshot(
+            locationId: 'a',
+            orders: <OrderSummary>[_order('A'), _order('B'), _order('C')],
+            mayPlaySound: true,
+          );
+      expect(restarted.read(orderAlertsProvider).value!.unseenIds, <String>[
+        'C',
+      ]);
+      expect(restartedSound.playCalls, 0);
+
+      await restarted
+          .read(orderAlertsProvider.notifier)
+          .processSnapshot(
+            locationId: 'a',
+            orders: <OrderSummary>[_order('A'), _order('B')],
+            mayPlaySound: true,
+          );
+      expect(restarted.read(orderAlertsProvider).value!.unseenIds, isEmpty);
+    },
+  );
+
+  test(
+    'locations seed independently and returning does not alert backlog',
+    () async {
+      final _MemoryStore store = _MemoryStore();
+      final _FakeSound sound = _FakeSound();
+      final ProviderContainer container = _container(store, sound);
+      addTearDown(container.dispose);
+      await container.read(orderAlertsProvider.future);
+      final OrderAlertsController controller = container.read(
+        orderAlertsProvider.notifier,
+      );
+      await controller.processSnapshot(
+        locationId: 'a',
+        orders: <OrderSummary>[_order('A1')],
+        mayPlaySound: true,
+      );
+      await controller.processSnapshot(
+        locationId: 'b',
+        orders: <OrderSummary>[_order('B1'), _order('B2')],
+        mayPlaySound: true,
+      );
+      expect(sound.playCalls, 0);
+      await controller.processSnapshot(
+        locationId: 'b',
+        orders: <OrderSummary>[_order('B1'), _order('B2'), _order('B3')],
+        mayPlaySound: true,
+      );
+      expect(sound.playCalls, 1);
+      await controller.processSnapshot(
+        locationId: 'a',
+        orders: <OrderSummary>[_order('A1')],
+        mayPlaySound: true,
+      );
+      expect(sound.playCalls, 1);
+    },
+  );
+
+  test('background detection tracks unseen without playing audio', () async {
+    final _MemoryStore store = _MemoryStore();
+    final _FakeSound sound = _FakeSound();
+    final ProviderContainer container = _container(store, sound);
+    addTearDown(container.dispose);
+    await container.read(orderAlertsProvider.future);
+    final OrderAlertsController controller = container.read(
+      orderAlertsProvider.notifier,
+    );
+    await controller.processSnapshot(
+      locationId: 'a',
+      orders: <OrderSummary>[_order('A')],
+      mayPlaySound: false,
+    );
+    await controller.processSnapshot(
+      locationId: 'a',
+      orders: <OrderSummary>[_order('A'), _order('B')],
+      mayPlaySound: false,
+    );
+    expect(container.read(orderAlertsProvider).value!.unseenIds, <String>['B']);
+    expect(sound.playCalls, 0);
+  });
+
+  testWidgets(
+    'global banner shows plural count, opens order, and clears after acknowledgements',
+    (WidgetTester tester) async {
+      final _MemoryStore store = _MemoryStore()
+        ..values['a'] = const StoredOrderAlerts(
+          knownIds: <String>['A', 'B', 'C'],
+          unseenIds: <String>['B', 'C'],
+        );
+      final GoRouter router = GoRouter(
+        initialLocation: '/app/promotions',
+        routes: <RouteBase>[
+          ShellRoute(
+            builder: (_, _, Widget child) => OrderAlertShell(child: child),
+            routes: <RouteBase>[
+              GoRoute(
+                path: '/app/promotions',
+                builder: (_, _) => const Scaffold(body: Text('Promotions')),
+              ),
+              GoRoute(
+                path: '/app/orders/:id',
+                builder: (_, GoRouterState state) =>
+                    _AcknowledgingDetail(orderId: state.pathParameters['id']!),
+              ),
+            ],
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            orderAlertStoreProvider.overrideWithValue(store),
+            orderAlertSoundProvider.overrideWithValue(_FakeSound()),
+            authControllerProvider.overrideWith(_FakeAuth.new),
+            currentLocationProvider.overrideWith(_FakeLocation.new),
+            todayOrdersProvider.overrideWith(_FakeToday.new),
+          ],
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Promotions'), findsOneWidget);
+      expect(find.byKey(const Key('new-orders-banner')), findsOneWidget);
+      expect(find.text('2 orders need your attention.'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('view-new-order')));
+      await tester.pumpAndSettle();
+      expect(find.text('Order B'), findsOneWidget);
+      expect(find.text('1 order needs your attention.'), findsOneWidget);
+
+      final BuildContext context = tester.element(find.text('Order B'));
+      await ProviderScope.containerOf(context)
+          .read(orderAlertsProvider.notifier)
+          .acknowledge('C');
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('new-orders-banner')), findsNothing);
+    },
+  );
+}
+
+ProviderContainer _container(_MemoryStore store, _FakeSound sound) =>
+    ProviderContainer(
+      overrides: [
+        orderAlertStoreProvider.overrideWithValue(store),
+        orderAlertSoundProvider.overrideWithValue(sound),
+      ],
+    );
+
+OrderSummary _order(
+  String id, {
+  OrderStatus status = OrderStatus.pending,
+  PaymentStatus payment = PaymentStatus.paid,
+}) => OrderSummary(
+  id: id,
+  orderNumber: id,
+  locationId: 'location-id',
+  orderType: OrderType.online,
+  status: status,
+  rawStatus: status.name,
+  paymentStatus: payment,
+  fulfillmentType: FulfillmentType.pickup,
+  contactName: 'Customer',
+  createdAt: DateTime.utc(2026),
+  itemCount: 1,
+  totalCents: 1000,
+);
+
+class _MemoryStore implements OrderAlertStore {
+  final Map<String, StoredOrderAlerts> values = <String, StoredOrderAlerts>{};
+
+  @override
+  Future<StoredOrderAlerts?> read(String locationId) async =>
+      values[locationId];
+
+  @override
+  Future<void> write(String locationId, StoredOrderAlerts alerts) async {
+    values[locationId] = alerts;
+  }
+}
+
+class _FakeSound implements OrderAlertSound {
+  int playCalls = 0;
+  @override
+  Future<void> play() async => playCalls++;
+  @override
+  Future<void> dispose() async {}
+}
+
+class _FakeAuth extends AuthController {
+  @override
+  Future<AdminSession?> build() async => null;
+}
+
+class _FakeLocation extends CurrentLocationController {
+  @override
+  Future<Location?> build() async => Location(
+    id: 'a',
+    name: 'Location A',
+    slug: 'location-a',
+    isActive: true,
+    deliveryFeeCents: 0,
+    deliveryMinimumCents: 0,
+    isAcceptingOrders: true,
+    createdAt: DateTime.utc(2026),
+    updatedAt: DateTime.utc(2026),
+  );
+}
+
+class _FakeToday extends TodayOrdersController {
+  @override
+  Future<TodayOrdersState> build() async => TodayOrdersState(
+    orders: <OrderSummary>[_order('A'), _order('B'), _order('C')],
+  );
+
+  @override
+  Future<void> refresh() async {}
+}
+
+class _AcknowledgingDetail extends ConsumerWidget {
+  const _AcknowledgingDetail({required this.orderId});
+  final String orderId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(orderAlertsProvider.notifier).acknowledge(orderId);
+    });
+    return Scaffold(body: Center(child: Text('Order $orderId')));
+  }
+}
