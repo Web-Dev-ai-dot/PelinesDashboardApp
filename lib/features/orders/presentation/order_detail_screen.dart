@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/theme/pelines_tokens.dart';
 import '../../../core/api/api_exception.dart';
 import '../../../core/time/pelines_time.dart';
 import '../../locations/models/location.dart';
@@ -179,14 +180,20 @@ class _DetailBody extends ConsumerWidget {
         ? OrderStatusAction.forOrder(order.status, order.fulfillmentType)
         : null;
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+      padding: const EdgeInsets.fromLTRB(
+        PelinesSpacing.md,
+        PelinesSpacing.xs,
+        PelinesSpacing.md,
+        PelinesSpacing.xxl,
+      ),
       children: <Widget>[
         Row(
           children: <Widget>[
             Expanded(
               child: Text(
                 order.orderNumber,
-                style: Theme.of(context).textTheme.headlineMedium,
+                style: Theme.of(context).textTheme.headlineMedium
+                    ?.copyWith(fontSize: 28),
               ),
             ),
             StatusChip(
@@ -196,44 +203,31 @@ class _DetailBody extends ConsumerWidget {
             ),
           ],
         ),
-        const SizedBox(height: 4),
-        Text('Placed ${PelinesTime.formatDateTime(order.createdAt)}'),
+        const SizedBox(height: PelinesSpacing.xxs),
+        Text(
+          'Placed ${PelinesTime.formatDateTime(order.createdAt)}',
+          style: Theme.of(context).textTheme.bodyMedium
+              ?.copyWith(color: PelinesColors.textSecondary),
+        ),
         if (!order.paymentStatus.isOperationallyPaid) ...<Widget>[
-          const SizedBox(height: 16),
-          Card(
-            color: Theme.of(context).colorScheme.errorContainer,
-            child: const Padding(
-              padding: EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    'Payment not completed',
-                    style: TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  SizedBox(height: 4),
-                  Text(
-                    'This order cannot be processed because its payment is not marked as paid.',
-                  ),
-                ],
-              ),
-            ),
+          const SizedBox(height: PelinesSpacing.md),
+          const _WarningCard(
+            icon: Icons.warning_amber_rounded,
+            title: 'Payment not completed',
+            message: 'This order cannot be processed because its payment is not marked as paid.',
           ),
         ],
         if (locationContextChanged) ...<Widget>[
-          const SizedBox(height: 16),
-          Card(
-            key: const Key('location-context-warning'),
-            color: Theme.of(context).colorScheme.errorContainer,
-            child: const Padding(
-              padding: EdgeInsets.all(16),
-              child: Text(
-                'Location context changed. This order is read-only until you return to its location.',
-              ),
-            ),
+          const SizedBox(height: PelinesSpacing.md),
+          const _WarningCard(
+            key: Key('location-context-warning'),
+            icon: Icons.location_off_outlined,
+            title: 'Location context changed',
+            message:
+                'This order is read-only until you return to its location.',
           ),
         ],
-        const SizedBox(height: 16),
+        const SizedBox(height: PelinesSpacing.xxs),
         _Section(
           title: 'Fulfillment',
           children: <Widget>[
@@ -275,7 +269,7 @@ class _DetailBody extends ConsumerWidget {
                     .toList(growable: false),
         ),
         _Section(
-          title: 'Financial',
+          title: 'Totals',
           children: <Widget>[
             _MoneyRow('Subtotal', order.subtotalCents),
             if (order.discountCents != 0)
@@ -508,9 +502,10 @@ class _InternalNotesEditorState extends ConsumerState<_InternalNotesEditor> {
     return _Section(
       title: 'Internal notes',
       children: <Widget>[
-        const Text(
+        Text(
           'Private notes for administrators only.',
-          style: TextStyle(color: Colors.black54),
+          style: Theme.of(context).textTheme.bodyMedium
+              ?.copyWith(color: PelinesColors.textSecondary),
         ),
         const SizedBox(height: 10),
         TextField(
@@ -533,10 +528,13 @@ class _InternalNotesEditorState extends ConsumerState<_InternalNotesEditor> {
           ),
         ),
         if (notes.hasRemoteConflict) ...<Widget>[
-          const Text(
+          Text(
             'This note was updated elsewhere. Your draft has been preserved.',
-            key: Key('notes-conflict-warning'),
-            style: TextStyle(color: Colors.deepOrange),
+            key: const Key('notes-conflict-warning'),
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: PelinesColors.destructive,
+              fontWeight: FontWeight.w600,
+            ),
           ),
           const SizedBox(height: 10),
         ],
@@ -647,22 +645,86 @@ class _CompletionDialog extends StatelessWidget {
   }
 }
 
+class _WarningCard extends StatelessWidget {
+  const _WarningCard({
+    required this.icon,
+    required this.title,
+    required this.message,
+    super.key,
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    decoration: BoxDecoration(
+      color: PelinesColors.brandPrimarySoft,
+      border: Border.all(color: PelinesColors.destructive),
+      borderRadius: BorderRadius.circular(PelinesRadius.card),
+    ),
+    padding: const EdgeInsets.all(PelinesSpacing.md),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Icon(icon, color: PelinesColors.destructive),
+        const SizedBox(width: PelinesSpacing.sm),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                title,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: PelinesColors.destructive,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: PelinesSpacing.xxs),
+              Text(message),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
 class _Section extends StatelessWidget {
   const _Section({required this.title, required this.children});
   final String title;
   final List<Widget> children;
   @override
-  Widget build(BuildContext context) => Card(
-    margin: const EdgeInsets.only(top: 12),
-    child: Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          Text(title, style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 12),
-          ...children,
-        ],
+  Widget build(BuildContext context) => Container(
+    margin: const EdgeInsets.only(top: PelinesSpacing.sm),
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(PelinesRadius.card),
+      boxShadow: PelinesShadows.subtle,
+    ),
+    child: Card(
+      margin: EdgeInsets.zero,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(PelinesRadius.card),
+        side: const BorderSide(color: PelinesColors.border),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(PelinesSpacing.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Text(
+              title.toUpperCase(),
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: PelinesColors.textSecondary,
+                letterSpacing: 0.6,
+              ),
+            ),
+            const SizedBox(height: PelinesSpacing.sm),
+            ...children,
+          ],
+        ),
       ),
     ),
   );
@@ -674,21 +736,34 @@ class _Row extends StatelessWidget {
   final String value;
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 4),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        SizedBox(
-          width: 120,
-          child: Text(
-            label,
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
+    padding: const EdgeInsets.symmetric(vertical: PelinesSpacing.xxs),
+    child: LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final Text labelWidget = Text(
+          label,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: PelinesColors.textSecondary,
+            fontWeight: FontWeight.w600,
           ),
-        ),
-        Expanded(child: Text(value)),
-      ],
+        );
+        if (constraints.maxWidth < 320) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              labelWidget,
+              const SizedBox(height: PelinesSpacing.xxs),
+              Text(value),
+            ],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            SizedBox(width: 120, child: labelWidget),
+            Expanded(child: Text(value)),
+          ],
+        );
+      },
     ),
   );
 }
@@ -700,20 +775,25 @@ class _MoneyRow extends StatelessWidget {
   final bool emphasized;
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 4),
+    padding: const EdgeInsets.symmetric(vertical: PelinesSpacing.xxs),
     child: Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: <Widget>[
         Text(
           label,
           style: emphasized
-              ? const TextStyle(fontWeight: FontWeight.bold)
+              ? Theme.of(context).textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w700)
               : null,
         ),
         Text(
           money(cents),
           style: emphasized
-              ? const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)
+              ? Theme.of(context).textTheme.titleLarge?.copyWith(
+                  color: PelinesColors.brandPrimary,
+                  fontFamily: PelinesTypography.bodyFamily,
+                  fontWeight: FontWeight.w700,
+                )
               : null,
         ),
       ],
@@ -726,7 +806,7 @@ class _Item extends StatelessWidget {
   final OrderItem order;
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 14),
+    padding: const EdgeInsets.only(bottom: PelinesSpacing.md),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
@@ -735,7 +815,8 @@ class _Item extends StatelessWidget {
             Expanded(
               child: Text(
                 '${order.quantity}× ${order.productName}',
-                style: const TextStyle(fontWeight: FontWeight.w700),
+                style: Theme.of(context).textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w700),
               ),
             ),
             Text(money(order.lineTotalCents)),
@@ -743,14 +824,22 @@ class _Item extends StatelessWidget {
         ),
         for (final OrderModifier modifier in order.modifiers)
           Padding(
-            padding: const EdgeInsets.only(left: 16, top: 3),
+            padding: const EdgeInsets.only(
+              left: PelinesSpacing.md,
+              top: PelinesSpacing.xxs,
+            ),
             child: Text(
               '${modifier.groupName}: ${modifier.optionName}${modifier.priceDeltaCents == 0 ? '' : ' (+${money(modifier.priceDeltaCents)})'}',
+              style: Theme.of(context).textTheme.bodyMedium
+                  ?.copyWith(color: PelinesColors.textSecondary),
             ),
           ),
         if (order.notes?.trim().isNotEmpty == true)
           Padding(
-            padding: const EdgeInsets.only(left: 16, top: 4),
+            padding: const EdgeInsets.only(
+              left: PelinesSpacing.md,
+              top: PelinesSpacing.xxs,
+            ),
             child: Text(
               'Note: ${order.notes}',
               style: const TextStyle(fontStyle: FontStyle.italic),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/theme/pelines_tokens.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../locations/models/location.dart';
 import '../../locations/providers/locations_providers.dart';
@@ -19,41 +20,78 @@ class AdminHomeScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Pelines Admin'),
+        title: Text(
+          'Pelines Admin',
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+            fontFamily: PelinesTypography.bodyFamily,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
         actions: <Widget>[
           PopupMenuButton<String>(
             tooltip: 'More',
-            icon: const Icon(Icons.more_vert),
+            icon: const Icon(
+              Icons.menu_rounded,
+              color: PelinesColors.brandPrimary,
+            ),
             onSelected: context.push,
+            color: PelinesColors.card,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(PelinesRadius.card),
+              side: const BorderSide(color: PelinesColors.border),
+            ),
             itemBuilder: (BuildContext context) =>
                 const <PopupMenuEntry<String>>[
                   PopupMenuItem<String>(
                     value: '/app/menu',
-                    child: Text('Menu'),
+                    child: _NavigationItem(
+                      icon: Icons.restaurant_menu_outlined,
+                      label: 'Menu',
+                    ),
                   ),
                   PopupMenuItem<String>(
                     value: '/app/store-operations',
-                    child: Text('Store Operations'),
+                    child: _NavigationItem(
+                      icon: Icons.storefront_outlined,
+                      label: 'Store Operations',
+                    ),
                   ),
                   PopupMenuItem<String>(
                     value: '/app/promotions',
-                    child: Text('Promotions'),
+                    child: _NavigationItem(
+                      icon: Icons.local_offer_outlined,
+                      label: 'Promotions',
+                    ),
                   ),
+                  PopupMenuDivider(),
                   PopupMenuItem<String>(
                     value: '/app/account',
-                    child: Text('Account'),
+                    child: _NavigationItem(
+                      icon: Icons.person_outline,
+                      label: 'Account',
+                    ),
                   ),
+                  PopupMenuDivider(),
                   PopupMenuItem<String>(
                     value: '/app/orders/calendar',
-                    child: Text('Calendar'),
+                    child: _NavigationItem(
+                      icon: Icons.calendar_month_outlined,
+                      label: 'Calendar',
+                    ),
                   ),
                   PopupMenuItem<String>(
                     value: '/app/orders/completed',
-                    child: Text('Completed Orders'),
+                    child: _NavigationItem(
+                      icon: Icons.check_circle_outline,
+                      label: 'Completed Orders',
+                    ),
                   ),
                   PopupMenuItem<String>(
                     value: '/app/orders/cancelled',
-                    child: Text('Cancelled Orders'),
+                    child: _NavigationItem(
+                      icon: Icons.cancel_outlined,
+                      label: 'Cancelled Orders',
+                    ),
                   ),
                 ],
           ),
@@ -90,6 +128,28 @@ class AdminHomeScreen extends ConsumerWidget {
       ),
     );
   }
+}
+
+class _NavigationItem extends StatelessWidget {
+  const _NavigationItem({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: <Widget>[
+      Icon(icon, color: PelinesColors.brandPrimary),
+      const SizedBox(width: PelinesSpacing.sm),
+      Text(
+        label,
+        style: const TextStyle(
+          fontFamily: PelinesTypography.bodyFamily,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    ],
+  );
 }
 
 class _HomeContent extends ConsumerWidget {
@@ -132,7 +192,7 @@ class _LocationPicker extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Padding(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(PelinesSpacing.xl),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
@@ -140,12 +200,12 @@ class _LocationPicker extends ConsumerWidget {
             'Choose a location',
             style: Theme.of(context).textTheme.headlineSmall,
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: PelinesSpacing.xs),
           Text(
             'Your selection will be used throughout the admin app.',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: PelinesSpacing.md),
           Expanded(
             child: _LocationList(
               locations: locations,
@@ -174,12 +234,17 @@ class _LocationList extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListView.builder(
       shrinkWrap: true,
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: PelinesSpacing.xs),
       itemCount: locations.length,
       itemBuilder: (BuildContext context, int index) {
         final Location location = locations[index];
         return ListTile(
           enabled: location.isActive,
+          selected: selectedId == location.id,
+          selectedTileColor: PelinesColors.brandPrimarySoft,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(PelinesRadius.control),
+          ),
           leading: Icon(
             location.isActive
                 ? Icons.storefront_outlined
@@ -193,7 +258,10 @@ class _LocationList extends StatelessWidget {
             ].join('\n'),
           ),
           trailing: selectedId == location.id
-              ? const Icon(Icons.check_circle)
+              ? const Icon(
+                  Icons.check_circle,
+                  color: PelinesColors.brandPrimary,
+                )
               : null,
           onTap: location.isActive ? () => onSelected(location) : null,
         );

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/theme/pelines_tokens.dart';
 import '../../auth/models/admin_session.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../locations/models/location.dart';
@@ -107,7 +108,12 @@ class _OrderAlertShellState extends ConsumerState<OrderAlertShell>
         if (showBanner)
           SafeArea(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+              padding: const EdgeInsets.fromLTRB(
+                PelinesSpacing.sm,
+                PelinesSpacing.xs,
+                PelinesSpacing.sm,
+                0,
+              ),
               child: Align(
                 alignment: Alignment.topCenter,
                 child: _NewOrdersBanner(
@@ -131,44 +137,71 @@ class _NewOrdersBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ColorScheme colors = Theme.of(context).colorScheme;
-    return Material(
+    return Container(
       key: const Key('new-orders-banner'),
-      elevation: 6,
-      color: colors.primaryContainer,
-      borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
-        child: Row(
-          children: <Widget>[
-            Icon(
-              Icons.notifications_active_outlined,
-              color: colors.onPrimaryContainer,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  Text(
-                    count == 1 ? 'New order' : 'New orders',
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  Text(
-                    count == 1
-                        ? '1 order needs your attention.'
-                        : '$count orders need your attention.',
-                  ),
-                ],
+      constraints: const BoxConstraints(maxWidth: 560),
+      decoration: BoxDecoration(
+        color: PelinesColors.brandYellowSoft,
+        border: Border.all(color: PelinesColors.brandYellow),
+        borderRadius: BorderRadius.circular(PelinesRadius.prominentCard),
+        boxShadow: PelinesShadows.prominent,
+      ),
+      child: Material(
+        color: PelinesColors.card.withValues(alpha: 0),
+        borderRadius: BorderRadius.circular(PelinesRadius.prominentCard),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            PelinesSpacing.sm,
+            PelinesSpacing.xs,
+            PelinesSpacing.xs,
+            PelinesSpacing.xs,
+          ),
+          child: Row(
+            children: <Widget>[
+              Container(
+                width: 40,
+                height: 40,
+                decoration: const BoxDecoration(
+                  color: PelinesColors.brandPrimary,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.notifications_active_outlined,
+                  color: PelinesColors.card,
+                ),
               ),
-            ),
-            TextButton(
-              key: const Key('view-new-order'),
-              onPressed: onView,
-              child: const Text('View'),
-            ),
-          ],
+              const SizedBox(width: PelinesSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Text(
+                      count == 1 ? 'New order' : 'New orders',
+                      style: Theme.of(context).textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w700),
+                    ),
+                    Text(
+                      count == 1
+                          ? '1 order needs your attention.'
+                          : '$count orders need your attention.',
+                      style: Theme.of(context).textTheme.bodySmall
+                          ?.copyWith(color: PelinesColors.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+              TextButton(
+                key: const Key('view-new-order'),
+                onPressed: onView,
+                style: TextButton.styleFrom(
+                  foregroundColor: PelinesColors.brandPrimary,
+                  minimumSize: const Size(64, 48),
+                ),
+                child: const Text('View'),
+              ),
+            ],
+          ),
         ),
       ),
     );

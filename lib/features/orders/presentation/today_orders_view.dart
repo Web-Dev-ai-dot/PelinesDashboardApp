@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/theme/pelines_tokens.dart';
 import '../../locations/models/location.dart';
 import '../models/order_models.dart';
 import '../providers/order_alerts_controller.dart';
@@ -33,7 +34,12 @@ class _TodayOrdersViewState extends ConsumerState<TodayOrdersView> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 12, 8),
+          padding: const EdgeInsets.fromLTRB(
+            PelinesSpacing.lg,
+            PelinesSpacing.md,
+            PelinesSpacing.sm,
+            PelinesSpacing.xs,
+          ),
           child: Row(
             children: <Widget>[
               Expanded(
@@ -41,12 +47,42 @@ class _TodayOrdersViewState extends ConsumerState<TodayOrdersView> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
-                      "Today's Orders",
-                      style: Theme.of(context).textTheme.headlineSmall,
+                      'Today',
+                      style: Theme.of(context).textTheme.headlineMedium,
                     ),
-                    Text(
-                      widget.location.name,
-                      style: Theme.of(context).textTheme.bodyMedium,
+                    const SizedBox(height: PelinesSpacing.xs),
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: PelinesColors.brandPrimarySoft,
+                        borderRadius: BorderRadius.circular(PelinesRadius.pill),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: PelinesSpacing.sm,
+                          vertical: PelinesSpacing.xxs,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            const Icon(
+                              Icons.storefront_outlined,
+                              size: 18,
+                              color: PelinesColors.brandPrimary,
+                            ),
+                            const SizedBox(width: PelinesSpacing.xs),
+                            Flexible(
+                              child: Text(
+                                widget.location.name,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.labelLarge
+                                    ?.copyWith(
+                                      color: PelinesColors.brandPrimary,
+                                    ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -114,7 +150,12 @@ class _TodayOrdersViewState extends ConsumerState<TodayOrdersView> {
                       )
                     else
                       SliverPadding(
-                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                        padding: const EdgeInsets.fromLTRB(
+                          PelinesSpacing.md,
+                          PelinesSpacing.xs,
+                          PelinesSpacing.md,
+                          PelinesSpacing.xl,
+                        ),
                         sliver: SliverList.builder(
                           itemCount: visible.length,
                           itemBuilder: (BuildContext context, int index) =>
@@ -139,7 +180,10 @@ class _Filters extends StatelessWidget {
   @override
   Widget build(BuildContext context) => SingleChildScrollView(
     scrollDirection: Axis.horizontal,
-    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+    padding: const EdgeInsets.symmetric(
+      horizontal: PelinesSpacing.md,
+      vertical: PelinesSpacing.xs,
+    ),
     child: Row(
       children: <Widget>[
         ChoiceChip(
@@ -154,7 +198,7 @@ class _Filters extends StatelessWidget {
               (OrderStatus.preparing, 'Preparing'),
               (OrderStatus.ready, 'Ready'),
             ]) ...<Widget>[
-          const SizedBox(width: 8),
+          const SizedBox(width: PelinesSpacing.xs),
           ChoiceChip(
             label: Text(label),
             selected: selected == status,
@@ -170,65 +214,80 @@ class _OrderCard extends ConsumerWidget {
   const _OrderCard({required this.order});
   final OrderSummary order;
   @override
-  Widget build(BuildContext context, WidgetRef ref) => Card(
-    margin: const EdgeInsets.only(bottom: 12),
-    clipBehavior: Clip.antiAlias,
-    child: InkWell(
-      onTap: () {
-        ref.read(orderAlertsProvider.notifier).acknowledge(order.id);
-        context.push('/app/orders/${order.id}');
-      },
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Row(
-              children: <Widget>[
-                Expanded(
-                  child: Text(
-                    requestedTime(order.scheduledFor),
-                    style: Theme.of(context).textTheme.titleLarge
+  Widget build(BuildContext context, WidgetRef ref) => Container(
+    margin: const EdgeInsets.only(bottom: PelinesSpacing.sm),
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(PelinesRadius.prominentCard),
+      boxShadow: PelinesShadows.subtle,
+    ),
+    child: Card(
+      margin: EdgeInsets.zero,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(PelinesRadius.prominentCard),
+        side: const BorderSide(color: PelinesColors.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () {
+          ref.read(orderAlertsProvider.notifier).acknowledge(order.id);
+          context.push('/app/orders/${order.id}');
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(PelinesSpacing.md),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: Text(
+                      requestedTime(order.scheduledFor),
+                      style: Theme.of(context).textTheme.titleLarge
+                          ?.copyWith(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  StatusChip(
+                    status: order.status,
+                    fulfillment: order.fulfillmentType,
+                    rawStatus: order.rawStatus,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                order.orderNumber,
+                style: Theme.of(context).textTheme.labelLarge,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                order.eventName?.isNotEmpty == true
+                    ? order.eventName!
+                    : order.contactName,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '${orderTypeLabel(order.orderType)} · ${fulfillmentLabel(order.fulfillmentType)}',
+                style: Theme.of(context).textTheme.bodyMedium
+                    ?.copyWith(color: PelinesColors.textSecondary),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: <Widget>[
+                  Text(
+                    '${order.itemCount} ${order.itemCount == 1 ? 'item' : 'items'}',
+                  ),
+                  Text(
+                    money(order.totalCents),
+                    style: Theme.of(context).textTheme.titleMedium
                         ?.copyWith(fontWeight: FontWeight.w700),
                   ),
-                ),
-                StatusChip(
-                  status: order.status,
-                  fulfillment: order.fulfillmentType,
-                  rawStatus: order.rawStatus,
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              order.orderNumber,
-              style: Theme.of(context).textTheme.labelLarge,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              order.eventName?.isNotEmpty == true
-                  ? order.eventName!
-                  : order.contactName,
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '${orderTypeLabel(order.orderType)} · ${fulfillmentLabel(order.fulfillmentType)}',
-            ),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: <Widget>[
-                Text(
-                  '${order.itemCount} ${order.itemCount == 1 ? 'item' : 'items'}',
-                ),
-                Text(
-                  money(order.totalCents),
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-              ],
-            ),
-          ],
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     ),
@@ -238,10 +297,32 @@ class _OrderCard extends ConsumerWidget {
 class _EmptyState extends StatelessWidget {
   const _EmptyState();
   @override
-  Widget build(BuildContext context) => const Center(
+  Widget build(BuildContext context) => Center(
     child: Padding(
-      padding: EdgeInsets.all(24),
-      child: Text('No active orders for today.'),
+      padding: const EdgeInsets.all(PelinesSpacing.xl),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          const Icon(
+            Icons.receipt_long_outlined,
+            size: 48,
+            color: PelinesColors.textSecondary,
+          ),
+          const SizedBox(height: PelinesSpacing.md),
+          Text(
+            'No active orders',
+            style: Theme.of(context).textTheme.headlineSmall,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: PelinesSpacing.xs),
+          Text(
+            'New orders for today will appear here.',
+            style: Theme.of(context).textTheme.bodyMedium
+                ?.copyWith(color: PelinesColors.textSecondary),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
     ),
   );
 }
