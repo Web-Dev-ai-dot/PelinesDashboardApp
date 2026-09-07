@@ -1,10 +1,141 @@
 import 'package:flutter/material.dart';
 
+import 'pelines_tokens.dart';
+
 abstract final class AppTheme {
   static ThemeData get light {
+    const ColorScheme colorScheme = ColorScheme.light(
+      primary: PelinesColors.brandPrimary,
+      onPrimary: PelinesColors.card,
+      primaryContainer: PelinesColors.brandPrimarySoft,
+      onPrimaryContainer: PelinesColors.brandPrimary,
+      secondary: PelinesColors.brandYellow,
+      onSecondary: PelinesColors.textPrimary,
+      secondaryContainer: PelinesColors.brandYellowSoft,
+      onSecondaryContainer: PelinesColors.textPrimary,
+      error: PelinesColors.destructive,
+      onError: PelinesColors.card,
+      surface: PelinesColors.card,
+      onSurface: PelinesColors.textPrimary,
+      outline: PelinesColors.border,
+      outlineVariant: PelinesColors.mutedSurface,
+    );
+    final TextTheme textTheme = PelinesTypography.textTheme(
+      Typography.material2021().black,
+    );
+    final OutlineInputBorder inputBorder = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(PelinesRadius.pill),
+      borderSide: BorderSide.none,
+    );
+
     return ThemeData(
-      colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepOrange),
       useMaterial3: true,
+      colorScheme: colorScheme,
+      scaffoldBackgroundColor: PelinesColors.page,
+      fontFamily: PelinesTypography.bodyFamily,
+      textTheme: textTheme,
+      extensions: const <ThemeExtension<dynamic>>[PelinesStatusColors.light()],
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: PelinesColors.mutedSurface,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: PelinesSpacing.lg,
+          vertical: PelinesSpacing.md,
+        ),
+        border: inputBorder,
+        enabledBorder: inputBorder,
+        disabledBorder: inputBorder,
+        errorBorder: inputBorder.copyWith(
+          borderSide: const BorderSide(color: PelinesColors.destructive),
+        ),
+        focusedBorder: inputBorder.copyWith(
+          borderSide: const BorderSide(
+            color: PelinesColors.brandPrimary,
+            width: 2,
+          ),
+        ),
+        focusedErrorBorder: inputBorder.copyWith(
+          borderSide: const BorderSide(
+            color: PelinesColors.destructive,
+            width: 2,
+          ),
+        ),
+        labelStyle: const TextStyle(
+          color: PelinesColors.textSecondary,
+          fontWeight: FontWeight.w500,
+        ),
+        hintStyle: const TextStyle(color: PelinesColors.textSecondary),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          minimumSize: const Size(48, 48),
+          backgroundColor: PelinesColors.brandPrimary,
+          foregroundColor: PelinesColors.card,
+          disabledBackgroundColor: PelinesColors.brandPrimarySoft,
+          disabledForegroundColor: PelinesColors.textSecondary,
+          textStyle: const TextStyle(
+            fontFamily: PelinesTypography.bodyFamily,
+            fontWeight: FontWeight.w600,
+          ),
+          shape: const StadiumBorder(),
+          elevation: 0,
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size(48, 48),
+          foregroundColor: PelinesColors.textPrimary,
+          side: const BorderSide(color: PelinesColors.border),
+          textStyle: const TextStyle(
+            fontFamily: PelinesTypography.bodyFamily,
+            fontWeight: FontWeight.w600,
+          ),
+          shape: const StadiumBorder(),
+        ),
+      ),
+      cardTheme: CardThemeData(
+        color: PelinesColors.card,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        shadowColor: Colors.black12,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(PelinesRadius.prominentCard),
+          side: const BorderSide(color: PelinesColors.border),
+        ),
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: PelinesColors.mutedSurface,
+        selectedColor: PelinesColors.brandPrimarySoft,
+        side: const BorderSide(color: PelinesColors.border),
+        shape: const StadiumBorder(),
+        padding: const EdgeInsets.symmetric(horizontal: PelinesSpacing.sm),
+        labelStyle: const TextStyle(
+          color: PelinesColors.textPrimary,
+          fontWeight: FontWeight.w600,
+          fontSize: 12,
+        ),
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: PelinesColors.card,
+        surfaceTintColor: Colors.transparent,
+        elevation: 8,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(PelinesRadius.dialog),
+        ),
+        titleTextStyle: textTheme.headlineSmall,
+        contentTextStyle: textTheme.bodyMedium,
+      ),
+      appBarTheme: AppBarTheme(
+        backgroundColor: PelinesColors.page,
+        foregroundColor: PelinesColors.textPrimary,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        centerTitle: false,
+        titleTextStyle: textTheme.titleLarge?.copyWith(
+          fontWeight: FontWeight.w600,
+        ),
+      ),
     );
   }
 }
