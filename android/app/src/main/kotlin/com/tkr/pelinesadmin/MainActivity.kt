@@ -1,4 +1,4 @@
-package com.example.pelines_admin_app
+package com.tkr.pelinesadmin
 
 import android.media.AudioAttributes
 import android.media.MediaPlayer
