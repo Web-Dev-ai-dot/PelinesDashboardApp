@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../app/theme/pelines_components.dart';
+import '../../../app/theme/pelines_tokens.dart';
 import '../../locations/models/location.dart';
 import '../../locations/providers/locations_providers.dart';
 import '../models/discount.dart';
@@ -185,15 +187,13 @@ class _PromotionFormState extends ConsumerState<_PromotionForm> {
           ),
         ),
         body: ListView(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(PelinesSpacing.lg),
           children: <Widget>[
-            Text('Location', style: Theme.of(context).textTheme.labelLarge),
-            const SizedBox(height: 4),
-            Text(
-              widget.location.name,
-              style: Theme.of(context).textTheme.titleMedium,
+            PelinesReadOnlyField(
+              label: 'Location',
+              value: widget.location.name,
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: PelinesSpacing.lg),
             _textField(
               controller: _code,
               label: 'Code',

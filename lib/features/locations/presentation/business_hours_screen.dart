@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/theme/pelines_components.dart';
+import '../../../app/theme/pelines_tokens.dart';
 import '../models/business_hours.dart';
 import '../models/location.dart';
 import '../providers/business_hours_controller.dart';
@@ -42,11 +44,16 @@ class _BusinessHoursScreenState extends ConsumerState<BusinessHoursScreen> {
       child: Scaffold(
         appBar: AppBar(title: const Text('Business Hours')),
         body: ListView(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(PelinesSpacing.lg),
           children: <Widget>[
-            Text(
-              widget.location.name,
-              style: Theme.of(context).textTheme.titleMedium,
+            Align(
+              alignment: Alignment.centerLeft,
+              child: PelinesStateBadge(
+                label: widget.location.name,
+                foreground: PelinesColors.brandPrimary,
+                background: PelinesColors.brandPrimarySoft,
+                icon: Icons.storefront_outlined,
+              ),
             ),
             const SizedBox(height: 4),
             const Text('Times are recurring business times in Pacific Time.'),

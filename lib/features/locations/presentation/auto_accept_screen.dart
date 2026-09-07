@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/theme/pelines_components.dart';
+import '../../../app/theme/pelines_tokens.dart';
 import '../models/auto_accept.dart';
 import '../models/location.dart';
 import '../providers/auto_accept_controller.dart';
@@ -45,11 +47,16 @@ class _AutoAcceptScreenState extends ConsumerState<AutoAcceptScreen> {
       child: Scaffold(
         appBar: AppBar(title: const Text('Auto-Accept Orders')),
         body: ListView(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(PelinesSpacing.lg),
           children: <Widget>[
-            Text(
-              widget.location.name,
-              style: Theme.of(context).textTheme.titleMedium,
+            Align(
+              alignment: Alignment.centerLeft,
+              child: PelinesStateBadge(
+                label: widget.location.name,
+                foreground: PelinesColors.brandPrimary,
+                background: PelinesColors.brandPrimarySoft,
+                icon: Icons.storefront_outlined,
+              ),
             ),
             const SizedBox(height: 8),
             const Text(

@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../app/theme/pelines_components.dart';
+import '../../../app/theme/pelines_tokens.dart';
 import '../../../core/time/pelines_time.dart';
 import '../../locations/models/location.dart';
 import '../../locations/providers/locations_providers.dart';
@@ -91,7 +93,7 @@ class _OrdersCalendarScreenState extends ConsumerState<OrdersCalendarScreen> {
       onRefresh: ref.read(calendarOrdersProvider.notifier).refresh,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.only(bottom: 24),
+        padding: const EdgeInsets.only(bottom: PelinesSpacing.xl),
         children: <Widget>[
           if (state.isRefreshing) const LinearProgressIndicator(minHeight: 2),
           if (state.refreshError != null)
@@ -105,8 +107,21 @@ class _OrdersCalendarScreenState extends ConsumerState<OrdersCalendarScreen> {
               ],
             ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-            child: Text(location.name),
+            padding: const EdgeInsets.fromLTRB(
+              PelinesSpacing.md,
+              PelinesSpacing.sm,
+              PelinesSpacing.md,
+              0,
+            ),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: PelinesStateBadge(
+                label: location.name,
+                foreground: PelinesColors.brandPrimary,
+                background: PelinesColors.brandPrimarySoft,
+                icon: Icons.storefront_outlined,
+              ),
+            ),
           ),
           CalendarDatePicker(
             initialDate: _selectedDay,
@@ -116,10 +131,9 @@ class _OrdersCalendarScreenState extends ConsumerState<OrdersCalendarScreen> {
                 setState(() => _selectedDay = value),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-            child: Text(
+            padding: const EdgeInsets.symmetric(horizontal: PelinesSpacing.sm),
+            child: PelinesSectionHeading(
               DateFormat('EEEE, MMMM d').format(_selectedDay),
-              style: Theme.of(context).textTheme.titleLarge,
             ),
           ),
           if (grouped.isEmpty)
@@ -133,11 +147,10 @@ class _OrdersCalendarScreenState extends ConsumerState<OrdersCalendarScreen> {
               _CalendarOrderCard(order: order),
           if (unscheduled.isNotEmpty) ...<Widget>[
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 20, 16, 4),
-              child: Text(
-                'Needs pickup time',
-                style: Theme.of(context).textTheme.titleLarge,
+              padding: const EdgeInsets.symmetric(
+                horizontal: PelinesSpacing.sm,
               ),
+              child: const PelinesSectionHeading('Needs pickup time'),
             ),
             for (final OrderSummary order in unscheduled)
               _CalendarOrderCard(order: order, unscheduled: true),
@@ -216,10 +229,16 @@ class _CalendarMessage extends StatelessWidget {
   final VoidCallback? action;
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.all(24),
+    padding: const EdgeInsets.all(PelinesSpacing.xl),
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
+        const Icon(
+          Icons.calendar_month_outlined,
+          size: 48,
+          color: PelinesColors.textSecondary,
+        ),
+        const SizedBox(height: PelinesSpacing.sm),
         Text(message, textAlign: TextAlign.center),
         if (action != null) ...<Widget>[
           const SizedBox(height: 12),

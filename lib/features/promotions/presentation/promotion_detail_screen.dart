@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/theme/pelines_components.dart';
+import '../../../app/theme/pelines_tokens.dart';
 import '../../locations/models/location.dart';
 import '../../locations/providers/locations_providers.dart';
 import '../models/discount.dart';
@@ -117,8 +119,21 @@ class _Details extends ConsumerWidget {
     final bool global = discount.locationId == null;
     final bool manageable = discount.locationId == location.id;
     return ListView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(PelinesSpacing.lg),
       children: <Widget>[
+        PelinesStateBadge(
+          label: global
+              ? 'All locations · Read-only'
+              : '${location.name} · Editable',
+          foreground: global
+              ? PelinesColors.textSecondary
+              : PelinesColors.brandPrimary,
+          background: global
+              ? PelinesColors.mutedSurface
+              : PelinesColors.brandPrimarySoft,
+          icon: global ? Icons.lock_outline : Icons.edit_outlined,
+        ),
+        const SizedBox(height: PelinesSpacing.md),
         _Field('Code', discount.code),
         _StatusField(discount.effectiveStatus(DateTime.now())),
         _Field('Discount', discount.discountLabel),
@@ -138,9 +153,18 @@ class _Details extends ConsumerWidget {
         if (global)
           const Card(
             child: Padding(
-              padding: EdgeInsets.all(16),
-              child: Text(
-                'This promotion applies to all locations and can only be managed from the desktop dashboard.',
+              padding: EdgeInsets.all(PelinesSpacing.md),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Icon(Icons.lock_outline, color: PelinesColors.textSecondary),
+                  SizedBox(width: PelinesSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      'This promotion applies to all locations and can only be managed from the desktop dashboard.',
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -261,12 +285,18 @@ class _Field extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 20),
+    padding: const EdgeInsets.only(bottom: PelinesSpacing.lg),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Text(label, style: Theme.of(context).textTheme.labelLarge),
-        const SizedBox(height: 4),
+        Text(
+          label,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: PelinesColors.textSecondary,
+            letterSpacing: 0.5,
+          ),
+        ),
+        const SizedBox(height: PelinesSpacing.xxs),
         Text(value, style: Theme.of(context).textTheme.bodyLarge),
       ],
     ),
@@ -279,7 +309,7 @@ class _StatusField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 20),
+    padding: const EdgeInsets.only(bottom: PelinesSpacing.lg),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[

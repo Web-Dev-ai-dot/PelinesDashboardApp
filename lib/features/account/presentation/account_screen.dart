@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/theme/pelines_components.dart';
+import '../../../app/theme/pelines_tokens.dart';
 import '../../auth/models/admin_session.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../models/profile.dart';
@@ -43,13 +45,13 @@ class _AccountContent extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final Profile profile = session.profile;
     return ListView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(PelinesSpacing.lg),
       children: <Widget>[
-        Text('Profile', style: Theme.of(context).textTheme.headlineSmall),
-        const SizedBox(height: 16),
+        const PelinesSectionHeading('Profile'),
+        const SizedBox(height: PelinesSpacing.xs),
         Card(
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(PelinesSpacing.md),
             child: Column(
               children: <Widget>[
                 _ProfileRow('Full name', _display(profile.fullName)),
@@ -63,7 +65,7 @@ class _AccountContent extends ConsumerWidget {
             ),
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: PelinesSpacing.md),
         FilledButton.icon(
           key: const Key('edit-profile'),
           onPressed: () => Navigator.push<void>(
@@ -76,9 +78,9 @@ class _AccountContent extends ConsumerWidget {
           icon: const Icon(Icons.edit_outlined),
           label: const Text('Edit Profile'),
         ),
-        const SizedBox(height: 32),
+        const SizedBox(height: PelinesSpacing.xxl),
         const Divider(),
-        const SizedBox(height: 16),
+        const SizedBox(height: PelinesSpacing.md),
         OutlinedButton.icon(
           key: const Key('account-log-out'),
           onPressed: () => _confirmLogout(context, ref),
@@ -183,7 +185,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           ),
         ),
         body: ListView(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(PelinesSpacing.lg),
           children: <Widget>[
             TextField(
               key: const Key('profile-full-name'),
@@ -195,7 +197,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                 border: OutlineInputBorder(),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: PelinesSpacing.sm),
             TextField(
               key: const Key('profile-phone'),
               controller: _phone,
@@ -207,15 +209,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                 border: OutlineInputBorder(),
               ),
             ),
-            const SizedBox(height: 12),
-            const Text('Email'),
-            Text(widget.email, style: Theme.of(context).textTheme.bodyLarge),
-            const Text('Read-only'),
-            const SizedBox(height: 20),
-            const Text('Role'),
-            const Text('Admin'),
-            const Text('Read-only'),
-            const SizedBox(height: 24),
+            const SizedBox(height: PelinesSpacing.sm),
+            PelinesReadOnlyField(label: 'Email', value: widget.email),
+            const SizedBox(height: PelinesSpacing.sm),
+            const PelinesReadOnlyField(label: 'Role', value: 'Admin'),
+            const SizedBox(height: PelinesSpacing.xl),
             if (desired.message != null)
               Padding(
                 padding: const EdgeInsets.only(bottom: 12),
@@ -339,8 +337,17 @@ class _ProfileRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ListTile(
     contentPadding: EdgeInsets.zero,
-    title: Text(label),
-    subtitle: helper == null ? null : Text(helper!),
+    title: Text(
+      label.toUpperCase(),
+      style: Theme.of(context).textTheme.labelSmall
+          ?.copyWith(color: PelinesColors.textSecondary, letterSpacing: 0.5),
+    ),
+    subtitle: helper == null
+        ? null
+        : Text(
+            helper!,
+            style: const TextStyle(color: PelinesColors.textSecondary),
+          ),
     trailing: SizedBox(
       width: MediaQuery.sizeOf(context).width * 0.45,
       child: Text(
@@ -348,6 +355,8 @@ class _ProfileRow extends StatelessWidget {
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
         textAlign: TextAlign.end,
+        style: Theme.of(context).textTheme.bodyLarge
+            ?.copyWith(fontWeight: FontWeight.w600),
       ),
     ),
   );

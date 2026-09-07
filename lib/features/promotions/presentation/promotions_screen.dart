@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/theme/pelines_components.dart';
+import '../../../app/theme/pelines_tokens.dart';
 import '../../locations/models/location.dart';
 import '../../locations/providers/locations_providers.dart';
 import '../models/discount.dart';
@@ -88,7 +90,12 @@ class _PromotionList extends StatelessWidget {
       onRefresh: onRefresh,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+        padding: const EdgeInsets.fromLTRB(
+          PelinesSpacing.md,
+          PelinesSpacing.sm,
+          PelinesSpacing.md,
+          PelinesSpacing.xxl,
+        ),
         children: <Widget>[
           if (local.isNotEmpty) ...<Widget>[
             const _SectionTitle('This location'),
@@ -112,10 +119,7 @@ class _SectionTitle extends StatelessWidget {
   final String label;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
-    child: Text(label, style: Theme.of(context).textTheme.titleMedium),
-  );
+  Widget build(BuildContext context) => PelinesSectionHeading(label);
 }
 
 class _PromotionCard extends StatelessWidget {
@@ -129,11 +133,12 @@ class _PromotionCard extends StatelessWidget {
       DateTime.now(),
     );
     return Card(
+      margin: const EdgeInsets.only(bottom: PelinesSpacing.sm),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(PelinesRadius.prominentCard),
         onTap: () => context.push('/app/promotions/${discount.id}'),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(PelinesSpacing.md),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
@@ -158,7 +163,19 @@ class _PromotionCard extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(discount.appliesToLabel),
-              Text(scope, style: Theme.of(context).textTheme.bodySmall),
+              const SizedBox(height: PelinesSpacing.xs),
+              PelinesStateBadge(
+                label: scope,
+                foreground: scope == 'All locations'
+                    ? PelinesColors.textSecondary
+                    : PelinesColors.brandPrimary,
+                background: scope == 'All locations'
+                    ? PelinesColors.mutedSurface
+                    : PelinesColors.brandPrimarySoft,
+                icon: scope == 'All locations'
+                    ? Icons.lock_outline
+                    : Icons.edit_outlined,
+              ),
             ],
           ),
         ),
@@ -181,27 +198,32 @@ class _StatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color color = switch (status) {
-      PromotionEffectiveStatus.active => Colors.green.shade700,
-      PromotionEffectiveStatus.scheduled => Colors.blue.shade700,
-      PromotionEffectiveStatus.inactive => Colors.grey.shade700,
-      PromotionEffectiveStatus.expired => Colors.orange.shade800,
-      PromotionEffectiveStatus.usageLimitReached => Colors.red.shade700,
+    final (Color foreground, Color background) = switch (status) {
+      PromotionEffectiveStatus.active => (
+        PelinesColors.successForeground,
+        PelinesColors.successBackground,
+      ),
+      PromotionEffectiveStatus.scheduled => (
+        PelinesColors.blue,
+        PelinesColors.blueSoft,
+      ),
+      PromotionEffectiveStatus.inactive => (
+        PelinesColors.textSecondary,
+        PelinesColors.mutedSurface,
+      ),
+      PromotionEffectiveStatus.expired => (
+        PelinesColors.textPrimary,
+        PelinesColors.brandYellowSoft,
+      ),
+      PromotionEffectiveStatus.usageLimitReached => (
+        PelinesColors.destructive,
+        PelinesColors.brandPrimarySoft,
+      ),
     };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: .12),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        status.label,
-        style: TextStyle(
-          color: color,
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
+    return PelinesStateBadge(
+      label: status.label,
+      foreground: foreground,
+      background: background,
     );
   }
 }

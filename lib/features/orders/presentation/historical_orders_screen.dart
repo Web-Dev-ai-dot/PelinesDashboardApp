@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/theme/pelines_components.dart';
+import '../../../app/theme/pelines_tokens.dart';
 import '../../../core/time/pelines_time.dart';
 import '../../locations/models/location.dart';
 import '../../locations/providers/locations_providers.dart';
@@ -72,10 +74,20 @@ class _HistoricalOrdersScreenState
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
-                child: Text(
-                  selected.name,
-                  style: Theme.of(context).textTheme.bodyMedium,
+                padding: const EdgeInsets.fromLTRB(
+                  PelinesSpacing.md,
+                  PelinesSpacing.sm,
+                  PelinesSpacing.md,
+                  PelinesSpacing.xxs,
+                ),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: PelinesStateBadge(
+                    label: selected.name,
+                    foreground: PelinesColors.brandPrimary,
+                    background: PelinesColors.brandPrimarySoft,
+                    icon: Icons.storefront_outlined,
+                  ),
                 ),
               ),
               _HistoryFilterBar(
@@ -137,20 +149,37 @@ class _HistoricalOrdersScreenState
                 hasScrollBody: false,
                 child: Center(
                   child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Text(
-                      state.orders.isNotEmpty
-                          ? 'No orders match these filters.'
-                          : widget.kind == HistoricalOrdersKind.completed
-                          ? 'No completed orders for this location.'
-                          : 'No cancelled orders for this location.',
+                    padding: const EdgeInsets.all(PelinesSpacing.xl),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        const Icon(
+                          Icons.receipt_long_outlined,
+                          size: 48,
+                          color: PelinesColors.textSecondary,
+                        ),
+                        const SizedBox(height: PelinesSpacing.sm),
+                        Text(
+                          state.orders.isNotEmpty
+                              ? 'No orders match these filters.'
+                              : widget.kind == HistoricalOrdersKind.completed
+                              ? 'No completed orders for this location.'
+                              : 'No cancelled orders for this location.',
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
                     ),
                   ),
                 ),
               )
             else
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                padding: const EdgeInsets.fromLTRB(
+                  PelinesSpacing.md,
+                  PelinesSpacing.xs,
+                  PelinesSpacing.md,
+                  PelinesSpacing.xl,
+                ),
                 sliver: SliverList.builder(
                   itemCount: visible.length,
                   itemBuilder: (BuildContext context, int index) =>
@@ -380,7 +409,16 @@ class _HistoricalOrderCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 4),
-              Text(paymentStatusLabel(order.paymentStatus)),
+              PelinesStateBadge(
+                label: paymentStatusLabel(order.paymentStatus),
+                foreground: order.paymentStatus == PaymentStatus.refunded
+                    ? PelinesColors.destructive
+                    : PelinesColors.textSecondary,
+                background: order.paymentStatus == PaymentStatus.refunded
+                    ? PelinesColors.brandPrimarySoft
+                    : PelinesColors.mutedSurface,
+                icon: Icons.payments_outlined,
+              ),
             ],
           ),
         ),

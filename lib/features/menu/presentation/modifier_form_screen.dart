@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/theme/pelines_tokens.dart';
 import '../../locations/providers/locations_providers.dart';
 import '../data/menu_repository.dart';
 import '../models/menu_models.dart';
@@ -215,7 +216,7 @@ class _ModifierGroupFormState extends ConsumerState<ModifierGroupForm> {
         if (input == null)
           const Text(
             'Name is required. Use max >= 1, min <= max, and sort >= 0. Required groups need min >= 1; optional groups need min = 0.',
-            style: TextStyle(color: Colors.red),
+            style: TextStyle(color: PelinesColors.destructive),
           ),
       ],
     );
@@ -342,7 +343,7 @@ class _ModifierOptionFormState extends ConsumerState<ModifierOptionForm> {
         if (input == null)
           const Text(
             'Name is required. Price accepts up to two decimals, including negative values. Sort order must be an integer.',
-            style: TextStyle(color: Colors.red),
+            style: TextStyle(color: PelinesColors.destructive),
           ),
       ],
     );
@@ -428,7 +429,7 @@ class _ModifierScaffold extends StatelessWidget {
         ),
       ),
       body: ListView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(PelinesSpacing.lg),
         children: <Widget>[
           ...children,
           if (message != null) Text(message!),

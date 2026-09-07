@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/theme/pelines_tokens.dart';
 import '../../locations/models/location.dart';
 import '../../locations/providers/locations_providers.dart';
 import '../data/menu_repository.dart';
@@ -222,7 +223,7 @@ class _FormState extends ConsumerState<_Form> {
           ),
         ),
         body: ListView(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(PelinesSpacing.lg),
           children: <Widget>[
             Text('${widget.categoryName} · ${widget.location.name}'),
             const SizedBox(height: 16),
@@ -244,7 +245,7 @@ class _FormState extends ConsumerState<_Form> {
             if (input == null)
               const Text(
                 'Enter a name, a valid non-negative price, and valid numeric values.',
-                style: TextStyle(color: Colors.red),
+                style: TextStyle(color: PelinesColors.destructive),
               ),
             if (mutation.message != null) Text(mutation.message!),
             const SizedBox(height: 12),

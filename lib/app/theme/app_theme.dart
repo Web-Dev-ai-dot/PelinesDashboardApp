@@ -93,6 +93,29 @@ abstract final class AppTheme {
           shape: const StadiumBorder(),
         ),
       ),
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith<Color?>((states) {
+          if (states.contains(WidgetState.selected)) {
+            return PelinesColors.card;
+          }
+          return PelinesColors.textSecondary;
+        }),
+        trackColor: WidgetStateProperty.resolveWith<Color?>((states) {
+          if (states.contains(WidgetState.selected)) {
+            return PelinesColors.brandPrimary;
+          }
+          return PelinesColors.border;
+        }),
+      ),
+      floatingActionButtonTheme: const FloatingActionButtonThemeData(
+        backgroundColor: PelinesColors.brandPrimary,
+        foregroundColor: PelinesColors.card,
+        elevation: 2,
+      ),
+      dividerTheme: const DividerThemeData(
+        color: PelinesColors.border,
+        space: PelinesSpacing.md,
+      ),
       cardTheme: CardThemeData(
         color: PelinesColors.card,
         surfaceTintColor: Colors.transparent,
@@ -132,9 +155,7 @@ abstract final class AppTheme {
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: false,
-        titleTextStyle: textTheme.titleLarge?.copyWith(
-          fontWeight: FontWeight.w600,
-        ),
+        titleTextStyle: textTheme.headlineSmall,
       ),
     );
   }

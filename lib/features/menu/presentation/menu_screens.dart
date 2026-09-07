@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/theme/pelines_components.dart';
+import '../../../app/theme/pelines_tokens.dart';
 import '../../locations/models/location.dart';
 import '../../locations/providers/locations_providers.dart';
 import '../../orders/presentation/order_ui_helpers.dart';
@@ -15,8 +17,9 @@ class MenuLandingScreen extends StatelessWidget {
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Menu')),
     body: ListView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(PelinesSpacing.md),
       children: <Widget>[
+        const PelinesSectionHeading('Choose a menu'),
         _MenuChoice(kind: MenuKind.store, icon: Icons.restaurant_menu),
         _MenuChoice(kind: MenuKind.catering, icon: Icons.room_service_outlined),
       ],
@@ -31,7 +34,15 @@ class _MenuChoice extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Card(
     child: ListTile(
-      leading: Icon(icon),
+      leading: Container(
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          color: PelinesColors.brandPrimarySoft,
+          borderRadius: BorderRadius.circular(PelinesRadius.control),
+        ),
+        child: Icon(icon, color: PelinesColors.brandPrimary),
+      ),
       title: Text(kind.label),
       subtitle: const Text('Browse categories and products'),
       trailing: const Icon(Icons.chevron_right),
@@ -306,7 +317,7 @@ class MenuProductDetailScreen extends ConsumerWidget {
               productId: productId,
             ),
             const SizedBox(height: 20),
-            Text(item.name, style: Theme.of(context).textTheme.headlineSmall),
+            Text(item.name, style: Theme.of(context).textTheme.headlineMedium),
             Text(
               money(item.priceCents),
               style: Theme.of(context).textTheme.titleLarge,
@@ -314,7 +325,16 @@ class MenuProductDetailScreen extends ConsumerWidget {
             const SizedBox(height: 16),
             if (item.description != null) Text(item.description!),
             const SizedBox(height: 16),
-            _Field('Status', item.isAvailable ? 'Available' : 'Unavailable'),
+            PelinesStateBadge(
+              label: item.isAvailable ? 'Available' : 'Unavailable',
+              foreground: item.isAvailable
+                  ? PelinesColors.successForeground
+                  : PelinesColors.destructive,
+              background: item.isAvailable
+                  ? PelinesColors.successBackground
+                  : PelinesColors.brandPrimarySoft,
+            ),
+            const SizedBox(height: PelinesSpacing.md),
             _Field('Category', categoryName),
             _Field('Menu', kind.label),
             _Field('Location', location.name),
@@ -331,7 +351,7 @@ class MenuProductDetailScreen extends ConsumerWidget {
                 Expanded(
                   child: Text(
                     'Modifier Administration',
-                    style: Theme.of(context).textTheme.titleMedium,
+                    style: Theme.of(context).textTheme.headlineSmall,
                   ),
                 ),
                 FilledButton.icon(
@@ -469,7 +489,7 @@ class _ProductImageAdministration extends ConsumerWidget {
               alignment: Alignment.centerLeft,
               child: Text(
                 'Product Image',
-                style: Theme.of(context).textTheme.titleMedium,
+                style: Theme.of(context).textTheme.headlineSmall,
               ),
             ),
             const SizedBox(height: 12),
@@ -549,12 +569,15 @@ class _ProductImage extends StatelessWidget {
     if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
       return placeholder;
     }
-    return Image.network(
-      url!,
-      width: size,
-      height: size,
-      fit: BoxFit.cover,
-      errorBuilder: (_, _, _) => placeholder,
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(PelinesRadius.card),
+      child: Image.network(
+        url!,
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => placeholder,
+      ),
     );
   }
 }
@@ -565,10 +588,25 @@ class _LocationHeader extends StatelessWidget {
   final VoidCallback onRefresh;
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(20, 12, 8, 4),
+    padding: const EdgeInsets.fromLTRB(
+      PelinesSpacing.lg,
+      PelinesSpacing.sm,
+      PelinesSpacing.xs,
+      PelinesSpacing.xxs,
+    ),
     child: Row(
       children: <Widget>[
-        Expanded(child: Text(name)),
+        Expanded(
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: PelinesStateBadge(
+              label: name,
+              foreground: PelinesColors.brandPrimary,
+              background: PelinesColors.brandPrimarySoft,
+              icon: Icons.storefront_outlined,
+            ),
+          ),
+        ),
         IconButton(
           tooltip: 'Refresh',
           onPressed: onRefresh,
@@ -584,8 +622,21 @@ class MenuEmpty extends StatelessWidget {
   final String message;
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.all(32),
-    child: Center(child: Text(message, textAlign: TextAlign.center)),
+    padding: const EdgeInsets.all(PelinesSpacing.xxl),
+    child: Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          const Icon(
+            Icons.inventory_2_outlined,
+            size: 48,
+            color: PelinesColors.textSecondary,
+          ),
+          const SizedBox(height: PelinesSpacing.md),
+          Text(message, textAlign: TextAlign.center),
+        ],
+      ),
+    ),
   );
 }
 

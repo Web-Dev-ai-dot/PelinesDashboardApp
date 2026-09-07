@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../app/theme/pelines_components.dart';
+import '../../../app/theme/pelines_tokens.dart';
 import '../models/location.dart';
 import '../models/temporary_closure.dart';
 import '../providers/closures_controller.dart';
@@ -50,11 +52,16 @@ class _ClosureFormScreenState extends ConsumerState<ClosureFormScreen> {
         title: Text(widget.closure == null ? 'Add Closure' : 'Edit Closure'),
       ),
       body: ListView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(PelinesSpacing.lg),
         children: <Widget>[
-          Text(
-            widget.location.name,
-            style: Theme.of(context).textTheme.titleMedium,
+          Align(
+            alignment: Alignment.centerLeft,
+            child: PelinesStateBadge(
+              label: widget.location.name,
+              foreground: PelinesColors.brandPrimary,
+              background: PelinesColors.brandPrimarySoft,
+              icon: Icons.storefront_outlined,
+            ),
           ),
           const SizedBox(height: 4),
           const Text('Temporary closure for regular online orders'),

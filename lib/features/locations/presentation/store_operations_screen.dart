@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../app/theme/pelines_components.dart';
+import '../../../app/theme/pelines_tokens.dart';
 import '../models/location.dart';
 import '../models/temporary_closure.dart';
 import '../models/business_hours.dart';
@@ -68,26 +70,32 @@ class _OperationsContent extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final bool accepting = location.isAcceptingOrders;
     return ListView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(PelinesSpacing.lg),
       children: <Widget>[
-        Text(location.name, style: Theme.of(context).textTheme.headlineSmall),
+        PelinesStateBadge(
+          label: location.name,
+          foreground: PelinesColors.brandPrimary,
+          background: PelinesColors.brandPrimarySoft,
+          icon: Icons.storefront_outlined,
+        ),
         if (location.address?.trim().isNotEmpty ?? false) ...<Widget>[
-          const SizedBox(height: 4),
+          const SizedBox(height: PelinesSpacing.xs),
           Text(
             location.address!,
-            style: Theme.of(context).textTheme.bodyMedium,
+            style: Theme.of(context).textTheme.bodyMedium
+                ?.copyWith(color: PelinesColors.textSecondary),
           ),
         ],
-        const SizedBox(height: 24),
+        const SizedBox(height: PelinesSpacing.xl),
         Card(
           child: Padding(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(PelinesSpacing.lg),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 Text(
                   'Online Orders',
-                  style: Theme.of(context).textTheme.titleLarge,
+                  style: Theme.of(context).textTheme.headlineSmall,
                 ),
                 const SizedBox(height: 16),
                 Semantics(
@@ -218,7 +226,7 @@ class _AutoAcceptCard extends StatelessWidget {
             children: <Widget>[
               Text(
                 'Auto-Accept Orders',
-                style: Theme.of(context).textTheme.titleLarge,
+                style: Theme.of(context).textTheme.headlineSmall,
               ),
               const SizedBox(height: 12),
               Text(
@@ -239,7 +247,7 @@ class _AutoAcceptCard extends StatelessWidget {
           children: <Widget>[
             Text(
               'Auto-Accept Orders',
-              style: Theme.of(context).textTheme.titleLarge,
+              style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: 12),
             const Text('Regular orders'),
@@ -293,7 +301,7 @@ class _CateringDeliveryCard extends StatelessWidget {
             children: <Widget>[
               Text(
                 'Catering Delivery',
-                style: Theme.of(context).textTheme.titleLarge,
+                style: Theme.of(context).textTheme.headlineSmall,
               ),
               const SizedBox(height: 12),
               Text(
@@ -314,7 +322,7 @@ class _CateringDeliveryCard extends StatelessWidget {
           children: <Widget>[
             Text(
               'Catering Delivery',
-              style: Theme.of(context).textTheme.titleLarge,
+              style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: 6),
             Text(settings.enabled ? 'Enabled' : 'Disabled'),
@@ -357,7 +365,7 @@ class _RegularDeliveryCard extends StatelessWidget {
             children: <Widget>[
               Text(
                 'Regular Delivery',
-                style: Theme.of(context).textTheme.titleLarge,
+                style: Theme.of(context).textTheme.headlineSmall,
               ),
               const SizedBox(height: 12),
               Text(
@@ -377,7 +385,7 @@ class _RegularDeliveryCard extends StatelessWidget {
           children: <Widget>[
             Text(
               'Regular Delivery',
-              style: Theme.of(context).textTheme.titleLarge,
+              style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: 6),
             Text(settings.enabled ? 'Enabled' : 'Disabled'),
@@ -419,7 +427,7 @@ class _BusinessHoursCard extends StatelessWidget {
           children: <Widget>[
             Text(
               'Business Hours',
-              style: Theme.of(context).textTheme.titleLarge,
+              style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: 6),
             const Text(
@@ -497,7 +505,7 @@ class _TemporaryClosuresCard extends StatelessWidget {
             children: <Widget>[
               Text(
                 'Temporary Closures',
-                style: Theme.of(context).textTheme.titleLarge,
+                style: Theme.of(context).textTheme.headlineSmall,
               ),
               const SizedBox(height: 12),
               Text(
@@ -517,7 +525,7 @@ class _TemporaryClosuresCard extends StatelessWidget {
           children: <Widget>[
             Text(
               'Temporary Closures',
-              style: Theme.of(context).textTheme.titleLarge,
+              style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: 6),
             const Text(
