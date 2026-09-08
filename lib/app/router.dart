@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../features/printing/presentation/printer_settings_screen.dart';
+import '../features/printing/presentation/printing_shell.dart';
+
 import '../features/account/presentation/admin_home_screen.dart';
 import '../features/account/presentation/account_screen.dart';
 import '../features/auth/models/admin_session.dart';
@@ -74,13 +77,17 @@ final routerProvider = Provider<GoRouter>((Ref ref) {
       ),
       ShellRoute(
         builder: (BuildContext context, GoRouterState state, Widget child) =>
-            OrderAlertShell(child: child),
+            PrintingShell(child: OrderAlertShell(child: child)),
         routes: <RouteBase>[
           GoRoute(
             path: '/app',
             builder: (BuildContext context, GoRouterState state) =>
                 const AdminHomeScreen(),
             routes: <RouteBase>[
+              GoRoute(
+                path: 'printing',
+                builder: (_, _) => const PrinterSettingsScreen(),
+              ),
               GoRoute(
                 path: 'menu',
                 builder: (_, _) => const MenuLandingScreen(),

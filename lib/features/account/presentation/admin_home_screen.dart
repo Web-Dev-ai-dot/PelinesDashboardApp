@@ -65,6 +65,13 @@ class AdminHomeScreen extends ConsumerWidget {
                   ),
                   PopupMenuDivider(),
                   PopupMenuItem<String>(
+                    value: '/app/printing',
+                    child: _NavigationItem(
+                      icon: Icons.print_outlined,
+                      label: 'Printer Settings',
+                    ),
+                  ),
+                  PopupMenuItem<String>(
                     value: '/app/account',
                     child: _NavigationItem(
                       icon: Icons.person_outline,
