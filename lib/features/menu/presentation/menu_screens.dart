@@ -377,7 +377,9 @@ class MenuProductDetailScreen extends ConsumerWidget {
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                       Text(_modifierRule(group)),
-                      if (group.options.isEmpty)
+                      if (!group.optionsLoaded)
+                        const Text('Options have not been loaded.'),
+                      if (group.optionsLoaded && group.options.isEmpty)
                         const Padding(
                           padding: EdgeInsets.symmetric(vertical: 12),
                           child: Text('No options in this group.'),
@@ -428,6 +430,7 @@ class MenuProductDetailScreen extends ConsumerWidget {
 }
 
 String _modifierRule(MenuModifierGroup group) {
+  if (!group.isFullyLoaded) return 'Modifier details have not been loaded.';
   final String requirement = group.isRequired == true ? 'Required' : 'Optional';
   if (group.minSelect == group.maxSelect) {
     return '$requirement - Choose ${group.maxSelect}';

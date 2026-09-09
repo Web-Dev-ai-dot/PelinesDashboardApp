@@ -97,7 +97,10 @@ class MenuProduct {
     updatedAt: _date(json, 'updatedAt'),
     modifierGroups: _list(json['modifierGroups'])
         .map(
-          (value) => MenuModifierGroup.fromJson(value as Map<String, dynamic>),
+          (value) => MenuModifierGroup.fromJson(
+            value as Map<String, dynamic>,
+            containingProductId: _string(json, 'id'),
+          ),
         )
         .toList(growable: false),
   );
@@ -126,26 +129,29 @@ class MenuModifierGroup {
     required this.name,
     required this.sortOrder,
     required this.options,
+    this.optionsLoaded = true,
     this.isRequired,
     this.minSelect,
     this.maxSelect,
   });
-  factory MenuModifierGroup.fromJson(Map<String, dynamic> json) =>
-      MenuModifierGroup(
-        id: _string(json, 'id'),
-        productId: _string(json, 'productId'),
-        name: _string(json, 'name'),
-        sortOrder: _int(json, 'sortOrder'),
-        isRequired: json['isRequired'] as bool?,
-        minSelect: json['minSelect'] as int?,
-        maxSelect: json['maxSelect'] as int?,
-        options: _list(json['options'])
-            .map(
-              (value) =>
-                  MenuModifierOption.fromJson(value as Map<String, dynamic>),
-            )
-            .toList(growable: false),
-      );
+  factory MenuModifierGroup.fromJson(
+    Map<String, dynamic> json, {
+    String? containingProductId,
+  }) => MenuModifierGroup(
+    id: _string(json, 'id'),
+    productId: _modifierProductId(json, containingProductId),
+    name: _string(json, 'name'),
+    sortOrder: _int(json, 'sortOrder'),
+    isRequired: json['isRequired'] as bool?,
+    minSelect: json['minSelect'] as int?,
+    maxSelect: json['maxSelect'] as int?,
+    optionsLoaded: json['options'] is List,
+    options: _list(json['options'])
+        .map(
+          (value) => MenuModifierOption.fromJson(value as Map<String, dynamic>),
+        )
+        .toList(growable: false),
+  );
   final String id;
   final String productId;
   final String name;
@@ -154,6 +160,26 @@ class MenuModifierGroup {
   final int? minSelect;
   final int? maxSelect;
   final List<MenuModifierOption> options;
+  final bool optionsLoaded;
+
+  bool get isFullyLoaded =>
+      optionsLoaded &&
+      isRequired != null &&
+      minSelect != null &&
+      maxSelect != null;
+}
+
+String _modifierProductId(
+  Map<String, dynamic> json,
+  String? containingProductId,
+) {
+  final value = json.containsKey('productId')
+      ? json['productId']
+      : containingProductId;
+  if (value is! String || value.trim().isEmpty) {
+    throw const FormatException('Invalid productId.');
+  }
+  return value;
 }
 
 class MenuModifierOption {

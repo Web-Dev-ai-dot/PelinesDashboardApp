@@ -23,7 +23,10 @@ final modifierGroupsProvider = FutureProvider.autoDispose
         final groups = await ref
             .watch(menuRepositoryProvider)
             .getModifierGroups(context.productId);
-        if (groups.any((group) => group.productId != context.productId)) {
+        if (groups.any(
+          (group) =>
+              group.productId != context.productId || !group.isFullyLoaded,
+        )) {
           throw const MenuContextChangedException();
         }
         return groups;
@@ -285,7 +288,9 @@ Future<List<MenuModifierGroup>> _validateModifierContext(
   final groups = await ref
       .read(menuRepositoryProvider)
       .getModifierGroups(context.productId);
-  if (groups.any((group) => group.productId != context.productId)) {
+  if (groups.any(
+    (group) => group.productId != context.productId || !group.isFullyLoaded,
+  )) {
     throw const MenuContextChangedException();
   }
   return groups;

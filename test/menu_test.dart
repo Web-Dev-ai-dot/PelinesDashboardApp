@@ -18,6 +18,60 @@ import 'package:pelines_admin_app/features/menu/providers/menu_providers.dart';
 import 'package:pelines_admin_app/features/menu/providers/modifier_providers.dart';
 
 void main() {
+  test(
+    'summary groups inherit product context without becoming full details',
+    () {
+      final group = MenuProduct.fromJson(_product()).modifierGroups.single;
+      expect(group.productId, 'product-uuid');
+      expect(group.optionsLoaded, isFalse);
+      expect(group.isFullyLoaded, isFalse);
+    },
+  );
+
+  test(
+    'explicit group product ID takes precedence over containing product',
+    () {
+      final json = _product(full: true);
+      (json['modifierGroups'] as List).single['productId'] = 'explicit-product';
+      final group = MenuProduct.fromJson(json).modifierGroups.single;
+      expect(group.productId, 'explicit-product');
+      expect(group.isFullyLoaded, isTrue);
+      expect(group.options.single.name, 'Hot');
+    },
+  );
+
+  test('products with no modifier groups parse safely', () {
+    final json = _product()..remove('modifierGroups');
+    expect(MenuProduct.fromJson(json).modifierGroups, isEmpty);
+    json['modifierGroups'] = <Object>[];
+    expect(MenuProduct.fromJson(json).modifierGroups, isEmpty);
+  });
+
+  test('standalone modifier groups require their own product ID', () {
+    final json = _modifierGroup()..remove('productId');
+    expect(() => MenuModifierGroup.fromJson(json), throwsFormatException);
+  });
+
+  test('malformed explicit IDs cannot use the contextual fallback', () {
+    for (final value in <Object?>[null, 42, '', ' ']) {
+      final json = _product();
+      (json['modifierGroups'] as List).single['productId'] = value;
+      expect(() => MenuProduct.fromJson(json), throwsFormatException);
+    }
+    final json = _product();
+    (json['modifierGroups'] as List).single['sortOrder'] = 'invalid';
+    expect(() => MenuProduct.fromJson(json), throwsFormatException);
+  });
+
+  test('missing options differ from loaded empty options in full groups', () {
+    final json = _modifierGroup();
+    expect(MenuModifierGroup.fromJson(json).isFullyLoaded, isTrue);
+    json.remove('options');
+    expect(MenuModifierGroup.fromJson(json).isFullyLoaded, isFalse);
+    json['options'] = 'invalid';
+    expect(() => MenuModifierGroup.fromJson(json), throwsFormatException);
+  });
+
   test('models preserve kinds, cents, nulls, availability and modifiers', () {
     final MenuCategory category = MenuCategory.fromJson(_category());
     expect(category.kind, MenuKind.store);
@@ -827,7 +881,7 @@ Map<String, dynamic> _product({
   'modifierGroups': <Object>[
     <String, dynamic>{
       'id': 'group',
-      'productId': 'product-uuid',
+      if (full) 'productId': 'product-uuid',
       'name': 'Sauce',
       'sortOrder': 0,
       if (full) ...<String, dynamic>{
