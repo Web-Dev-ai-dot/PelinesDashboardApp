@@ -31,10 +31,7 @@ class PrinterSettingsStore {
           .toList();
 
   Future<void> save(PrinterSettings settings) async {
-    if (settings.locationId.isEmpty ||
-        settings.printerId.isEmpty ||
-        settings.scheduledLeadMinutes < 0 ||
-        settings.scheduledLeadMinutes > 1440) {
+    if (!settings.isValid) {
       throw ArgumentError('Invalid printer settings.');
     }
     await database.transaction((tx) async {

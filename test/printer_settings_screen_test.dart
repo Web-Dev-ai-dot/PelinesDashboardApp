@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -7,6 +6,9 @@ import 'package:pelines_admin_app/app/theme/app_theme.dart';
 import 'package:pelines_admin_app/features/locations/models/location.dart';
 import 'package:pelines_admin_app/features/locations/providers/locations_providers.dart';
 import 'package:pelines_admin_app/features/printing/data/printing_database.dart';
+import 'package:pelines_admin_app/features/printing/data/printer_socket.dart';
+import 'package:pelines_admin_app/features/printing/models/network_printer_endpoint.dart';
+import 'package:pelines_admin_app/features/printing/models/printer.dart';
 import 'package:pelines_admin_app/features/printing/models/print_job.dart';
 import 'package:pelines_admin_app/features/printing/models/print_result.dart';
 import 'package:pelines_admin_app/features/printing/presentation/printer_settings_screen.dart';
@@ -29,6 +31,121 @@ class _Location extends CurrentLocationController {
 
 void main() {
   sqfliteFfiInit();
+  testWidgets(
+    'network form validates, probes without job, saves and prints via queue',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(900, 1600));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.runAsync(() async {
+        final connector = _Connector();
+        final runtime = PrintingRuntime(
+          await openPrintingDatabase(
+            factory: databaseFactoryFfiNoIsolate,
+            path: inMemoryDatabasePath,
+          ),
+          connector: connector,
+        );
+        runtime.adapter.delay = Duration.zero;
+        await runtime.start();
+        runtime.active = true;
+        final container = ProviderContainer(
+          overrides: [
+            printingRuntimeProvider.overrideWith((ref) async => runtime),
+            currentLocationProvider.overrideWith(_Location.new),
+          ],
+        );
+        Future<void> settle() async {
+          for (var i = 0; i < 8; i++) {
+            await Future<void>.delayed(const Duration(milliseconds: 10));
+            await tester.pump();
+          }
+        }
+
+        try {
+          await tester.pumpWidget(
+            UncontrolledProviderScope(
+              container: container,
+              child: MaterialApp(
+                theme: AppTheme.light,
+                home: const PrinterSettingsScreen(),
+              ),
+            ),
+          );
+          await settle();
+          await tester.tap(
+            find.byType(DropdownButtonFormField<PrinterTransport>),
+          );
+          await settle();
+          await tester.tap(find.text('Network Epson / ESC-POS').last);
+          await settle();
+          expect(find.text('IP address / hostname'), findsOneWidget);
+          expect(find.text('Simulation controls'), findsNothing);
+          final printFinder = find.widgetWithText(FilledButton, 'Test Print');
+          expect(tester.widget<FilledButton>(printFinder).onPressed, isNull);
+          final probeFinder = find.widgetWithText(
+            FilledButton,
+            'Test Connection',
+          );
+          expect(tester.widget<FilledButton>(probeFinder).onPressed, isNull);
+          final host = find.widgetWithText(TextField, 'IP address / hostname');
+          await tester.enterText(host, 'http://printer');
+          await settle();
+          expect(tester.widget<FilledButton>(probeFinder).onPressed, isNull);
+          await tester.enterText(host, '192.168.1.50');
+          await tester.enterText(
+            find.widgetWithText(TextField, 'Port'),
+            '9200',
+          );
+          await settle();
+          await tester.ensureVisible(probeFinder);
+          await tester.tap(probeFinder);
+          await settle();
+          expect(
+            find.text('Connection status: Printer reachable'),
+            findsOneWidget,
+          );
+          expect(await runtime.jobs.list(), isEmpty);
+          expect(connector.sockets.single.bytes, isEmpty);
+          expect(connector.sockets.single.closed, isTrue);
+          await tester.ensureVisible(find.text('Save Printer'));
+          await tester.tap(find.text('Save Printer'));
+          await settle();
+          var settings = await runtime.settings.read('location-id');
+          expect(settings.transport, PrinterTransport.network);
+          expect(settings.port, 9200);
+          expect(settings.enabled, isFalse);
+          await tester.ensureVisible(
+            find.text('Enable Printing on This Tablet'),
+          );
+          await tester.tap(find.text('Enable Printing on This Tablet'));
+          await settle();
+          await tester.ensureVisible(printFinder);
+          await tester.tap(printFinder);
+          await settle();
+          await runtime.queue.idle;
+          expect(
+            (await runtime.jobs.list()).single.status,
+            PrintJobStatus.submitted,
+          );
+          expect(connector.sockets.last.bytes, isNotEmpty);
+          expect(runtime.adapter.printCalls, 0);
+          await tester.ensureVisible(host);
+          await tester.enterText(host, '192.168.1.51');
+          await settle();
+          expect(tester.widget<FilledButton>(printFinder).onPressed, isNull);
+          expect(find.text('Connection status: Not tested'), findsOneWidget);
+          // Leaving with an unsaved edit retains the saved endpoint.
+          await tester.pumpWidget(const SizedBox.shrink());
+          settings = await runtime.settings.read('location-id');
+          expect(settings.host, '192.168.1.50');
+        } finally {
+          await tester.pumpWidget(const SizedBox.shrink());
+          container.dispose();
+          await runtime.dispose();
+        }
+      });
+    },
+  );
   testWidgets(
     'settings saves preferences, processes fake test, survives screen exit',
     (tester) async {
@@ -109,4 +226,35 @@ void main() {
       });
     },
   );
+}
+
+class _Connector implements PrinterSocketConnector {
+  final sockets = <_Socket>[];
+  @override
+  Future<PrinterSocket> connect(
+    NetworkPrinterEndpoint endpoint,
+    Duration timeout,
+  ) async {
+    final socket = _Socket();
+    sockets.add(socket);
+    return socket;
+  }
+}
+
+class _Socket implements PrinterSocket {
+  final bytes = <int>[];
+  bool closed = false;
+  @override
+  void add(List<int> value) => bytes.addAll(value);
+  @override
+  Future<void> flush() async {}
+  @override
+  Future<void> close() async {
+    closed = true;
+  }
+
+  @override
+  void destroy() {
+    closed = true;
+  }
 }

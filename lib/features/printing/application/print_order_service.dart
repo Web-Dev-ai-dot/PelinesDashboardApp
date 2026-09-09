@@ -4,6 +4,7 @@ import '../../orders/models/order_models.dart';
 import '../data/print_job_store.dart';
 import '../data/printer_settings_store.dart';
 import '../models/print_job.dart';
+import '../models/printer.dart';
 import '../models/printer_settings.dart';
 import '../models/ticket_document.dart';
 import 'print_eligibility.dart';
@@ -72,12 +73,16 @@ class PrintOrderService {
         orderNumber: 'TEST',
         orderType: OrderType.unknown,
         fulfillmentType: FulfillmentType.unknown,
-        customerName: 'Printer test',
+        customerName: 'José / Piña / Jalapeño',
         phone: '',
         placedAt: DateTime.now().toUtc(),
         locationName: locationName,
         items: [],
-        notes: 'Simulation only. No physical ticket.',
+        notes: config.transport == PrinterTransport.fake
+            ? 'Simulation only. No physical ticket.'
+            : 'PRINTER TEST - TEST ONLY\nPrinter: ${config.displayName}\n'
+                  'Connection: Network\nTortilla española\n¿Sin cebolla? ¡Sí!\n'
+                  'á é í ó ú ñ ü\nVerify text, layout and cut on paper.',
         payment: PaymentStatus.unknown,
         totals: const TicketTotals(
           subtotalCents: 0,
@@ -101,7 +106,8 @@ class PrintOrderService {
     String? originalJobId,
   }) async {
     await queue.initialize();
-    if (config.printerId != queue.adapter.printer.id ||
+    if (!config.isValid ||
+        config.printerId != queue.adapter.printer.id ||
         config.transport != queue.adapter.printer.transport) {
       throw const PrintRequestException('Selected printer is not available.');
     }

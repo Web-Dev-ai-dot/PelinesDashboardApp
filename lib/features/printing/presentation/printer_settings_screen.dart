@@ -10,6 +10,7 @@ import '../models/print_job.dart';
 import '../models/print_result.dart';
 import '../models/printer.dart';
 import '../models/printer_settings.dart';
+import '../models/network_printer_endpoint.dart';
 import '../providers/printer_controller.dart';
 import '../providers/printing_providers.dart';
 
@@ -52,10 +53,20 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
   String? _error;
   StreamSubscription<void>? _queueEvents;
   PrintingRuntime? _runtime;
+  PrinterTransport? _type;
+  bool _dirty = false;
+  bool _fieldsLoaded = false;
+  String? _connectionMessage;
+  final _name = TextEditingController();
+  final _host = TextEditingController();
+  final _port = TextEditingController();
 
   @override
   void dispose() {
     unawaited(_queueEvents?.cancel());
+    _name.dispose();
+    _host.dispose();
+    _port.dispose();
     super.dispose();
   }
 
@@ -84,6 +95,30 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
         .save(settings),
   );
 
+  PrinterSettings? _networkConfig(PrinterSettings config) {
+    try {
+      final endpoint = NetworkPrinterEndpoint.parse(
+        _host.text,
+        int.tryParse(_port.text) ?? 0,
+      );
+      final result = config.copyWith(
+        transport: PrinterTransport.network,
+        printerId: endpoint.printerId(widget.locationId),
+        host: endpoint.host,
+        port: endpoint.port,
+        displayName: _name.text.trim(),
+      );
+      return result.isValid ? result : null;
+    } on FormatException {
+      return null;
+    }
+  }
+
+  void _edit(String _) => setState(() {
+    _dirty = true;
+    _connectionMessage = null;
+  });
+
   @override
   Widget build(BuildContext context) {
     final settings = ref.watch(printerControllerProvider(widget.locationId));
@@ -104,6 +139,13 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
         ),
       ),
       data: (config) {
+        if (!_fieldsLoaded) {
+          _fieldsLoaded = true;
+          _name.text = config.displayName;
+          _host.text = config.host;
+          _port.text = '${config.port}';
+        }
+        final network = (_type ?? config.transport) == PrinterTransport.network;
         final engine = runtime.value;
         if (engine == null) {
           return const Center(child: CircularProgressIndicator());
@@ -129,8 +171,10 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  'Simulation only. No physical printer is connected.',
+                Text(
+                  network
+                      ? 'Manual network printing. Check the physical ticket after sending.'
+                      : 'Simulation only. No physical printer is connected.',
                 ),
                 if (_error ?? engine.queue.lastError case final String message)
                   Padding(
@@ -148,61 +192,173 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
                   subtitle: const Text(
                     'Enabling this location disables printing for other locations on this tablet.',
                   ),
-                  value: config.enabled,
-                  onChanged: _busy
+                  value: config.enabled && !_dirty,
+                  onChanged: _busy || _dirty
                       ? null
                       : (v) => _save(config.copyWith(enabled: v)),
                 ),
                 DropdownButtonFormField<PrinterTransport>(
-                  initialValue: config.transport,
-                  decoration: const InputDecoration(labelText: 'Printer'),
+                  initialValue: _type ?? config.transport,
+                  decoration: const InputDecoration(labelText: 'Printer Type'),
                   items: const [
                     DropdownMenuItem(
                       value: PrinterTransport.fake,
                       child: Text('Fake Printer'),
                     ),
+                    DropdownMenuItem(
+                      value: PrinterTransport.network,
+                      child: Text('Network Epson / ESC-POS'),
+                    ),
                   ],
                   onChanged: _busy
                       ? null
-                      : (_) => _save(
-                          config.copyWith(
-                            printerId: 'fake',
-                            transport: PrinterTransport.fake,
-                          ),
-                        ),
+                      : (type) async {
+                          if (type == null) return;
+                          setState(() {
+                            _type = type;
+                            _dirty = true;
+                            _connectionMessage = null;
+                          });
+                          if (type == PrinterTransport.fake) {
+                            await _act(() async {
+                              await ref
+                                  .read(
+                                    printerControllerProvider(widget.locationId)
+                                        .notifier,
+                                  )
+                                  .save(
+                                    config.copyWith(
+                                      printerId: 'fake',
+                                      transport: type,
+                                      enabled: false,
+                                    ),
+                                  );
+                              if (mounted) setState(() => _dirty = false);
+                            });
+                          }
+                        },
                 ),
+                if (network) ...[
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _name,
+                    enabled: !_busy,
+                    onChanged: _edit,
+                    decoration: const InputDecoration(
+                      labelText: 'Printer Name',
+                    ),
+                  ),
+                  TextField(
+                    controller: _host,
+                    enabled: !_busy,
+                    onChanged: _edit,
+                    autocorrect: false,
+                    keyboardType: TextInputType.url,
+                    decoration: const InputDecoration(
+                      labelText: 'IP address / hostname',
+                      hintText: '192.168.1.50',
+                    ),
+                  ),
+                  TextField(
+                    controller: _port,
+                    enabled: !_busy,
+                    onChanged: _edit,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Port',
+                      helperText: 'Raw TCP printing; Epson default is 9100.',
+                    ),
+                  ),
+                  const Text(
+                    '80 mm paper, conservative Font A layout. Save changes before enabling or printing.',
+                  ),
+                  if (_dirty) const Text('Unsaved printer settings'),
+                  OutlinedButton(
+                    onPressed: _busy || _networkConfig(config) == null
+                        ? null
+                        : () => _act(() async {
+                            final draft = _networkConfig(config)!;
+                            await ref
+                                .read(
+                                  printerControllerProvider(widget.locationId)
+                                      .notifier,
+                                )
+                                .save(
+                                  draft.copyWith(
+                                    enabled:
+                                        config.transport ==
+                                            PrinterTransport.network &&
+                                        config.enabled,
+                                  ),
+                                );
+                            if (mounted) {
+                              setState(() {
+                                _dirty = false;
+                                _connectionMessage = null;
+                              });
+                            }
+                          }),
+                    child: const Text('Save Printer'),
+                  ),
+                ],
                 const SizedBox(height: 12),
-                Text('Status: ${status.name}'),
+                Text(
+                  network
+                      ? 'Connection status: ${_connectionMessage ?? 'Not tested'}'
+                      : 'Status: ${status.name}',
+                ),
                 Wrap(
                   spacing: 12,
                   children: [
-                    FilledButton(
-                      onPressed: _busy || status == PrinterStatus.connected
-                          ? null
-                          : () => _act(() async {
-                              final connecting = adapter.connect();
-                              setState(() {});
-                              final result = await connecting;
-                              if (result.message != null && mounted) {
-                                setState(() => _error = result.message);
-                              }
-                              engine.queue.kick();
-                            }),
-                      child: const Text('Connect'),
-                    ),
-                    OutlinedButton(
-                      onPressed:
-                          _busy ||
-                              engine.queue.isSending ||
-                              status != PrinterStatus.connected
-                          ? null
-                          : () => _act(() async {
-                              await adapter.disconnect();
-                            }),
-                      child: const Text('Disconnect'),
-                    ),
+                    if (network)
+                      FilledButton(
+                        onPressed:
+                            _busy ||
+                                _networkConfig(config) == null ||
+                                engine.queue.isSending
+                            ? null
+                            : () => _act(() async {
+                                final result = await engine
+                                    .createAdapter(_networkConfig(config)!)
+                                    .connect();
+                                if (mounted) {
+                                  setState(
+                                    () => _connectionMessage = result.message,
+                                  );
+                                }
+                              }),
+                        child: const Text('Test Connection'),
+                      ),
+                    if (!network)
+                      FilledButton(
+                        onPressed: _busy || status == PrinterStatus.connected
+                            ? null
+                            : () => _act(() async {
+                                final connecting = adapter.connect();
+                                setState(() {});
+                                final result = await connecting;
+                                if (result.message != null && mounted) {
+                                  setState(() => _error = result.message);
+                                }
+                                engine.queue.kick();
+                              }),
+                        child: const Text('Connect'),
+                      ),
+                    if (!network)
+                      OutlinedButton(
+                        onPressed:
+                            _busy ||
+                                engine.queue.isSending ||
+                                status != PrinterStatus.connected
+                            ? null
+                            : () => _act(() async {
+                                await adapter.disconnect();
+                              }),
+                        child: const Text('Disconnect'),
+                      ),
                     FilledButton.tonal(
-                      onPressed: _busy || !config.enabled
+                      onPressed:
+                          _busy || _dirty || !config.enabled || !config.isValid
                           ? null
                           : () => _act(() async {
                               await engine.service.queueTestPrint(
@@ -226,7 +382,7 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Auto-print Regular ASAP'),
                   value: config.autoPrintRegularAsap,
-                  onChanged: _busy
+                  onChanged: _busy || _dirty
                       ? null
                       : (v) => _save(config.copyWith(autoPrintRegularAsap: v)),
                 ),
@@ -234,14 +390,14 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Auto-print Scheduled'),
                   value: config.autoPrintScheduled,
-                  onChanged: _busy
+                  onChanged: _busy || _dirty
                       ? null
                       : (v) => _save(config.copyWith(autoPrintScheduled: v)),
                 ),
                 TextFormField(
                   key: ValueKey(config.scheduledLeadMinutes),
                   initialValue: '${config.scheduledLeadMinutes}',
-                  enabled: !_busy,
+                  enabled: !_busy && !_dirty,
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
                     labelText: 'Scheduled lead time (minutes)',
@@ -261,45 +417,47 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
                     );
                   },
                 ),
-                const Divider(height: 32),
-                Text(
-                  'Simulation controls',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Simulate connection failure'),
-                  value: adapter.connectionFails,
-                  onChanged: _busy
-                      ? null
-                      : (v) => setState(() => adapter.connectionFails = v),
-                ),
-                DropdownButtonFormField<PrintOutcome>(
-                  initialValue: adapter.outcome,
-                  decoration: const InputDecoration(
-                    labelText: 'Next simulated result',
+                if (!network) ...[
+                  const Divider(height: 32),
+                  Text(
+                    'Simulation controls',
+                    style: Theme.of(context).textTheme.titleMedium,
                   ),
-                  items: PrintOutcome.values
-                      .map(
-                        (v) => DropdownMenuItem(
-                          value: v,
-                          child: Text(_outcomeLabel(v)),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: _busy
-                      ? null
-                      : (v) {
-                          if (v != null) setState(() => adapter.outcome = v);
-                        },
-                ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Simulate connection failure'),
+                    value: adapter.connectionFails,
+                    onChanged: _busy
+                        ? null
+                        : (v) => setState(() => adapter.connectionFails = v),
+                  ),
+                  DropdownButtonFormField<PrintOutcome>(
+                    initialValue: adapter.outcome,
+                    decoration: const InputDecoration(
+                      labelText: 'Next simulated result',
+                    ),
+                    items: PrintOutcome.values
+                        .map(
+                          (v) => DropdownMenuItem(
+                            value: v,
+                            child: Text(_outcomeLabel(v)),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: _busy
+                        ? null
+                        : (v) {
+                            if (v != null) setState(() => adapter.outcome = v);
+                          },
+                  ),
+                ],
                 const SizedBox(height: 20),
                 Text(
                   'Print jobs',
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 const Text(
-                  'Submitted means sent, not physically confirmed. All results here are simulated.',
+                  'Submitted means sent, not physically confirmed. Fake Printer jobs are simulated.',
                 ),
                 jobs.when(
                   loading: () => const LinearProgressIndicator(),
@@ -324,7 +482,14 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
                                         job.status ==
                                             PrintJobStatus.failedBeforeSend
                                         ? TextButton(
-                                            onPressed: _busy
+                                            onPressed:
+                                                _busy ||
+                                                    _dirty ||
+                                                    job.printerId !=
+                                                        engine
+                                                            .selectedAdapter
+                                                            .printer
+                                                            .id
                                                 ? null
                                                 : () => _act(
                                                     () => engine.queue.retry(
@@ -342,6 +507,17 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
                                                     job,
                                                   ),
                                             child: const Text('Review'),
+                                          )
+                                        : job.status == PrintJobStatus.queued
+                                        ? TextButton(
+                                            onPressed: _busy
+                                                ? null
+                                                : () => _act(
+                                                    () => engine.queue.cancel(
+                                                      job.id,
+                                                    ),
+                                                  ),
+                                            child: const Text('Cancel'),
                                           )
                                         : null,
                                   ),

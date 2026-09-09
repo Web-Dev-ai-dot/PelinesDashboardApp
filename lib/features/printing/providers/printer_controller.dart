@@ -18,7 +18,7 @@ class PrinterController extends AsyncNotifier<PrinterSettings> {
       throw ArgumentError('Location mismatch.');
     }
     final runtime = await ref.read(printingRuntimeProvider.future);
-    await runtime.settings.save(settings);
+    await runtime.saveSettings(settings);
     state = AsyncData(settings);
     runtime.queue.kick();
   }
