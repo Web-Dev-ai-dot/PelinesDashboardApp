@@ -1,4 +1,4 @@
-# Signed artifact only. No automatic triggers, Apple API integration, or publishing.
+# Manual build and Apple upload. No automatic triggers, ASC API, or publishing block.
 # See docs/ios-testflight-setup.md before the first manual run.
 workflows:
   ios-staging-build:
@@ -13,6 +13,7 @@ workflows:
         bundle_identifier: com.tkr.pelinesadmin
       groups:
         - pelines_staging
+        - apple_upload
     scripts:
       - name: Verify checkout and toolchain
         script: |
@@ -57,8 +58,33 @@ workflows:
           test "$(/usr/libexec/PlistBuddy -c 'Print CFBundleDisplayName' build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app/Info.plist)" = "Pelines Admin"
           codesign --verify --deep --strict build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app
           # Flutter can finish successfully even if IPA export failed.
+          shopt -s nullglob
           ipa_files=(build/ios/ipa/*.ipa)
+          if (( ${#ipa_files[@]} != 1 )); then
+            echo "Expected exactly one IPA in build/ios/ipa; found ${#ipa_files[@]}." >&2
+            exit 1
+          fi
+          test -f "${ipa_files[0]}"
           test -s "${ipa_files[0]}"
+      - name: Validate and upload IPA to App Store Connect
+        script: |
+          set +x
+          set -euo pipefail
+          cd "$CM_BUILD_DIR"
+          : "${APPLE_ID:?APPLE_ID is required in apple_upload}"
+          : "${APPLE_APP_SPECIFIC_PASSWORD:?APPLE_APP_SPECIFIC_PASSWORD is required in apple_upload}"
+          shopt -s nullglob
+          ipa_files=(build/ios/ipa/*.ipa)
+          if (( ${#ipa_files[@]} != 1 )); then
+            echo "Expected exactly one IPA in build/ios/ipa; found ${#ipa_files[@]}." >&2
+            exit 1
+          fi
+          test -f "${ipa_files[0]}"
+          test -s "${ipa_files[0]}"
+          xcrun altool --validate-app -f "${ipa_files[0]}" -t ios \
+            -u "$APPLE_ID" -p "$APPLE_APP_SPECIFIC_PASSWORD"
+          xcrun altool --upload-app -f "${ipa_files[0]}" -t ios \
+            -u "$APPLE_ID" -p "$APPLE_APP_SPECIFIC_PASSWORD"
     artifacts:
       - build/ios/ipa/*.ipa
-    # Deliberately no publishing. Upload/TestFlight requires separate authorization.
+    # Upload runs after validation on manual Start build; no TestFlight distribution step.

@@ -4,9 +4,11 @@
 
 The `ios-staging-build` workflow now creates a **signed App Store distribution
 IPA** on Codemagic, following the successful unsigned build. It uses the uploaded
-certificate/private key and provisioning profile. It does not create signing
-identities, connect to the App Store Connect API, upload to Apple, or distribute
-through TestFlight. It has no automatic triggers or publishing block.
+certificate/private key and provisioning profile. A manual Start build now also
+validates and uploads the IPA to App Store Connect using `altool` and an
+app-specific password. It does not create signing identities, use the App Store
+Connect API, or assign TestFlight testers. There are no automatic triggers or
+Codemagic `publishing:` block.
 
 - Bundle ID: `com.tkr.pelinesadmin` (RunnerTests: `.RunnerTests`).
 - Display name: **Pelines Admin**.
@@ -60,9 +62,9 @@ through TestFlight. It has no automatic triggers or publishing block.
    The ephemeral JSON is deleted on shell exit, including ordinary build failures.
 5. Success means the signed archive passes bundle/display-name and code-signature
    checks and a nonempty `build/ios/ipa/*.ipa` exists as a downloadable artifact.
-   Actual signing/export remains to be verified by this manual macOS run.
+   Signed IPA generation has already passed in Codemagic.
    This App Store IPA is not an ad-hoc installation package; downloading it does
-   not distribute it through TestFlight. No publishing is enabled. Review any
+   not distribute it through TestFlight. The next step uploads it to Apple. Review any
    separate pre-existing Codemagic UI workflows/webhooks before running.
 
 Never commit `.env.staging.json`, generated xcconfig/plugin files, keys,
@@ -87,29 +89,47 @@ rounded-corner matte, preserving the P and circular artwork. Every declared
 size is RGB/opaque, including 1024px marketing artwork. Android icons and the
 source remain unchanged. No redesign or new artwork is involved.
 
-## Later upload and TestFlight (not enabled)
+## Manual upload with app-specific password (provisional)
 
-After a successful signed IPA build and separate upload authorization:
+The workflow imports the existing secure group **apple_upload** with `APPLE_ID`
+and `APPLE_APP_SPECIFIC_PASSWORD`. Keep both marked secret in Codemagic; never
+put their values in Git. Use an app-specific password, not the Apple account's
+normal password. The Apple account must have upload access to the app record,
+with applicable agreements accepted. No ASC API key, issuer ID, or `.p8` is used.
 
-1. Confirm TKR's Apple Developer membership/team, agreements, bundle-ID ownership,
-   explicit App ID, and App Store Connect app record (name, language, SKU).
-2. If Codemagic will upload later, configure its App Store Connect integration
-   with issuer ID, key ID, and private `.p8` with appropriate permissions.
-   This API key is separate from the already uploaded signing private key.
-   Keep all credentials in Codemagic secure storage, never YAML/Git.
-3. Before uploading, use a new increasing build number as required by App Store
-   Connect, rebuild the signed IPA, and address export compliance/archive checks.
-   This build-only change intentionally retains the current Flutter version.
-4. Only then authorize upload to App Store Connect and internal TestFlight
-   distribution. Do not enable App Store release publishing. Create an internal
-   tester group with eligible App Store Connect users.
-5. Use an iPad mini supporting the current TestFlight app (currently iPadOS 16+,
+After building, the upload step disables shell tracing, requires both variables,
+and fails clearly unless exactly one nonempty regular `build/ios/ipa/*.ipa`
+exists. It runs `xcrun altool --validate-app` followed by `--upload-app`, both with
+`-t ios -u "$APPLE_ID" -p "$APPLE_APP_SPECIFIC_PASSWORD"`. `set -euo pipefail`
+stops the step if validation fails, so upload is not attempted. Do not enable
+shell tracing or verbose credential logging. The IPA remains a build artifact.
+
+This is a provisional upload route; a future separately reviewed migration to
+ASC API authentication would remove the dependency on an individual's Apple
+account and app-specific password. It is not configured by this change.
+
+Before pressing **Start build**, confirm the intended commit and app record,
+secure group access, and a build number that Apple has not already accepted for
+this version. The workflow intentionally does not change the current version or
+build-number command. Every manual run now attempts upload after validation;
+there is no separate approval prompt within the run. No run/upload was performed
+while preparing this configuration.
+
+Upload acceptance is not the end of Apple processing or a public release. Check
+App Store Connect for processing errors, export compliance, and build availability.
+TestFlight tester assignment/distribution remains a separate manual decision.
+
+Apple reference: [Validate and upload builds with altool](https://developer.apple.com/help/app-store-connect/manage-builds/upload-builds).
+
+## Later TestFlight and physical smoke test
+
+1. Use an iPad mini supporting the current TestFlight app (currently iPadOS 16+,
    mini 5th generation or newer). Install, confirm STAGING, login, verify admin,
    locations, Today, and Menu using read-only actions.
-6. On the printer's reachable LAN, select Network Epson/ESC-POS, enter its IP and
+2. On the printer's reachable LAN, select Network Epson/ESC-POS, enter its IP and
    port 9100, and use Test Connection. Grant Local Network access; retry the
    connection test if the first prompt outlasts the four-second timeout.
-7. After separate physical-test authorization, enable local printing and issue
+3. After separate physical-test authorization, enable local printing and issue
    one Test Print. Verify one ticket, accents, wrapping, feed/cut, submitted queue
    state, and no duplicate after relaunch. Submitted is not physical confirmation;
    ambiguous delivery stays unknown and must not be blindly retried.
