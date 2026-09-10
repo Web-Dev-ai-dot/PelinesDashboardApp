@@ -22,6 +22,9 @@ build-clean-cache.stdout.log
 !.env.example
 *.pem
 *.key
+*.p8
+*.p12
+*.mobileprovision
 credentials.json
 
 # IntelliJ related
