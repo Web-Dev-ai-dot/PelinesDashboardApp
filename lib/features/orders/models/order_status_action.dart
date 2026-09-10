@@ -1,6 +1,13 @@
 import 'order_models.dart';
 
 enum OrderStatusAction {
+  cancelOrder(
+    source: null,
+    target: OrderStatus.cancelled,
+    label: 'Cancel Order',
+    progressLabel: 'Cancelling...',
+    successMessage: 'Order cancelled',
+  ),
   acceptOrder(
     source: OrderStatus.pending,
     target: OrderStatus.confirmed,
@@ -38,11 +45,21 @@ enum OrderStatusAction {
     required this.successMessage,
   });
 
-  final OrderStatus source;
+  final OrderStatus? source;
   final OrderStatus target;
   final String label;
   final String progressLabel;
   final String successMessage;
+
+  // Cancellation is deliberately not part of forStatus/forOrder progression.
+  static bool canCancel(OrderDetail order) =>
+      order.paymentStatus.isOperationallyPaid &&
+      const <OrderStatus>{
+        OrderStatus.pending,
+        OrderStatus.confirmed,
+        OrderStatus.preparing,
+        OrderStatus.ready,
+      }.contains(order.status);
 
   static OrderStatusAction? forStatus(OrderStatus status) => switch (status) {
     OrderStatus.pending => acceptOrder,

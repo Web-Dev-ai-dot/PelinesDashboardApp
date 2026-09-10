@@ -151,6 +151,7 @@ class OrderDetail {
     required this.deliveryFeeCents,
     required this.totalCents,
     required this.items,
+    this.rawPaymentStatus,
     this.location,
     this.scheduledFor,
     this.eventDetails,
@@ -173,6 +174,7 @@ class OrderDetail {
       status: OrderStatus.fromJson(json['status']),
       rawStatus: json['status']?.toString() ?? 'unknown',
       paymentStatus: PaymentStatus.fromJson(json['paymentStatus']),
+      rawPaymentStatus: json['paymentStatus']?.toString(),
       fulfillmentType: FulfillmentType.fromJson(json['fulfillmentType']),
       contactName: _string(json, 'contactName'),
       contactPhone: _string(json, 'contactPhone'),
@@ -214,6 +216,7 @@ class OrderDetail {
   final OrderStatus status;
   final String rawStatus;
   final PaymentStatus paymentStatus;
+  final String? rawPaymentStatus;
   final FulfillmentType fulfillmentType;
   final String contactName;
   final String contactPhone;

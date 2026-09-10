@@ -191,6 +191,31 @@ void main() {
     },
   );
 
+  test('PATCHes exact cancellation body and parses its response', () async {
+    const String id = '11111111-1111-4111-8111-111111111111';
+    final _Adapter adapter = _Adapter(
+      statusCode: 200,
+      body: jsonEncode(orderJson(id: id, status: 'cancelled')),
+    );
+    final Dio dio = Dio(BaseOptions(baseUrl: 'https://example.test/v1/'))
+      ..httpClientAdapter = adapter;
+    final OrdersRepository repository = ApiOrdersRepository(
+      ApiClient(dio: dio),
+    );
+
+    final OrderDetail result = await repository.updateOrderStatus(
+      orderId: id,
+      status: OrderStatus.cancelled,
+    );
+
+    expect(adapter.calls, 1);
+    expect(adapter.lastOptions?.method, 'PATCH');
+    expect(adapter.lastOptions?.path, 'orders/$id/status');
+    expect(adapter.lastOptions?.data, <String, dynamic>{'status': 'cancelled'});
+    expect(result.id, id);
+    expect(result.status, OrderStatus.cancelled);
+  });
+
   for (final int status in <int>[401, 403, 404]) {
     test('maps status mutation $status to a typed ApiException', () async {
       final Dio dio = Dio(BaseOptions(baseUrl: 'https://example.test/v1/'))
@@ -312,6 +337,7 @@ class _Adapter implements HttpClientAdapter {
   _Adapter({required this.statusCode, required this.body});
   final int statusCode;
   final String body;
+  int calls = 0;
   RequestOptions? lastOptions;
   bool hadRequestBody = false;
 
@@ -321,6 +347,7 @@ class _Adapter implements HttpClientAdapter {
     Stream<Uint8List>? requestStream,
     Future<void>? cancelFuture,
   ) async {
+    calls++;
     lastOptions = options;
     hadRequestBody = requestStream != null;
     return ResponseBody.fromString(

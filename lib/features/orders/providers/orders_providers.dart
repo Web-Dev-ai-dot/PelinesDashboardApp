@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/api/api_exception.dart';
+import '../../../core/config/app_config.dart';
 import '../../../core/time/pelines_time.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../locations/models/location.dart';
@@ -9,6 +10,11 @@ import '../../locations/providers/locations_providers.dart';
 import '../data/orders_repository.dart';
 import '../models/order_models.dart';
 import '../models/order_status_action.dart';
+
+// Staging-only V1 rollout; production cannot invoke Cancel through the controller.
+final orderCancellationEnabledProvider = Provider<bool>(
+  (Ref ref) => AppConfig.environment == AppEnvironment.staging,
+);
 
 final ordersRepositoryProvider = Provider<OrdersRepository>((Ref ref) {
   return ApiOrdersRepository(ref.watch(apiClientProvider));
@@ -290,6 +296,26 @@ class OrderMutationController extends Notifier<OrderMutationState> {
   @override
   OrderMutationState build() => const OrderMutationState();
 
+  Future<void> cancelOrder(OrderDetail order) async {
+    // Finish reconciliation even if Detail closes while the request is in flight.
+    final keepAlive = ref.keepAlive();
+    try {
+      await _run(order, OrderStatusAction.cancelOrder);
+    } finally {
+      keepAlive.close();
+    }
+  }
+
+  bool _allows(OrderDetail order, OrderStatusAction action) =>
+      action == OrderStatusAction.cancelOrder
+      ? ref.read(orderCancellationEnabledProvider) &&
+            OrderStatusAction.canCancel(order)
+      : OrderStatusAction.allows(
+          order.status,
+          action.target,
+          fulfillment: order.fulfillmentType,
+        );
+
   Future<void> acceptOrder(OrderDetail order) =>
       _run(order, OrderStatusAction.acceptOrder);
 
@@ -328,11 +354,7 @@ class OrderMutationController extends Notifier<OrderMutationState> {
     if (state.isBusy ||
         ref.read(orderNotesProvider(orderId)).isBusy ||
         order.id != orderId ||
-        !OrderStatusAction.allows(
-          order.status,
-          action.target,
-          fulfillment: order.fulfillmentType,
-        )) {
+        !_allows(order, action)) {
       return;
     }
     if (!order.paymentStatus.isOperationallyPaid) {
@@ -356,6 +378,10 @@ class OrderMutationController extends Notifier<OrderMutationState> {
       final OrderDetail provisional = await ref
           .read(ordersRepositoryProvider)
           .updateOrderStatus(orderId: orderId, status: action.target);
+      if (action == OrderStatusAction.cancelOrder) {
+        await _reconcileCancellation(canonical);
+        return;
+      }
       state = OrderMutationState(
         phase: OrderMutationPhase.reconciling,
         canonicalOrder: provisional,
@@ -365,6 +391,10 @@ class OrderMutationController extends Notifier<OrderMutationState> {
     } on ApiException catch (error) {
       if (error.statusCode == 401) {
         await ref.read(authControllerProvider.notifier).signOut();
+      }
+      if (action == OrderStatusAction.cancelOrder && error.statusCode != 401) {
+        await _reconcileCancellation(canonical);
+        return;
       }
       if (_isAmbiguousNetworkError(error) ||
           error.statusCode != null &&
@@ -381,6 +411,10 @@ class OrderMutationController extends Notifier<OrderMutationState> {
         );
       }
     } on Object {
+      if (action == OrderStatusAction.cancelOrder) {
+        await _reconcileCancellation(canonical);
+        return;
+      }
       state = OrderMutationState(
         phase: OrderMutationPhase.error,
         canonicalOrder: canonical,
@@ -429,7 +463,10 @@ class OrderMutationController extends Notifier<OrderMutationState> {
         );
         return null;
       }
-      if (canonical.status != action.source) {
+      if (canonical.status !=
+          (action == OrderStatusAction.cancelOrder
+              ? original.status
+              : action.source)) {
         state = OrderMutationState(
           phase: OrderMutationPhase.error,
           canonicalOrder: canonical,
@@ -439,11 +476,7 @@ class OrderMutationController extends Notifier<OrderMutationState> {
         );
         return null;
       }
-      if (!OrderStatusAction.allows(
-        canonical.status,
-        action.target,
-        fulfillment: canonical.fulfillmentType,
-      )) {
+      if (!_allows(canonical, action)) {
         state = OrderMutationState(
           phase: OrderMutationPhase.error,
           canonicalOrder: canonical,
@@ -473,6 +506,52 @@ class OrderMutationController extends Notifier<OrderMutationState> {
         message: 'Unable to refresh the order before updating it.',
       );
       return null;
+    }
+  }
+
+  Future<void> _reconcileCancellation(OrderDetail original) async {
+    state = OrderMutationState(
+      phase: OrderMutationPhase.reconciling,
+      canonicalOrder: original,
+      action: OrderStatusAction.cancelOrder,
+    );
+    try {
+      final OrderDetail canonical = await ref
+          .read(ordersRepositoryProvider)
+          .getOrderById(orderId);
+      if (canonical.id != orderId ||
+          canonical.locationId != original.locationId) {
+        throw const ApiException(
+          message: 'Order identity could not be verified.',
+        );
+      }
+      final bool applied = canonical.status == OrderStatus.cancelled;
+      state = OrderMutationState(
+        phase: applied ? OrderMutationPhase.success : OrderMutationPhase.error,
+        canonicalOrder: canonical,
+        action: OrderStatusAction.cancelOrder,
+        message: applied
+            ? 'Order cancelled'
+            : canonical.status == original.status
+            ? 'Cancellation could not be completed. Refresh and try again manually.'
+            : 'Order updated elsewhere\nThis order is now ${_statusLabel(canonical.status)}.',
+      );
+      // Expire the detail cache too, so reopening Detail cannot reuse its
+      // pre-cancellation snapshot. Refresh errors do not undo reconciliation.
+      ref.invalidate(orderDetailProvider(orderId));
+      ref.invalidate(todayOrdersProvider);
+      ref.invalidate(cancelledOrdersProvider);
+      ref.invalidate(calendarOrdersProvider);
+    } on Object catch (error) {
+      if (error is ApiException && error.statusCode == 401) {
+        await ref.read(authControllerProvider.notifier).signOut();
+      }
+      state = OrderMutationState(
+        phase: OrderMutationPhase.error,
+        canonicalOrder: original,
+        action: OrderStatusAction.cancelOrder,
+        message: 'Cancellation status is uncertain.\nRefresh the order before trying again manually.',
+      );
     }
   }
 

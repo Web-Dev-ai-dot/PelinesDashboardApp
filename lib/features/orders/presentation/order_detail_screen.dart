@@ -176,6 +176,11 @@ class _DetailBody extends ConsumerWidget {
           ..showSnackBar(SnackBar(content: Text(next.message!)));
       }
     });
+    final bool cancellationEnabled = ref.watch(
+      orderCancellationEnabledProvider,
+    );
+    final bool canCancel =
+        cancellationEnabled && OrderStatusAction.canCancel(order);
     final OrderStatusAction? action = order.paymentStatus.isOperationallyPaid
         ? OrderStatusAction.forOrder(order.status, order.fulfillmentType)
         : null;
@@ -209,7 +214,9 @@ class _DetailBody extends ConsumerWidget {
           style: Theme.of(context).textTheme.bodyMedium
               ?.copyWith(color: PelinesColors.textSecondary),
         ),
-        if (!order.paymentStatus.isOperationallyPaid) ...<Widget>[
+        if (!order.paymentStatus.isOperationallyPaid &&
+            !(cancellationEnabled &&
+                order.status == OrderStatus.cancelled)) ...<Widget>[
           const SizedBox(height: PelinesSpacing.md),
           const _WarningCard(
             icon: Icons.warning_amber_rounded,
@@ -259,7 +266,15 @@ class _DetailBody extends ConsumerWidget {
             title: 'Customer Notes',
             children: <Widget>[Text(order.notes!)],
           ),
-        _InternalNotesEditor(order: order),
+        if (cancellationEnabled && order.status == OrderStatus.cancelled)
+          _Section(
+            title: 'Internal notes',
+            children: <Widget>[
+              Text(order.internalNotes ?? 'No internal notes'),
+            ],
+          )
+        else
+          _InternalNotesEditor(order: order),
         _Section(
           title: 'Items',
           children: order.items.isEmpty
@@ -290,7 +305,12 @@ class _DetailBody extends ConsumerWidget {
         _Section(
           title: 'Payment',
           children: <Widget>[
-            _Row('Status', order.paymentStatus.name),
+            _Row(
+              'Status',
+              cancellationEnabled
+                  ? order.rawPaymentStatus ?? order.paymentStatus.name
+                  : order.paymentStatus.name,
+            ),
             if (order.cardBrand != null && order.cardLast4 != null)
               _Row('Card', '${order.cardBrand} ending in ${order.cardLast4}'),
           ],
@@ -307,6 +327,11 @@ class _DetailBody extends ConsumerWidget {
                   PelinesTime.formatDateTime(order.deliveredAt!),
                 ),
             ],
+          ),
+        if (canCancel && !locationContextChanged)
+          _CancelOrderAction(
+            order: order,
+            busy: mutation.isBusy || notes.isBusy,
           ),
         if (action != null && !locationContextChanged)
           _OrderActions(
@@ -358,7 +383,8 @@ class _DetailBody extends ConsumerWidget {
       OrderStatusAction.acceptOrder => controller.acceptOrder(order),
       OrderStatusAction.startPreparing => controller.startPreparing(order),
       OrderStatusAction.markReady => controller.markReady(order),
-      OrderStatusAction.completeOrder => Future<void>.value(),
+      OrderStatusAction.completeOrder ||
+      OrderStatusAction.cancelOrder => Future<void>.value(),
     };
   }
 
@@ -366,6 +392,69 @@ class _DetailBody extends ConsumerWidget {
       _mapString(order.location, 'name') == '—'
       ? order.locationId
       : _mapString(order.location, 'name');
+}
+
+class _CancelOrderAction extends ConsumerStatefulWidget {
+  const _CancelOrderAction({required this.order, required this.busy});
+  final OrderDetail order;
+  final bool busy;
+
+  @override
+  ConsumerState<_CancelOrderAction> createState() => _CancelOrderActionState();
+}
+
+class _CancelOrderActionState extends ConsumerState<_CancelOrderAction> {
+  bool _confirming = false;
+
+  @override
+  Widget build(BuildContext context) => Align(
+    alignment: Alignment.centerRight,
+    child: TextButton(
+      key: const Key('cancel-order-action'),
+      style: TextButton.styleFrom(foregroundColor: PelinesColors.destructive),
+      onPressed: widget.busy || _confirming ? null : _confirm,
+      child: const Text('Cancel Order'),
+    ),
+  );
+
+  Future<void> _confirm() async {
+    if (_confirming || widget.busy) return;
+    final OrderDetail order = widget.order;
+    setState(() => _confirming = true);
+    try {
+      final bool? confirmed = await showDialog<bool>(
+        context: context,
+        builder: (BuildContext context) => AlertDialog(
+          title: const Text('Cancel Order?'),
+          content: Text(
+            'Cancel ${order.orderNumber} (${money(order.totalCents)})?\n'
+            'Cancellation may initiate a refund if this order has already been paid.',
+          ),
+          actions: <Widget>[
+            TextButton(
+              key: const Key('cancel-order-keep'),
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Keep Order'),
+            ),
+            FilledButton(
+              key: const Key('cancel-order-confirm'),
+              style: FilledButton.styleFrom(
+                backgroundColor: PelinesColors.destructive,
+              ),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Cancel Order'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+      await ref
+          .read(orderMutationProvider(order.id).notifier)
+          .cancelOrder(order);
+    } finally {
+      if (mounted) setState(() => _confirming = false);
+    }
+  }
 }
 
 class _OrderActions extends StatelessWidget {
@@ -421,7 +510,9 @@ class _OrderActions extends StatelessWidget {
                   ],
                   Text(
                     busy
-                        ? action.progressLabelFor(fulfillment)
+                        ? (mutation.action ?? action).progressLabelFor(
+                            fulfillment,
+                          )
                         : action.labelFor(fulfillment),
                   ),
                 ],
