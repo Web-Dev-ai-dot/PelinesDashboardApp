@@ -1,13 +1,16 @@
-# Build validation only. No triggers, signing integration, or publishing section.
+# Signed artifact only. No automatic triggers, Apple API integration, or publishing.
 # See docs/ios-testflight-setup.md before the first manual run.
 workflows:
   ios-staging-build:
-    name: iOS staging unsigned build
+    name: iOS staging signed IPA build
     instance_type: mac_mini_m2
     max_build_duration: 60
     environment:
       flutter: 3.47.2
       xcode: "26.6"
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.tkr.pelinesadmin
       groups:
         - pelines_staging
     scripts:
@@ -29,7 +32,7 @@ workflows:
           cd "$CM_BUILD_DIR"
           flutter analyze
           flutter test
-      - name: Compile unsigned staging app with SwiftPM
+      - name: Build signed staging IPA with SwiftPM
         script: |
           set -euo pipefail
           cd "$CM_BUILD_DIR"
@@ -37,19 +40,25 @@ workflows:
           export STAGING_DEFINE_FILE="$CM_BUILD_DIR/build/ios-ci/staging-defines.json"
           trap 'rm -f "$STAGING_DEFINE_FILE"' EXIT
           python3 tools/write_staging_defines.py
-          flutter build ios --release --no-codesign --config-only \
+          xcode-project use-profiles --project ios/Runner.xcodeproj \
+            --archive-method app-store \
+            --custom-export-options='{"teamID":"B4YBH74VKG","destination":"export"}'
+          test "$(/usr/libexec/PlistBuddy -c 'Print teamID' "$HOME/export_options.plist")" = "B4YBH74VKG"
+          flutter build ios --release --config-only \
             --dart-define-from-file="$STAGING_DEFINE_FILE"
           xcodebuild -resolvePackageDependencies \
             -workspace ios/Runner.xcworkspace -scheme Runner \
-            -configuration Release CODE_SIGNING_ALLOWED=NO
-          flutter build ios --release --no-codesign \
+            -configuration Release
+          flutter build ipa --release \
+            --export-options-plist="$HOME/export_options.plist" \
             --dart-define-from-file="$STAGING_DEFINE_FILE"
-          plutil -lint build/ios/iphoneos/Runner.app/Info.plist
-          test "$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' build/ios/iphoneos/Runner.app/Info.plist)" = "com.tkr.pelinesadmin"
-          test "$(/usr/libexec/PlistBuddy -c 'Print CFBundleDisplayName' build/ios/iphoneos/Runner.app/Info.plist)" = "Pelines Admin"
-          ditto -c -k --sequesterRsrc --keepParent \
-            build/ios/iphoneos/Runner.app build/ios/unsigned-pelines-admin-staging.zip
+          plutil -lint build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app/Info.plist
+          test "$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app/Info.plist)" = "com.tkr.pelinesadmin"
+          test "$(/usr/libexec/PlistBuddy -c 'Print CFBundleDisplayName' build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app/Info.plist)" = "Pelines Admin"
+          codesign --verify --deep --strict build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app
+          # Flutter can finish successfully even if IPA export failed.
+          ipa_files=(build/ios/ipa/*.ipa)
+          test -s "${ipa_files[0]}"
     artifacts:
-      - build/ios/unsigned-pelines-admin-staging.zip
-    # Deliberately no publishing. This unsigned .app is not installable through
-    # TestFlight. A separately authorized signed IPA workflow comes later.
+      - build/ios/ipa/*.ipa
+    # Deliberately no publishing. Upload/TestFlight requires separate authorization.

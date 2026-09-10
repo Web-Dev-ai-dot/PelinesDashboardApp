@@ -2,10 +2,11 @@
 
 ## Current scope
 
-The `ios-staging-build` workflow compiles an **unsigned release device app** on
-Codemagic. It does not create certificates, sign an IPA, upload to Apple, or
-distribute through TestFlight. It has no automatic triggers or publishing block.
-Build-only validation is not a TestFlight-ready signed IPA.
+The `ios-staging-build` workflow now creates a **signed App Store distribution
+IPA** on Codemagic, following the successful unsigned build. It uses the uploaded
+certificate/private key and provisioning profile. It does not create signing
+identities, connect to the App Store Connect API, upload to Apple, or distribute
+through TestFlight. It has no automatic triggers or publishing block.
 
 - Bundle ID: `com.tkr.pelinesadmin` (RunnerTests: `.RunnerTests`).
 - Display name: **Pelines Admin**.
@@ -33,20 +34,36 @@ Build-only validation is not a TestFlight-ready signed IPA.
    | `SUPABASE_URL` | `https://qrtuwjpofwtefueqtokp.supabase.co` |
    | `SUPABASE_ANON_KEY` | Staging anon/publishable client key from approved secure configuration |
 
-3. Start the workflow manually on the intended main commit. It selects a macOS
-   M2 worker, Flutter **3.47.2**, and Xcode **26.6**. No Apple credentials are
-   required for this unsigned run. Review any separate pre-existing Codemagic
-   UI workflows/webhooks; this YAML contains no publishing actions.
-4. The workflow resolves the locked Dart packages, analyzes/tests, generates an
-   ignored JSON configuration with Python's JSON encoder, regenerates iOS
-   configuration on macOS, resolves SwiftPM, and runs
-   `flutter build ios --release --no-codesign` with the JSON dart-defines.
-   The JSON is deleted on shell exit, including ordinary build failures.
-5. Success means SwiftPM/native plugins, Flutter release code, plist, and assets
-   compile into `build/ios/iphoneos/Runner.app`. The downloadable artifact is
-   `unsigned-pelines-admin-staging.zip`. It is **not an IPA** and cannot be
-   installed with TestFlight. Archive validation/signing and hardware behavior
-   are still unproven.
+3. Confirm the uploaded Apple Distribution certificate (reference
+   `pelines_admin_distribution`) and matching App Store profile for
+   `com.tkr.pelinesadmin` are available to this app's Codemagic team, unexpired,
+   and belong to Apple Team **B4YBH74VKG**. The certificate includes its private
+   key and the profile shows the green matching-certificate check.
+   `environment.ios_signing` fetches uploaded identities by `app_store` and
+   bundle identifier; no profile reference name or new secret variable is needed.
+   Do not mix reference-name selectors with these selectors. No Apple API key
+   is needed for this build using already uploaded identities.
+4. After the reviewed YAML is available in Git, start `ios-staging-build` manually
+   on the intended commit. It retains M2, Flutter **3.47.2**, Xcode **26.6**,
+   locked dependencies, analyze/tests, and the existing staging JSON validation.
+   `xcode-project use-profiles` applies signing to the CI checkout and generates
+   `$HOME/export_options.plist`; export is pinned to team `B4YBH74VKG` and local
+   `destination=export`. No manual Xcode project edits are needed in Git.
+   Flutter regenerates configuration on macOS and SwiftPM resolves before:
+
+   ```sh
+   flutter build ipa --release \
+     --export-options-plist="$HOME/export_options.plist" \
+     --dart-define-from-file="$STAGING_DEFINE_FILE"
+   ```
+
+   The ephemeral JSON is deleted on shell exit, including ordinary build failures.
+5. Success means the signed archive passes bundle/display-name and code-signature
+   checks and a nonempty `build/ios/ipa/*.ipa` exists as a downloadable artifact.
+   Actual signing/export remains to be verified by this manual macOS run.
+   This App Store IPA is not an ad-hoc installation package; downloading it does
+   not distribute it through TestFlight. No publishing is enabled. Review any
+   separate pre-existing Codemagic UI workflows/webhooks before running.
 
 Never commit `.env.staging.json`, generated xcconfig/plugin files, keys,
 certificates, profiles, or build products. Do not print configuration values or
@@ -70,20 +87,19 @@ rounded-corner matte, preserving the P and circular artwork. Every declared
 size is RGB/opaque, including 1024px marketing artwork. Android icons and the
 source remain unchanged. No redesign or new artwork is involved.
 
-## Later signing and TestFlight (not enabled)
+## Later upload and TestFlight (not enabled)
 
-After a successful unsigned build and explicit authorization:
+After a successful signed IPA build and separate upload authorization:
 
 1. Confirm TKR's Apple Developer membership/team, agreements, bundle-ID ownership,
    explicit App ID, and App Store Connect app record (name, language, SKU).
-2. Configure Codemagic's Apple integration using issuer ID, key ID, and private
-   `.p8` with appropriate permissions. Supply the Apple Team ID and distribution
-   certificate/private key/profile, or authorize Codemagic automatic signing.
-   The API `.p8` and signing certificate's private key are different credentials.
-   Keep them in Codemagic secure storage, never YAML/Git.
-3. Use a new increasing build number and a separate signed
-   `flutter build ipa --release` workflow with the same staging defines and
-   App Store export configuration. Address export compliance and archive checks.
+2. If Codemagic will upload later, configure its App Store Connect integration
+   with issuer ID, key ID, and private `.p8` with appropriate permissions.
+   This API key is separate from the already uploaded signing private key.
+   Keep all credentials in Codemagic secure storage, never YAML/Git.
+3. Before uploading, use a new increasing build number as required by App Store
+   Connect, rebuild the signed IPA, and address export compliance/archive checks.
+   This build-only change intentionally retains the current Flutter version.
 4. Only then authorize upload to App Store Connect and internal TestFlight
    distribution. Do not enable App Store release publishing. Create an internal
    tester group with eligible App Store Connect users.
@@ -106,3 +122,5 @@ References: [Flutter SwiftPM](https://docs.flutter.dev/packages-and-plugins/swif
 [Codemagic Flutter workflows](https://docs.codemagic.io/yaml-quick-start/building-a-flutter-app/),
 [Apple local-network privacy](https://developer.apple.com/documentation/technotes/tn3179-understanding-local-network-privacy),
 [Apple upload requirements](https://developer.apple.com/news/upcoming-requirements/).
+
+Signing reference: [Codemagic uploaded signing identities](https://docs.codemagic.io/yaml-code-signing/signing-ios/).
