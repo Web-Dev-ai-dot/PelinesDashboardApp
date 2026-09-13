@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'navigation/admin_navigation.dart';
+
 import '../features/printing/presentation/printer_settings_screen.dart';
 import '../features/printing/presentation/printing_shell.dart';
 
@@ -44,6 +46,7 @@ final routerProvider = Provider<GoRouter>((Ref ref) {
   final _RouterRefresh refresh = _RouterRefresh(ref);
   ref.onDispose(refresh.dispose);
 
+  final navigation = AdminNavigationController();
   return GoRouter(
     initialLocation: '/',
     refreshListenable: refresh,
@@ -76,8 +79,17 @@ final routerProvider = Provider<GoRouter>((Ref ref) {
             const LoginScreen(),
       ),
       ShellRoute(
+        observers: [navigation],
         builder: (BuildContext context, GoRouterState state, Widget child) =>
-            PrintingShell(child: OrderAlertShell(child: child)),
+            PrintingShell(
+              child: OrderAlertShell(
+                child: AdminNavigationShell(
+                  controller: navigation,
+                  path: state.uri.path,
+                  child: child,
+                ),
+              ),
+            ),
         routes: <RouteBase>[
           GoRoute(
             path: '/app',

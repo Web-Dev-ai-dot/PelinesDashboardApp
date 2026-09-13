@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/navigation/admin_navigation.dart';
 import '../../../app/theme/pelines_components.dart';
 import '../../../app/theme/pelines_tokens.dart';
 import '../../locations/models/location.dart';
@@ -49,7 +50,7 @@ class ProductFormScreen extends ConsumerWidget {
           loading: () =>
               const Scaffold(body: Center(child: CircularProgressIndicator())),
           error: (error, stack) => Scaffold(
-            appBar: AppBar(title: const Text('Edit Product')),
+            appBar: AdminAppBar(title: const Text('Edit Product')),
             body: MenuError(
               message: error.toString(),
               onRetry: () => ref.invalidate(menuProductDetailProvider(query)),
@@ -210,13 +211,13 @@ class _FormState extends ConsumerState<_Form> {
       productId: widget.initial?.id,
     );
     final mutation = ref.watch(productMutationProvider(key));
-    return PopScope(
+    return AdminPopScope(
       canPop: !dirty,
-      onPopInvokedWithResult: (popped, result) {
-        if (!popped) _leave();
+      onPopInvokedWithResult: (popped, result) async {
+        if (!popped) await _leave();
       },
       child: Scaffold(
-        appBar: AppBar(
+        appBar: AdminAppBar(
           title: Text(widget.initial == null ? 'New Product' : 'Edit Product'),
           leading: IconButton(
             onPressed: _leave,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/navigation/admin_navigation.dart';
 import '../../../app/theme/pelines_components.dart';
 import '../../../app/theme/pelines_tokens.dart';
 import '../../auth/models/admin_session.dart';
@@ -16,7 +17,7 @@ class AccountScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final AsyncValue<AdminSession?> session = ref.watch(authControllerProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Account')),
+      appBar: AdminAppBar(title: const Text('Account')),
       body: session.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (Object error, StackTrace stack) => _AccountError(
@@ -79,47 +80,9 @@ class _AccountContent extends ConsumerWidget {
             icon: const Icon(Icons.edit_outlined),
             label: const Text('Edit Profile'),
           ),
-          const SizedBox(height: PelinesSpacing.xxl),
-          const Divider(),
-          const SizedBox(height: PelinesSpacing.md),
-          OutlinedButton.icon(
-            key: const Key('account-log-out'),
-            onPressed: () => _confirmLogout(context, ref),
-            icon: const Icon(Icons.logout),
-            label: const Text('Log Out'),
-          ),
         ],
       ),
     );
-  }
-
-  Future<void> _confirmLogout(BuildContext context, WidgetRef ref) async {
-    final bool confirmed =
-        await showDialog<bool>(
-          context: context,
-          builder: (BuildContext dialogContext) => AlertDialog(
-            title: const Text('Log out?'),
-            content: const Text(
-              'You will need to sign in again to access the dashboard.',
-            ),
-            actions: <Widget>[
-              TextButton(
-                key: const Key('logout-cancel'),
-                onPressed: () => Navigator.pop(dialogContext, false),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                key: const Key('logout-confirm'),
-                onPressed: () => Navigator.pop(dialogContext, true),
-                child: const Text('Log out'),
-              ),
-            ],
-          ),
-        ) ??
-        false;
-    if (confirmed) {
-      await ref.read(authControllerProvider.notifier).signOut();
-    }
   }
 }
 
@@ -173,13 +136,13 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   Widget build(BuildContext context) {
     final ProfileMutationState operation = ref.watch(profileMutationProvider);
     final ProfileDraftResult desired = _desired;
-    return PopScope<void>(
+    return AdminPopScope<void>(
       canPop: !_dirty || operation.isBusy,
-      onPopInvokedWithResult: (bool didPop, void result) {
-        if (!didPop && !operation.isBusy) _leave();
+      onPopInvokedWithResult: (bool didPop, void result) async {
+        if (!didPop && !operation.isBusy) await _leave();
       },
       child: Scaffold(
-        appBar: AppBar(
+        appBar: AdminAppBar(
           title: const Text('Edit Profile'),
           leading: IconButton(
             onPressed: operation.isBusy ? null : _leave,

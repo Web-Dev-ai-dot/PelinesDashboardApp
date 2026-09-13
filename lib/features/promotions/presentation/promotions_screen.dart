@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/navigation/admin_navigation.dart';
 import '../../../app/theme/pelines_components.dart';
 import '../../../app/theme/pelines_tokens.dart';
 import '../../locations/models/location.dart';
@@ -17,7 +18,7 @@ class PromotionsScreen extends ConsumerWidget {
     final AsyncValue<Location?> location = ref.watch(currentLocationProvider);
     final AsyncValue<List<Discount>> promotions = ref.watch(promotionsProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Promotions')),
+      appBar: AdminAppBar(title: const Text('Promotions')),
       floatingActionButton: location.value == null
           ? null
           : FloatingActionButton.extended(

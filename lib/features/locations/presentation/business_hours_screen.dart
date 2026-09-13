@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/navigation/admin_navigation.dart';
 import '../../../app/theme/pelines_components.dart';
 import '../../../app/theme/pelines_tokens.dart';
 import '../models/business_hours.dart';
@@ -35,14 +36,14 @@ class _BusinessHoursScreenState extends ConsumerState<BusinessHoursScreen> {
     final BusinessHoursSaveState operation = ref.watch(
       businessHoursSaveProvider,
     );
-    return PopScope<void>(
+    return AdminPopScope<void>(
       canPop: !_dirty || operation.isBusy,
       onPopInvokedWithResult: (bool didPop, void result) async {
         if (didPop || operation.isBusy) return;
         if (await _confirmDiscard() && context.mounted) Navigator.pop(context);
       },
       child: Scaffold(
-        appBar: AppBar(title: const Text('Business Hours')),
+        appBar: AdminAppBar(title: const Text('Business Hours')),
         body: PelinesPageBody(
           child: ListView(
             padding: const EdgeInsets.all(PelinesSpacing.lg),

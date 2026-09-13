@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/pelines_tokens.dart';
+import '../../locations/presentation/pelines_location_selector.dart';
 import '../../locations/models/location.dart';
 import '../models/order_models.dart';
 import '../providers/order_alerts_controller.dart';
@@ -51,46 +52,12 @@ class _TodayOrdersViewState extends ConsumerState<TodayOrdersView> {
                       style: Theme.of(context).textTheme.headlineMedium,
                     ),
                     const SizedBox(height: PelinesSpacing.xs),
-                    DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: PelinesColors.brandPrimarySoft,
-                        borderRadius: BorderRadius.circular(PelinesRadius.pill),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: PelinesSpacing.sm,
-                          vertical: PelinesSpacing.xxs,
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: <Widget>[
-                            const Icon(
-                              Icons.storefront_outlined,
-                              size: 18,
-                              color: PelinesColors.brandPrimary,
-                            ),
-                            const SizedBox(width: PelinesSpacing.xs),
-                            Flexible(
-                              child: Text(
-                                widget.location.name,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.labelLarge
-                                    ?.copyWith(
-                                      color: PelinesColors.brandPrimary,
-                                    ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                    PelinesLocationSelector(
+                      locationName: widget.location.name,
+                      onPressed: widget.onChangeLocation,
                     ),
                   ],
                 ),
-              ),
-              IconButton(
-                onPressed: widget.onChangeLocation,
-                tooltip: 'Change location',
-                icon: const Icon(Icons.storefront_outlined),
               ),
               IconButton(
                 onPressed: () =>

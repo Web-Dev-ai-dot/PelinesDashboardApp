@@ -1,3 +1,5 @@
+import 'package:go_router/go_router.dart';
+import 'package:pelines_admin_app/app/navigation/admin_navigation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -9,6 +11,32 @@ import 'package:pelines_admin_app/features/auth/providers/auth_providers.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() {
+  testWidgets('section change awaits the real profile discard confirmation', (
+    tester,
+  ) async {
+    final harness = await _WidgetHarness.pump(tester, _profile());
+    addTearDown(harness.dispose);
+    expect(find.byKey(const Key('account-log-out')), findsNothing);
+    await tester.tap(find.byKey(const Key('edit-profile')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('profile-full-name')),
+      'Unsaved name',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('nav-orders')));
+    await tester.pumpAndSettle();
+    expect(find.text('Discard changes?'), findsOneWidget);
+    await tester.tap(find.text('Keep editing'));
+    await tester.pumpAndSettle();
+    expect(find.text('Unsaved name'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('nav-orders')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Discard'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('orders-page')), findsOneWidget);
+    expect(harness.account.updateCalls, 0);
+  });
   testWidgets(
     'shows canonical profile, auth email, nulls, and read-only role',
     (WidgetTester tester) async {
@@ -34,9 +62,9 @@ void main() {
     );
     addTearDown(harness.dispose);
 
-    await tester.drag(find.byType(ListView), const Offset(0, -350));
+    await tester.drag(find.byType(ListView).last, const Offset(0, -350));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('account-log-out')));
+    await tester.tap(find.byKey(const Key('admin-sign-out')));
     await tester.pumpAndSettle();
     expect(find.text('Log out?'), findsOneWidget);
     expect(
@@ -47,9 +75,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(harness.auth.signOutCalls, 0);
 
-    await tester.drag(find.byType(ListView), const Offset(0, -350));
+    await tester.drag(find.byType(ListView).last, const Offset(0, -350));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('account-log-out')));
+    await tester.tap(find.byKey(const Key('admin-sign-out')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('logout-confirm')));
     await tester.pumpAndSettle();
@@ -68,17 +96,17 @@ void main() {
       await tester.tap(find.byKey(const Key('edit-profile')));
       await tester.pumpAndSettle();
       final Finder name = find.byKey(const Key('profile-full-name'));
-    final Finder save = find.byKey(const Key('profile-save'));
-    await tester.enterText(name, 'Grace');
-    await tester.pump();
-    expect(tester.widget<FilledButton>(save).onPressed, isNotNull);
-    await tester.enterText(name, 'Ada');
-    await tester.pump();
+      final Finder save = find.byKey(const Key('profile-save'));
+      await tester.enterText(name, 'Grace');
+      await tester.pump();
+      expect(tester.widget<FilledButton>(save).onPressed, isNotNull);
+      await tester.enterText(name, 'Ada');
+      await tester.pump();
       expect(tester.widget<FilledButton>(save).onPressed, isNull);
       expect(harness.account.updateCalls, 0);
 
-    await tester.enterText(name, 'Grace');
-    await tester.pump();
+      await tester.enterText(name, 'Grace');
+      await tester.pump();
       await tester.tap(find.byIcon(Icons.arrow_back));
       await tester.pumpAndSettle();
       expect(find.text('Discard changes?'), findsOneWidget);
@@ -111,10 +139,35 @@ class _WidgetHarness {
       ],
     );
     await container.read(authControllerProvider.future);
+    final navigation = AdminNavigationController();
+    final router = GoRouter(
+      initialLocation: '/app/account',
+      routes: [
+        ShellRoute(
+          observers: [navigation],
+          builder: (context, state, child) => AdminNavigationShell(
+            controller: navigation,
+            path: state.uri.path,
+            child: child,
+          ),
+          routes: [
+            GoRoute(
+              path: '/app/account',
+              builder: (_, _) => const AccountScreen(),
+            ),
+            GoRoute(
+              path: '/app',
+              builder: (_, _) => const Scaffold(key: Key('orders-page')),
+            ),
+          ],
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
-        child: const MaterialApp(home: AccountScreen()),
+        child: MaterialApp.router(routerConfig: router),
       ),
     );
     await tester.pumpAndSettle();

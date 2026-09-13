@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/navigation/admin_navigation.dart';
 import '../../../app/theme/pelines_components.dart';
 import '../../../app/theme/pelines_tokens.dart';
 import '../models/auto_accept.dart';
@@ -34,7 +35,7 @@ class _AutoAcceptScreenState extends ConsumerState<AutoAcceptScreen> {
   @override
   Widget build(BuildContext context) {
     final AutoAcceptState operation = ref.watch(autoAcceptProvider);
-    return PopScope<void>(
+    return AdminPopScope<void>(
       canPop: !_dirty || operation.isBusy,
       onPopInvokedWithResult: (bool didPop, void result) async {
         if (!didPop &&
@@ -45,7 +46,7 @@ class _AutoAcceptScreenState extends ConsumerState<AutoAcceptScreen> {
         }
       },
       child: Scaffold(
-        appBar: AppBar(title: const Text('Auto-Accept Orders')),
+        appBar: AdminAppBar(title: const Text('Auto-Accept Orders')),
         body: ListView(
           padding: const EdgeInsets.all(PelinesSpacing.lg),
           children: <Widget>[

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/navigation/admin_navigation.dart';
 import '../../../app/theme/pelines_components.dart';
 import '../../../app/theme/pelines_tokens.dart';
 import '../../../core/time/pelines_time.dart';
@@ -41,7 +42,7 @@ class _HistoricalOrdersScreenState
         : 'Cancelled Orders';
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: AdminAppBar(
         title: Text(title),
         actions: <Widget>[
           IconButton(

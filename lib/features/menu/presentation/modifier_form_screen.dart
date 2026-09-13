@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/navigation/admin_navigation.dart';
 import '../../../app/theme/pelines_components.dart';
 import '../../../app/theme/pelines_tokens.dart';
 import '../../locations/providers/locations_providers.dart';
@@ -416,13 +417,13 @@ class _ModifierScaffold extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) => PopScope(
+  Widget build(BuildContext context) => AdminPopScope(
     canPop: !dirty,
-    onPopInvokedWithResult: (popped, result) {
-      if (!popped) _leave(context);
+    onPopInvokedWithResult: (popped, result) async {
+      if (!popped) await _leave(context);
     },
     child: Scaffold(
-      appBar: AppBar(
+      appBar: AdminAppBar(
         title: Text(title),
         leading: IconButton(
           onPressed: busy ? null : () => _leave(context),

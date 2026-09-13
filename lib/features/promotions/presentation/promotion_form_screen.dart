@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../app/navigation/admin_navigation.dart';
 import '../../../app/theme/pelines_components.dart';
 import '../../../app/theme/pelines_tokens.dart';
 import '../../locations/models/location.dart';
@@ -33,7 +34,7 @@ class PromotionFormScreen extends ConsumerWidget {
           loading: () =>
               const Scaffold(body: Center(child: CircularProgressIndicator())),
           error: (Object error, StackTrace stack) => Scaffold(
-            appBar: AppBar(title: const Text('Edit Promotion')),
+            appBar: AdminAppBar(title: const Text('Edit Promotion')),
             body: Center(child: Text(error.toString())),
           ),
           data: (List<Discount> values) {
@@ -173,13 +174,13 @@ class _PromotionFormState extends ConsumerState<_PromotionForm> {
       promotionFormMutationProvider,
     );
     final PromotionWriteResult validation = _validation;
-    return PopScope<void>(
+    return AdminPopScope<void>(
       canPop: !_dirty || operation.isBusy,
-      onPopInvokedWithResult: (bool didPop, void result) {
-        if (!didPop && !operation.isBusy) _leave();
+      onPopInvokedWithResult: (bool didPop, void result) async {
+        if (!didPop && !operation.isBusy) await _leave();
       },
       child: Scaffold(
-        appBar: AppBar(
+        appBar: AdminAppBar(
           title: Text(_editing ? 'Edit Promotion' : 'Add Promotion'),
           leading: IconButton(
             onPressed: operation.isBusy ? null : _leave,

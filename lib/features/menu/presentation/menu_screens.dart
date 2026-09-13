@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/navigation/admin_navigation.dart';
 import '../../../app/theme/pelines_components.dart';
 import '../../../app/theme/pelines_tokens.dart';
 import '../../locations/models/location.dart';
@@ -15,7 +16,7 @@ class MenuLandingScreen extends StatelessWidget {
   const MenuLandingScreen({super.key});
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Menu')),
+    appBar: AdminAppBar(title: const Text('Menu')),
     body: ListView(
       padding: const EdgeInsets.all(PelinesSpacing.md),
       children: <Widget>[
@@ -58,7 +59,7 @@ class MenuCategoriesScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final AsyncValue<Location?> location = ref.watch(currentLocationProvider);
     return Scaffold(
-      appBar: AppBar(title: Text(kind.label)),
+      appBar: AdminAppBar(title: Text(kind.label)),
       floatingActionButton: location.value == null
           ? null
           : FloatingActionButton.extended(
@@ -173,7 +174,7 @@ class MenuProductsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final AsyncValue<Location?> location = ref.watch(currentLocationProvider);
     return Scaffold(
-      appBar: AppBar(title: Text(categoryName)),
+      appBar: AdminAppBar(title: Text(categoryName)),
       floatingActionButton: location.value == null
           ? null
           : FloatingActionButton.extended(
@@ -287,7 +288,7 @@ class MenuProductDetailScreen extends ConsumerWidget {
     );
     final product = ref.watch(menuProductDetailProvider(query));
     return Scaffold(
-      appBar: AppBar(
+      appBar: AdminAppBar(
         title: const Text('Product Detail'),
         actions: <Widget>[
           IconButton(

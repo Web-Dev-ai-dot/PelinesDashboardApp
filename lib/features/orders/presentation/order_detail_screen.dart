@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/navigation/admin_navigation.dart';
 import '../../../app/theme/pelines_components.dart';
 import '../../../app/theme/pelines_tokens.dart';
 import '../../../core/api/api_exception.dart';
@@ -67,13 +68,13 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
       if (context.mounted) await Navigator.of(context).maybePop();
     }
 
-    return PopScope(
+    return AdminPopScope(
       canPop: !notes.isDirty,
-      onPopInvokedWithResult: (bool didPop, Object? result) {
-        if (!didPop) unawaited(leave());
+      onPopInvokedWithResult: (bool didPop, Object? result) async {
+        if (!didPop) await leave();
       },
       child: Scaffold(
-        appBar: AppBar(
+        appBar: AdminAppBar(
           leading: BackButton(onPressed: leave),
           title: Text(displayed?.orderNumber ?? 'Order'),
         ),

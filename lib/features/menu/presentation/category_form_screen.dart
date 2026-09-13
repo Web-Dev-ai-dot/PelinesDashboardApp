@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/navigation/admin_navigation.dart';
 import '../../../app/theme/pelines_components.dart';
 import '../../../app/theme/pelines_tokens.dart';
 import '../../locations/models/location.dart';
@@ -39,7 +40,7 @@ class CategoryFormScreen extends ConsumerWidget {
           loading: () =>
               const Scaffold(body: Center(child: CircularProgressIndicator())),
           error: (Object error, StackTrace stackTrace) => Scaffold(
-            appBar: AppBar(title: const Text('Edit Category')),
+            appBar: AdminAppBar(title: const Text('Edit Category')),
             body: MenuError(
               message: error.toString(),
               onRetry: () => ref.invalidate(menuCategoryDetailProvider(query)),
@@ -156,13 +157,13 @@ class _CategoryFormState extends ConsumerState<_CategoryForm> {
     );
     final CategoryWriteInput? input = _input;
 
-    return PopScope(
+    return AdminPopScope(
       canPop: !_dirty,
-      onPopInvokedWithResult: (bool popped, Object? result) {
-        if (!popped) _leave();
+      onPopInvokedWithResult: (bool popped, Object? result) async {
+        if (!popped) await _leave();
       },
       child: Scaffold(
-        appBar: AppBar(
+        appBar: AdminAppBar(
           title: Text(
             widget.initial == null ? 'New Category' : 'Edit Category',
           ),

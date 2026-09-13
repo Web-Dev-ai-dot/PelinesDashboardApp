@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../app/navigation/admin_navigation.dart';
 import '../../../app/theme/pelines_components.dart';
 import '../../../app/theme/pelines_tokens.dart';
 import '../models/location.dart';
@@ -48,7 +49,7 @@ class _ClosureFormScreenState extends ConsumerState<ClosureFormScreen> {
   Widget build(BuildContext context) {
     final ClosureSaveState operation = ref.watch(closureSaveProvider);
     return Scaffold(
-      appBar: AppBar(
+      appBar: AdminAppBar(
         title: Text(widget.closure == null ? 'Add Closure' : 'Edit Closure'),
       ),
       body: PelinesPageBody(

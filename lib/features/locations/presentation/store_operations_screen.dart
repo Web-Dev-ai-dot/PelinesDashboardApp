@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../app/navigation/admin_navigation.dart';
 import '../../../app/theme/pelines_components.dart';
 import '../../../app/theme/pelines_tokens.dart';
 import '../models/location.dart';
@@ -41,7 +42,7 @@ class StoreOperationsScreen extends ConsumerWidget {
     final AsyncValue<Location?> current = ref.watch(currentLocationProvider);
     final StoreOperationState operation = ref.watch(storeOperationsProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Store Operations')),
+      appBar: AdminAppBar(title: const Text('Store Operations')),
       body: current.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (Object error, StackTrace stackTrace) => Center(

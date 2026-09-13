@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/navigation/admin_navigation.dart';
 import '../../../app/theme/pelines_components.dart';
 import '../../../app/theme/pelines_tokens.dart';
 import '../../locations/models/location.dart';
@@ -35,7 +36,7 @@ class _PromotionDetailScreenState extends ConsumerState<PromotionDetailScreen> {
     final Location? location = ref.watch(currentLocationProvider).value;
     final AsyncValue<List<Discount>> source = ref.watch(promotionsProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Promotion Details')),
+      appBar: AdminAppBar(title: const Text('Promotion Details')),
       body: source.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (Object error, StackTrace stack) => Center(

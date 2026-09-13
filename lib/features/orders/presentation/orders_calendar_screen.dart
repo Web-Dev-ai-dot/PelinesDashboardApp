@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../app/navigation/admin_navigation.dart';
 import '../../../app/theme/pelines_components.dart';
 import '../../../app/theme/pelines_tokens.dart';
 import '../../../core/time/pelines_time.dart';
@@ -38,7 +39,7 @@ class _OrdersCalendarScreenState extends ConsumerState<OrdersCalendarScreen> {
       calendarOrdersProvider,
     );
     return Scaffold(
-      appBar: AppBar(
+      appBar: AdminAppBar(
         title: const Text('Orders Calendar'),
         actions: <Widget>[
           IconButton(

@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
+import '../../../app/navigation/admin_navigation.dart';
 import '../../../app/theme/pelines_tokens.dart';
-import '../../auth/providers/auth_providers.dart';
 import '../../locations/models/location.dart';
 import '../../locations/providers/locations_providers.dart';
 import '../../orders/presentation/today_orders_view.dart';
@@ -19,93 +18,11 @@ class AdminHomeScreen extends ConsumerWidget {
     );
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: AdminAppBar(
         title: Text(
           'Pelines Admin',
           style: PelinesTypography.pageTitle(Theme.of(context).textTheme),
         ),
-        actions: <Widget>[
-          PopupMenuButton<String>(
-            tooltip: 'More',
-            icon: const Icon(
-              Icons.menu_rounded,
-              color: PelinesColors.brandPrimary,
-            ),
-            onSelected: context.push,
-            color: PelinesColors.card,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(PelinesRadius.card),
-              side: const BorderSide(color: PelinesColors.border),
-            ),
-            itemBuilder: (BuildContext context) =>
-                const <PopupMenuEntry<String>>[
-                  PopupMenuItem<String>(
-                    value: '/app/menu',
-                    child: _NavigationItem(
-                      icon: Icons.restaurant_menu_outlined,
-                      label: 'Menu',
-                    ),
-                  ),
-                  PopupMenuItem<String>(
-                    value: '/app/store-operations',
-                    child: _NavigationItem(
-                      icon: Icons.storefront_outlined,
-                      label: 'Store Operations',
-                    ),
-                  ),
-                  PopupMenuItem<String>(
-                    value: '/app/promotions',
-                    child: _NavigationItem(
-                      icon: Icons.local_offer_outlined,
-                      label: 'Promotions',
-                    ),
-                  ),
-                  PopupMenuDivider(),
-                  PopupMenuItem<String>(
-                    value: '/app/printing',
-                    child: _NavigationItem(
-                      icon: Icons.print_outlined,
-                      label: 'Printer Settings',
-                    ),
-                  ),
-                  PopupMenuItem<String>(
-                    value: '/app/account',
-                    child: _NavigationItem(
-                      icon: Icons.person_outline,
-                      label: 'Account',
-                    ),
-                  ),
-                  PopupMenuDivider(),
-                  PopupMenuItem<String>(
-                    value: '/app/orders/calendar',
-                    child: _NavigationItem(
-                      icon: Icons.calendar_month_outlined,
-                      label: 'Calendar',
-                    ),
-                  ),
-                  PopupMenuItem<String>(
-                    value: '/app/orders/completed',
-                    child: _NavigationItem(
-                      icon: Icons.check_circle_outline,
-                      label: 'Completed Orders',
-                    ),
-                  ),
-                  PopupMenuItem<String>(
-                    value: '/app/orders/cancelled',
-                    child: _NavigationItem(
-                      icon: Icons.cancel_outlined,
-                      label: 'Cancelled Orders',
-                    ),
-                  ),
-                ],
-          ),
-          IconButton(
-            tooltip: 'Log out',
-            onPressed: () =>
-                ref.read(authControllerProvider.notifier).signOut(),
-            icon: const Icon(Icons.logout),
-          ),
-        ],
       ),
       body: locations.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -132,28 +49,6 @@ class AdminHomeScreen extends ConsumerWidget {
       ),
     );
   }
-}
-
-class _NavigationItem extends StatelessWidget {
-  const _NavigationItem({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) => Row(
-    children: <Widget>[
-      Icon(icon, color: PelinesColors.brandPrimary),
-      const SizedBox(width: PelinesSpacing.sm),
-      Text(
-        label,
-        style: const TextStyle(
-          fontFamily: PelinesTypography.bodyFamily,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    ],
-  );
 }
 
 class _HomeContent extends ConsumerWidget {

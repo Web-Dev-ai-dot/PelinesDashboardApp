@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/navigation/admin_navigation.dart';
 import '../../../app/theme/pelines_components.dart';
 import '../../../app/theme/pelines_tokens.dart';
 import '../../../core/time/pelines_time.dart';
@@ -21,7 +22,7 @@ class PrinterSettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final location = ref.watch(currentLocationProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Printer Settings')),
+      appBar: AdminAppBar(title: const Text('Printer Settings')),
       body: location.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, _) =>
