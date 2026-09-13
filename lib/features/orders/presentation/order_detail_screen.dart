@@ -1,3 +1,4 @@
+import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -16,6 +17,8 @@ import '../models/order_status_action.dart';
 import '../providers/order_alerts_controller.dart';
 import '../providers/orders_providers.dart';
 import 'order_ui_helpers.dart';
+import 'cancel_order_action.dart';
+import 'new_order_alert.dart';
 
 class OrderDetailScreen extends ConsumerStatefulWidget {
   const OrderDetailScreen({required this.orderId, super.key});
@@ -32,6 +35,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
   @override
   Widget build(BuildContext context) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || ref.read(fullscreenOrderAlertVisibleProvider)) return;
       ref.read(orderAlertsProvider.notifier).acknowledge(widget.orderId);
     });
     final AsyncValue<OrderDetail> detail = ref.watch(
@@ -84,15 +88,15 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                   if (detail.hasError)
                     MaterialBanner(
                       key: const Key('detail-refresh-warning'),
-                      content: const Text(
-                        'The latest order status could not be loaded. Showing saved details.',
+                      content:  Text(
+                        tr(context, 'The latest order status could not be loaded. Showing saved details.'),
                       ),
                       actions: <Widget>[
                         TextButton(
                           onPressed: () => ref.invalidate(
                             orderDetailProvider(widget.orderId),
                           ),
-                          child: const Text('Retry'),
+                          child:  Text(tr(context, 'Retry')),
                         ),
                       ],
                     ),
@@ -106,7 +110,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                       error is ApiException && error.statusCode == 404;
                   return _DetailError(
                     message: missing
-                        ? 'Order no longer available'
+                        ? tr(context, 'Order no longer available')
                         : error.toString(),
                     onRetry: missing
                         ? null
@@ -125,18 +129,18 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
     return await showDialog<bool>(
           context: context,
           builder: (BuildContext context) => AlertDialog(
-            title: const Text('Discard unsaved notes?'),
-            content: const Text('You have unsaved internal notes.'),
+            title:  Text(tr(context, 'Discard unsaved notes?')),
+            content:  Text(tr(context, 'You have unsaved internal notes.')),
             actions: <Widget>[
               TextButton(
                 key: const Key('unsaved-stay'),
                 onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('Stay'),
+                child:  Text(tr(context, 'Stay')),
               ),
               FilledButton(
                 key: const Key('unsaved-discard'),
                 onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('Discard changes'),
+                child:  Text(tr(context, 'Discard changes')),
               ),
             ],
           ),
@@ -183,9 +187,6 @@ class _DetailBody extends ConsumerWidget {
     );
     final bool canCancel =
         cancellationEnabled && OrderStatusAction.canCancel(order);
-    final OrderStatusAction? action = order.paymentStatus.isOperationallyPaid
-        ? OrderStatusAction.forOrder(order.status, order.fulfillmentType)
-        : null;
     return ListView(
       padding: const EdgeInsets.fromLTRB(
         PelinesSpacing.md,
@@ -220,57 +221,57 @@ class _DetailBody extends ConsumerWidget {
             !(cancellationEnabled &&
                 order.status == OrderStatus.cancelled)) ...<Widget>[
           const SizedBox(height: PelinesSpacing.md),
-          const _WarningCard(
+           _WarningCard(
             icon: Icons.warning_amber_rounded,
-            title: 'Payment not completed',
-            message: 'This order cannot be processed because its payment is not marked as paid.',
+            title: tr(context, 'Payment not completed'),
+            message: tr(context, 'This order cannot be processed because its payment is not marked as paid.'),
           ),
         ],
         if (locationContextChanged) ...<Widget>[
           const SizedBox(height: PelinesSpacing.md),
-          const _WarningCard(
+           _WarningCard(
             key: Key('location-context-warning'),
             icon: Icons.location_off_outlined,
-            title: 'Location context changed',
+            title: tr(context, 'Location context changed'),
             message:
-                'This order is read-only until you return to its location.',
+                tr(context, 'This order is read-only until you return to its location.'),
           ),
         ],
         const SizedBox(height: PelinesSpacing.xxs),
         _Section(
-          title: 'Fulfillment',
+          title: tr(context, 'Fulfillment'),
           children: <Widget>[
-            _Row('Requested time', requestedTime(order.scheduledFor)),
-            _Row('Method', fulfillmentLabel(order.fulfillmentType)),
-            _Row('Location', _locationName(order)),
+            _Row(tr(context, 'Requested time'), requestedTime(order.scheduledFor)),
+            _Row(tr(context, 'Method'), fulfillmentLabel(order.fulfillmentType)),
+            _Row(tr(context, 'Location'), _locationName(order)),
             if (order.fulfillmentType == FulfillmentType.delivery)
-              _Row('Delivery address', _address(order.deliveryAddress)),
+              _Row(tr(context, 'Delivery address'), _address(order.deliveryAddress)),
           ],
         ),
         _Section(
-          title: 'Customer',
+          title: tr(context, 'Customer'),
           children: <Widget>[
-            _Row('Name', order.contactName),
-            _Row('Phone', order.contactPhone),
-            _Row('Email', order.contactEmail),
+            _Row(tr(context, 'Name'), order.contactName),
+            _Row(tr(context, 'Phone'), order.contactPhone),
+            _Row(tr(context, 'Email'), order.contactEmail),
           ],
         ),
         if (order.orderType == OrderType.catering)
           _Section(
-            title: 'Event',
+            title: tr(context, 'Event'),
             children: <Widget>[
-              _Row('Event name', _mapString(order.eventDetails, 'eventName')),
-              _Row('Attendees', _mapValue(order.eventDetails, 'attendees')),
+              _Row(tr(context, 'Event name'), _mapString(order.eventDetails, 'eventName')),
+              _Row(tr(context, 'Attendees'), _mapValue(order.eventDetails, 'attendees')),
             ],
           ),
         if (order.notes?.trim().isNotEmpty == true)
           _Section(
-            title: 'Customer Notes',
+            title: tr(context, 'Customer Notes'),
             children: <Widget>[Text(order.notes!)],
           ),
         if (cancellationEnabled && order.status == OrderStatus.cancelled)
           _Section(
-            title: 'Internal notes',
+            title: tr(context, 'Internal notes'),
             children: <Widget>[
               Text(order.internalNotes ?? 'No internal notes'),
             ],
@@ -278,238 +279,71 @@ class _DetailBody extends ConsumerWidget {
         else
           _InternalNotesEditor(order: order),
         _Section(
-          title: 'Items',
+          title: tr(context, 'Items'),
           children: order.items.isEmpty
-              ? const <Widget>[Text('No items recorded')]
+              ?  <Widget>[Text(tr(context, 'No items recorded'))]
               : order.items
                     .map((OrderItem item) => _Item(order: item))
                     .toList(growable: false),
         ),
         _Section(
-          title: 'Totals',
+          title: tr(context, 'Totals'),
           children: <Widget>[
-            _MoneyRow('Subtotal', order.subtotalCents),
+            _MoneyRow(tr(context, 'Subtotal'), order.subtotalCents),
             if (order.discountCents != 0)
               _MoneyRow(
                 order.discountCode == null
-                    ? 'Discount'
+                    ? tr(context, 'Discount')
                     : 'Discount (${order.discountCode})',
                 -order.discountCents,
               ),
-            _MoneyRow('Service fee', order.serviceFeeCents),
-            _MoneyRow('Delivery fee', order.deliveryFeeCents),
-            _MoneyRow('Tax', order.taxCents),
-            _MoneyRow('Tip', order.tipCents),
+            _MoneyRow(tr(context, 'Service fee'), order.serviceFeeCents),
+            _MoneyRow(tr(context, 'Delivery fee'), order.deliveryFeeCents),
+            _MoneyRow(tr(context, 'Tax'), order.taxCents),
+            _MoneyRow(tr(context, 'Tip'), order.tipCents),
             const Divider(),
-            _MoneyRow('Total', order.totalCents, emphasized: true),
+            _MoneyRow(tr(context, 'Total'), order.totalCents, emphasized: true),
           ],
         ),
         _Section(
-          title: 'Payment',
+          title: tr(context, 'Payment'),
           children: <Widget>[
             _Row(
-              'Status',
+              tr(context, 'Status'),
               cancellationEnabled
                   ? order.rawPaymentStatus ?? order.paymentStatus.name
                   : order.paymentStatus.name,
             ),
             if (order.cardBrand != null && order.cardLast4 != null)
-              _Row('Card', '${order.cardBrand} ending in ${order.cardLast4}'),
+              _Row(tr(context, 'Card'), '${order.cardBrand} ending in ${order.cardLast4}'),
           ],
         ),
         if (order.printedAt != null || order.deliveredAt != null)
           _Section(
-            title: 'Operational',
+            title: tr(context, 'Operational'),
             children: <Widget>[
               if (order.printedAt != null)
-                _Row('Printed', PelinesTime.formatDateTime(order.printedAt!)),
+                _Row(tr(context, 'Printed'), PelinesTime.formatDateTime(order.printedAt!)),
               if (order.deliveredAt != null)
                 _Row(
-                  'Completed',
+                  tr(context, 'Completed'),
                   PelinesTime.formatDateTime(order.deliveredAt!),
                 ),
             ],
           ),
         if (canCancel && !locationContextChanged)
-          _CancelOrderAction(
+          CancelOrderAction(
             order: order,
             busy: mutation.isBusy || notes.isBusy,
           ),
-        if (action != null && !locationContextChanged)
-          _OrderActions(
-            action: action,
-            mutation: mutation,
-            fulfillment: order.fulfillmentType,
-            otherMutationBusy: notes.isBusy,
-            onPressed: () => _performAction(context, ref, order, action),
-          ),
       ],
     );
-  }
-
-  Future<void> _performAction(
-    BuildContext context,
-    WidgetRef ref,
-    OrderDetail order,
-    OrderStatusAction action,
-  ) async {
-    final OrderMutationController controller = ref.read(
-      orderMutationProvider(order.id).notifier,
-    );
-    if (action == OrderStatusAction.completeOrder) {
-      final bool? confirmed = await showDialog<bool>(
-        context: context,
-        builder: (BuildContext context) => _CompletionDialog(order: order),
-      );
-      if (confirmed != true || !context.mounted) return;
-
-      // Re-read immediately before the terminal PATCH. Completion stamps the
-      // order and triggers customer-facing backend side effects.
-      final OrderDetail latest =
-          ref.read(orderDetailProvider(order.id)).value ??
-          ref.read(orderMutationProvider(order.id)).canonicalOrder ??
-          order;
-      if (!OrderStatusAction.allows(
-        latest.status,
-        OrderStatus.delivered,
-        fulfillment: latest.fulfillmentType,
-      )) {
-        controller.adoptChangedOrder(latest);
-        return;
-      }
-      await controller.markOrderCompleted(latest);
-      return;
-    }
-
-    await switch (action) {
-      OrderStatusAction.acceptOrder => controller.acceptOrder(order),
-      OrderStatusAction.startPreparing => controller.startPreparing(order),
-      OrderStatusAction.markReady => controller.markReady(order),
-      OrderStatusAction.completeOrder ||
-      OrderStatusAction.cancelOrder => Future<void>.value(),
-    };
   }
 
   String _locationName(OrderDetail order) =>
       _mapString(order.location, 'name') == '—'
       ? order.locationId
       : _mapString(order.location, 'name');
-}
-
-class _CancelOrderAction extends ConsumerStatefulWidget {
-  const _CancelOrderAction({required this.order, required this.busy});
-  final OrderDetail order;
-  final bool busy;
-
-  @override
-  ConsumerState<_CancelOrderAction> createState() => _CancelOrderActionState();
-}
-
-class _CancelOrderActionState extends ConsumerState<_CancelOrderAction> {
-  bool _confirming = false;
-
-  @override
-  Widget build(BuildContext context) => Align(
-    alignment: Alignment.centerRight,
-    child: TextButton(
-      key: const Key('cancel-order-action'),
-      style: TextButton.styleFrom(foregroundColor: PelinesColors.destructive),
-      onPressed: widget.busy || _confirming ? null : _confirm,
-      child: const Text('Cancel Order'),
-    ),
-  );
-
-  Future<void> _confirm() async {
-    if (_confirming || widget.busy) return;
-    final OrderDetail order = widget.order;
-    setState(() => _confirming = true);
-    try {
-      final bool? confirmed = await showDialog<bool>(
-        context: context,
-        builder: (BuildContext context) => AlertDialog(
-          title: const Text('Cancel Order?'),
-          content: Text(
-            'Cancel ${order.orderNumber} (${money(order.totalCents)})?\n'
-            'Cancellation may initiate a refund if this order has already been paid.',
-          ),
-          actions: <Widget>[
-            TextButton(
-              key: const Key('cancel-order-keep'),
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Keep Order'),
-            ),
-            FilledButton(
-              key: const Key('cancel-order-confirm'),
-              style: FilledButton.styleFrom(
-                backgroundColor: PelinesColors.destructive,
-              ),
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Cancel Order'),
-            ),
-          ],
-        ),
-      );
-      if (confirmed != true || !mounted) return;
-      await ref
-          .read(orderMutationProvider(order.id).notifier)
-          .cancelOrder(order);
-    } finally {
-      if (mounted) setState(() => _confirming = false);
-    }
-  }
-}
-
-class _OrderActions extends StatelessWidget {
-  const _OrderActions({
-    required this.action,
-    required this.mutation,
-    required this.fulfillment,
-    required this.otherMutationBusy,
-    required this.onPressed,
-  });
-
-  final OrderStatusAction action;
-  final OrderMutationState mutation;
-  final FulfillmentType fulfillment;
-  final bool otherMutationBusy;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final bool busy = mutation.isBusy || otherMutationBusy;
-    final bool showButton =
-        action != OrderStatusAction.completeOrder ||
-        mutation.phase != OrderMutationPhase.error ||
-        mutation.terminalRetryAllowed;
-    return _Section(
-      title: 'Order actions',
-      children: <Widget>[
-        if (mutation.phase == OrderMutationPhase.error &&
-            mutation.message != null) ...<Widget>[
-          Text(
-            mutation.message!,
-            key: const Key('order-mutation-error'),
-            style: TextStyle(color: Theme.of(context).colorScheme.error),
-          ),
-          const SizedBox(height: 12),
-        ],
-        if (showButton)
-          FilledButton(
-            key: const Key('order-primary-action'),
-            onPressed: busy ? null : onPressed,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              child: PelinesButtonLabel(
-                busy: busy,
-                label: busy
-                    ? (mutation.action ?? action).progressLabelFor(fulfillment)
-                    : action.labelFor(fulfillment),
-              ),
-            ),
-          ),
-      ],
-    );
-  }
 }
 
 class _InternalNotesEditor extends ConsumerStatefulWidget {
@@ -579,10 +413,10 @@ class _InternalNotesEditorState extends ConsumerState<_InternalNotesEditor> {
     final bool canSave = notes.canSave && !statusBusy;
 
     return _Section(
-      title: 'Internal notes',
+      title: tr(context, 'Internal notes'),
       children: <Widget>[
         Text(
-          'Private notes for administrators only.',
+          tr(context, 'Private notes for administrators only.'),
           style: Theme.of(context).textTheme.bodyMedium
               ?.copyWith(color: PelinesColors.textSecondary),
         ),
@@ -599,16 +433,16 @@ class _InternalNotesEditorState extends ConsumerState<_InternalNotesEditor> {
               .read(orderNotesProvider(widget.order.id).notifier)
               .edit,
           decoration: InputDecoration(
-            hintText: 'Add a private note about this order',
+            hintText: tr(context, 'Add a private note about this order'),
             errorText: notes.isValid
                 ? null
-                : 'Internal notes cannot exceed 5000 characters.',
+                : tr(context, 'Internal notes cannot exceed 5000 characters.'),
             border: const OutlineInputBorder(),
           ),
         ),
         if (notes.hasRemoteConflict) ...<Widget>[
           Text(
-            'This note was updated elsewhere. Your draft has been preserved.',
+            tr(context, 'This note was updated elsewhere. Your draft has been preserved.'),
             key: const Key('notes-conflict-warning'),
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: PelinesColors.destructive,
@@ -628,14 +462,14 @@ class _InternalNotesEditorState extends ConsumerState<_InternalNotesEditor> {
         PelinesActionBar(
           children: <Widget>[
             if (notes.phase == OrderNotesPhase.saved) ...<Widget>[
-              const Text('Saved', key: Key('notes-saved')),
+               Text(tr(context, 'Saved'), key: Key('notes-saved')),
             ],
             FilledButton(
               key: const Key('save-internal-notes'),
               onPressed: canSave ? _save : null,
               child: PelinesButtonLabel(
                 busy: notes.isBusy,
-                label: notes.isBusy ? 'Saving...' : 'Save notes',
+                label: notes.isBusy ? tr(context, 'Saving...') : tr(context, 'Save notes'),
               ),
             ),
           ],
@@ -654,20 +488,20 @@ class _InternalNotesEditorState extends ConsumerState<_InternalNotesEditor> {
           await showDialog<bool>(
             context: context,
             builder: (BuildContext context) => AlertDialog(
-              title: const Text('Replace newer note?'),
-              content: const Text(
-                'This note was changed by another user. Saving will replace the newer server note with your current draft.',
+              title:  Text(tr(context, 'Replace newer note?')),
+              content:  Text(
+                tr(context, 'This note was changed by another user. Saving will replace the newer server note with your current draft.'),
               ),
               actions: <Widget>[
                 TextButton(
                   key: const Key('notes-conflict-cancel'),
                   onPressed: () => Navigator.of(context).pop(false),
-                  child: const Text('Cancel'),
+                  child:  Text(tr(context, 'Cancel')),
                 ),
                 FilledButton(
                   key: const Key('notes-conflict-save'),
                   onPressed: () => Navigator.of(context).pop(true),
-                  child: const Text('Save anyway'),
+                  child:  Text(tr(context, 'Save anyway')),
                 ),
               ],
             ),
@@ -678,38 +512,6 @@ class _InternalNotesEditorState extends ConsumerState<_InternalNotesEditor> {
       return;
     }
     await controller.save();
-  }
-}
-
-class _CompletionDialog extends StatelessWidget {
-  const _CompletionDialog({required this.order});
-
-  final OrderDetail order;
-
-  @override
-  Widget build(BuildContext context) {
-    final bool pickup = order.fulfillmentType == FulfillmentType.pickup;
-    final String action = pickup ? 'Mark picked up' : 'Mark delivered';
-    return AlertDialog(
-      title: Text(pickup ? 'Confirm pickup?' : 'Confirm delivery?'),
-      content: Text(
-        pickup
-            ? 'Confirm that the customer has picked up this order? It will be marked complete and removed from active orders.'
-            : 'Confirm that this order has been delivered to the customer? It will be marked delivered and removed from active orders.',
-      ),
-      actions: <Widget>[
-        TextButton(
-          key: const Key('completion-cancel'),
-          onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('Keep active'),
-        ),
-        FilledButton(
-          key: const Key('completion-confirm'),
-          onPressed: () => Navigator.of(context).pop(true),
-          child: Text(action),
-        ),
-      ],
-    );
   }
 }
 
@@ -912,10 +714,10 @@ class _DetailError extends StatelessWidget {
           Text(message, textAlign: TextAlign.center),
           const SizedBox(height: 12),
           if (onRetry != null)
-            FilledButton(onPressed: onRetry, child: const Text('Try again')),
+            FilledButton(onPressed: onRetry, child:  Text(tr(context, 'Try again'))),
           TextButton(
             onPressed: () => Navigator.of(context).maybePop(),
-            child: const Text('Back to Today Orders'),
+            child:  Text(tr(context, 'Back to Today Orders')),
           ),
         ],
       ),

@@ -1,3 +1,4 @@
+import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -27,8 +28,8 @@ class ProductFormScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final Location? location = ref.watch(currentLocationProvider).value;
     if (location == null) {
-      return const Scaffold(
-        body: MenuEmpty('Choose a location to edit products.'),
+      return  Scaffold(
+        body: MenuEmpty(tr(context, 'Choose a location to edit products.')),
       );
     }
     if (productId == null) {
@@ -50,7 +51,7 @@ class ProductFormScreen extends ConsumerWidget {
           loading: () =>
               const Scaffold(body: Center(child: CircularProgressIndicator())),
           error: (error, stack) => Scaffold(
-            appBar: AdminAppBar(title: const Text('Edit Product')),
+            appBar: AdminAppBar(title:  Text(tr(context, 'Edit Product'))),
             body: MenuError(
               message: error.toString(),
               onRetry: () => ref.invalidate(menuProductDetailProvider(query)),
@@ -182,15 +183,15 @@ class _FormState extends ConsumerState<_Form> {
     final discard = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Discard unsaved changes?'),
+        title:  Text(tr(context, 'Discard unsaved changes?')),
         actions: <Widget>[
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Stay'),
+            child:  Text(tr(context, 'Stay')),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Discard'),
+            child:  Text(tr(context, 'Discard')),
           ),
         ],
       ),
@@ -218,7 +219,7 @@ class _FormState extends ConsumerState<_Form> {
       },
       child: Scaffold(
         appBar: AdminAppBar(
-          title: Text(widget.initial == null ? 'New Product' : 'Edit Product'),
+          title: Text(widget.initial == null ? tr(context, 'New Product') : tr(context, 'Edit Product')),
           leading: IconButton(
             onPressed: _leave,
             icon: const Icon(Icons.arrow_back),
@@ -230,24 +231,24 @@ class _FormState extends ConsumerState<_Form> {
             children: <Widget>[
               Text('${widget.categoryName} · ${widget.location.name}'),
               const SizedBox(height: 16),
-              _text(name, 'Name'),
-              _text(description, 'Description', lines: 3),
-              _text(price, 'Price', number: true),
-              _text(subcategory, 'Subcategory'),
-              _text(serves, 'Serves', number: true),
-              _text(disclaimer, 'Disclaimer', lines: 2),
-              _text(sortOrder, 'Sort order', number: true),
+              _text(name, tr(context, 'Name')),
+              _text(description, tr(context, 'Description'), lines: 3),
+              _text(price, tr(context, 'Price'), number: true),
+              _text(subcategory, tr(context, 'Subcategory')),
+              _text(serves, tr(context, 'Serves'), number: true),
+              _text(disclaimer, tr(context, 'Disclaimer'), lines: 2),
+              _text(sortOrder, tr(context, 'Sort order'), number: true),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Available'),
+                title:  Text(tr(context, 'Available')),
                 value: available,
                 onChanged: mutation.isBusy
                     ? null
                     : (value) => setState(() => available = value),
               ),
               if (input == null)
-                const Text(
-                  'Enter a name, a valid non-negative price, and valid numeric values.',
+                 Text(
+                  tr(context, 'Enter a name, a valid non-negative price, and valid numeric values.'),
                   style: TextStyle(color: PelinesColors.destructive),
                 ),
               if (mutation.message != null) Text(mutation.message!),
@@ -256,7 +257,7 @@ class _FormState extends ConsumerState<_Form> {
                 children: <Widget>[
                   OutlinedButton(
                     onPressed: mutation.isBusy ? null : _leave,
-                    child: const Text('Cancel'),
+                    child:  Text(tr(context, 'Cancel')),
                   ),
                   FilledButton(
                     onPressed: input == null || !dirty || mutation.isBusy
@@ -272,10 +273,10 @@ class _FormState extends ConsumerState<_Form> {
                     child: PelinesButtonLabel(
                       busy: mutation.isBusy,
                       label: mutation.isBusy
-                          ? 'Saving...'
+                          ? tr(context, 'Saving...')
                           : widget.initial == null
-                          ? 'Create Product'
-                          : 'Save',
+                          ? tr(context, 'Create Product')
+                          : tr(context, 'Save'),
                     ),
                   ),
                 ],

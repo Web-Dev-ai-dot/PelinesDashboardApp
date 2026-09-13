@@ -1,3 +1,4 @@
+import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../features/auth/providers/auth_providers.dart';
 import '../theme/pelines_tokens.dart';
+import '../l10n/language_toggle.dart';
 
 enum AdminDestination {
   orders('/app', 'Orders', Icons.receipt_long_outlined),
@@ -190,7 +192,7 @@ class AdminAppBar extends StatelessWidget implements PreferredSizeWidget {
               children: [
                 IconButton(
                   key: const Key('admin-open-drawer'),
-                  tooltip: 'Open navigation',
+                  tooltip: tr(context, 'Open navigation'),
                   onPressed: scope!.openDrawer,
                   icon: const Icon(Icons.view_sidebar_outlined),
                 ),
@@ -207,20 +209,20 @@ Future<bool> confirmAdminSignOut(BuildContext context) async =>
     await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Log out?'),
-        content: const Text(
-          'You will need to sign in again to access the dashboard.',
+        title:  Text(tr(context, 'Log out?')),
+        content:  Text(
+          tr(context, 'You will need to sign in again to access the dashboard.'),
         ),
         actions: [
           TextButton(
             key: const Key('logout-cancel'),
             onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
+            child:  Text(tr(context, 'Cancel')),
           ),
           FilledButton(
             key: const Key('logout-confirm'),
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Log out'),
+            child:  Text(tr(context, 'Log out')),
           ),
         ],
       ),
@@ -348,7 +350,7 @@ class _AdminDestinationList extends StatelessWidget {
               alignment: Alignment.centerRight,
               child: IconButton(
                 key: const Key('admin-toggle-navigation'),
-                tooltip: rail ? 'Expand navigation' : 'Collapse navigation',
+                tooltip: rail ? tr(context, 'Expand navigation') : tr(context, 'Collapse navigation'),
                 onPressed: onToggle,
                 icon: Icon(
                   rail ? Icons.view_sidebar_outlined : Icons.view_sidebar,
@@ -429,6 +431,7 @@ class _AdminDestinationList extends StatelessWidget {
             ),
           ),
           const Divider(key: Key('admin-sign-out-divider'), height: 1),
+          const LanguageToggle(),
           Padding(
             padding: const EdgeInsets.all(PelinesSpacing.xs),
             child: TextButton(
@@ -438,18 +441,18 @@ class _AdminDestinationList extends StatelessWidget {
                 foregroundColor: PelinesColors.destructive,
               ),
               child: rail
-                  ? const Column(
+                  ?  Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(Icons.logout),
-                        Text('Sign Out', textAlign: TextAlign.center),
+                        Text(tr(context, 'Sign Out'), textAlign: TextAlign.center),
                       ],
                     )
-                  : const Row(
+                  :  Row(
                       children: [
                         Icon(Icons.logout),
                         SizedBox(width: PelinesSpacing.sm),
-                        Expanded(child: Text('Sign Out')),
+                        Expanded(child: Text(tr(context, 'Sign Out'))),
                       ],
                     ),
             ),

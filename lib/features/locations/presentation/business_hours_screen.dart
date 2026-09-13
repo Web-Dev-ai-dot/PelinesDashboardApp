@@ -1,3 +1,4 @@
+import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -43,7 +44,7 @@ class _BusinessHoursScreenState extends ConsumerState<BusinessHoursScreen> {
         if (await _confirmDiscard() && context.mounted) Navigator.pop(context);
       },
       child: Scaffold(
-        appBar: AdminAppBar(title: const Text('Business Hours')),
+        appBar: AdminAppBar(title:  Text(tr(context, 'Business Hours'))),
         body: PelinesPageBody(
           child: ListView(
             padding: const EdgeInsets.all(PelinesSpacing.lg),
@@ -58,14 +59,14 @@ class _BusinessHoursScreenState extends ConsumerState<BusinessHoursScreen> {
                 ),
               ),
               const SizedBox(height: 4),
-              const Text('Times are recurring business times in Pacific Time.'),
+               Text(tr(context, 'Times are recurring business times in Pacific Time.')),
               const SizedBox(height: 8),
-              const Text(
-                'Business hours affect regular online ordering. Catering availability is handled separately.',
+               Text(
+                tr(context, 'Business hours affect regular online ordering. Catering availability is handled separately.'),
               ),
               const SizedBox(height: 4),
-              const Text(
-                'Temporary closures can override regular business hours.',
+               Text(
+                tr(context, 'Temporary closures can override regular business hours.'),
               ),
               const SizedBox(height: 20),
               for (int index = 0; index < 7; index++)
@@ -75,7 +76,7 @@ class _BusinessHoursScreenState extends ConsumerState<BusinessHoursScreen> {
                 key: const Key('business-hours-save'),
                 onPressed: operation.isBusy ? null : _save,
                 child: Text(
-                  operation.isBusy ? 'Saving…' : 'Save business hours',
+                  operation.isBusy ? tr(context, 'Saving…') : tr(context, 'Save business hours'),
                 ),
               ),
               if (operation.isBusy) ...<Widget>[

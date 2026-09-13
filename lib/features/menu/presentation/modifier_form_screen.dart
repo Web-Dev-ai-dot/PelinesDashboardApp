@@ -1,3 +1,4 @@
+import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -32,7 +33,7 @@ class ModifierFormScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final location = ref.watch(currentLocationProvider).value;
     if (location == null) {
-      return const Scaffold(body: MenuEmpty('Choose a location to continue.'));
+      return  Scaffold(body: MenuEmpty(tr(context, 'Choose a location to continue.')));
     }
     final ModifierContext modifierContext = (
       locationId: location.id,
@@ -61,8 +62,8 @@ class ModifierFormScreen extends ConsumerWidget {
                 .where((value) => value.id == groupId)
                 .firstOrNull;
             if (group == null) {
-              return const Scaffold(
-                body: MenuEmpty('Modifier group not found.'),
+              return  Scaffold(
+                body: MenuEmpty(tr(context, 'Modifier group not found.')),
               );
             }
             if (!optionForm) {
@@ -77,8 +78,8 @@ class ModifierFormScreen extends ConsumerWidget {
                       .where((value) => value.id == optionId)
                       .firstOrNull;
             if (optionId != null && option == null) {
-              return const Scaffold(
-                body: MenuEmpty('Modifier option not found.'),
+              return  Scaffold(
+                body: MenuEmpty(tr(context, 'Modifier option not found.')),
               );
             }
             return ModifierOptionForm(
@@ -188,12 +189,12 @@ class _ModifierGroupFormState extends ConsumerState<ModifierGroupForm> {
     final input = _input;
     return _ModifierScaffold(
       title: widget.initial == null
-          ? 'Add Modifier Group'
-          : 'Edit Modifier Group',
+          ? tr(context, 'Add Modifier Group')
+          : tr(context, 'Edit Modifier Group'),
       dirty: _dirty,
       busy: mutation.isBusy,
       message: mutation.message,
-      saveLabel: widget.initial == null ? 'Create Group' : 'Save Group',
+      saveLabel: widget.initial == null ? tr(context, 'Create Group') : tr(context, 'Save Group'),
       onSave: input == null || !_dirty
           ? null
           : () async {
@@ -203,21 +204,21 @@ class _ModifierGroupFormState extends ConsumerState<ModifierGroupForm> {
               if (saved && mounted) Navigator.pop(this.context, true);
             },
       children: <Widget>[
-        _textField(_name, 'Name', enabled: !mutation.isBusy, maxLength: 80),
+        _textField(_name, tr(context, 'Name'), enabled: !mutation.isBusy, maxLength: 80),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
-          title: const Text('Required'),
+          title:  Text(tr(context, 'Required')),
           value: _required,
           onChanged: mutation.isBusy
               ? null
               : (value) => setState(() => _required = value),
         ),
-        _textField(_min, 'Minimum selections', enabled: !mutation.isBusy),
-        _textField(_max, 'Maximum selections', enabled: !mutation.isBusy),
-        _textField(_sort, 'Sort order', enabled: !mutation.isBusy),
+        _textField(_min, tr(context, 'Minimum selections'), enabled: !mutation.isBusy),
+        _textField(_max, tr(context, 'Maximum selections'), enabled: !mutation.isBusy),
+        _textField(_sort, tr(context, 'Sort order'), enabled: !mutation.isBusy),
         if (input == null)
-          const Text(
-            'Name is required. Use max >= 1, min <= max, and sort >= 0. Required groups need min >= 1; optional groups need min = 0.',
+           Text(
+            tr(context, 'Name is required. Use max >= 1, min <= max, and sort >= 0. Required groups need min >= 1; optional groups need min = 0.'),
             style: TextStyle(color: PelinesColors.destructive),
           ),
       ],
@@ -307,11 +308,11 @@ class _ModifierOptionFormState extends ConsumerState<ModifierOptionForm> {
     final mutation = ref.watch(modifierMutationProvider(widget.contextKey));
     final input = _input;
     return _ModifierScaffold(
-      title: widget.initial == null ? 'Add Option' : 'Edit Option',
+      title: widget.initial == null ? tr(context, 'Add Option') : tr(context, 'Edit Option'),
       dirty: _dirty,
       busy: mutation.isBusy,
       message: mutation.message,
-      saveLabel: widget.initial == null ? 'Create Option' : 'Save Option',
+      saveLabel: widget.initial == null ? tr(context, 'Create Option') : tr(context, 'Save Option'),
       onSave: input == null || !_dirty
           ? null
           : () async {
@@ -326,25 +327,25 @@ class _ModifierOptionFormState extends ConsumerState<ModifierOptionForm> {
             },
       children: <Widget>[
         Text('Group: ${widget.group.name}'),
-        _textField(_name, 'Name', enabled: !mutation.isBusy, maxLength: 80),
+        _textField(_name, tr(context, 'Name'), enabled: !mutation.isBusy, maxLength: 80),
         _textField(
           _price,
-          'Price delta (dollars)',
+          tr(context, 'Price delta (dollars)'),
           enabled: !mutation.isBusy,
           decimal: true,
         ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
-          title: const Text('Default option'),
+          title:  Text(tr(context, 'Default option')),
           value: _default,
           onChanged: mutation.isBusy
               ? null
               : (value) => setState(() => _default = value),
         ),
-        _textField(_sort, 'Sort order', enabled: !mutation.isBusy),
+        _textField(_sort, tr(context, 'Sort order'), enabled: !mutation.isBusy),
         if (input == null)
-          const Text(
-            'Name is required. Price accepts up to two decimals, including negative values. Sort order must be an integer.',
+           Text(
+            tr(context, 'Name is required. Price accepts up to two decimals, including negative values. Sort order must be an integer.'),
             style: TextStyle(color: PelinesColors.destructive),
           ),
       ],
@@ -400,15 +401,15 @@ class _ModifierScaffold extends StatelessWidget {
     final discard = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Discard unsaved changes?'),
+        title:  Text(tr(context, 'Discard unsaved changes?')),
         actions: <Widget>[
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Stay'),
+            child:  Text(tr(context, 'Stay')),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Discard'),
+            child:  Text(tr(context, 'Discard')),
           ),
         ],
       ),
@@ -441,13 +442,13 @@ class _ModifierScaffold extends StatelessWidget {
               children: <Widget>[
                 OutlinedButton(
                   onPressed: busy ? null : () => _leave(context),
-                  child: const Text('Cancel'),
+                  child:  Text(tr(context, 'Cancel')),
                 ),
                 FilledButton(
                   onPressed: busy ? null : onSave,
                   child: PelinesButtonLabel(
                     busy: busy,
-                    label: busy ? 'Saving...' : saveLabel,
+                    label: busy ? tr(context, 'Saving...') : saveLabel,
                   ),
                 ),
               ],

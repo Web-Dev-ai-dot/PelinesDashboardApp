@@ -1,3 +1,4 @@
+import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -46,7 +47,7 @@ class _AutoAcceptScreenState extends ConsumerState<AutoAcceptScreen> {
         }
       },
       child: Scaffold(
-        appBar: AdminAppBar(title: const Text('Auto-Accept Orders')),
+        appBar: AdminAppBar(title:  Text(tr(context, 'Auto-Accept Orders'))),
         body: ListView(
           padding: const EdgeInsets.all(PelinesSpacing.lg),
           children: <Widget>[
@@ -60,14 +61,14 @@ class _AutoAcceptScreenState extends ConsumerState<AutoAcceptScreen> {
               ),
             ),
             const SizedBox(height: 8),
-            const Text(
-              'Paid orders can move directly to Confirmed without requiring manual acceptance.',
+             Text(
+              tr(context, 'Paid orders can move directly to Confirmed without requiring manual acceptance.'),
             ),
             const SizedBox(height: 20),
             SwitchListTile(
               key: const Key('auto-accept-regular'),
               contentPadding: EdgeInsets.zero,
-              title: const Text('Automatically accept paid regular orders'),
+              title:  Text(tr(context, 'Automatically accept paid regular orders')),
               value: _regular,
               onChanged: operation.isBusy
                   ? null
@@ -80,7 +81,7 @@ class _AutoAcceptScreenState extends ConsumerState<AutoAcceptScreen> {
             SwitchListTile(
               key: const Key('auto-accept-catering'),
               contentPadding: EdgeInsets.zero,
-              title: const Text('Automatically accept paid catering orders'),
+              title:  Text(tr(context, 'Automatically accept paid catering orders')),
               value: _catering,
               onChanged: operation.isBusy
                   ? null
@@ -94,7 +95,7 @@ class _AutoAcceptScreenState extends ConsumerState<AutoAcceptScreen> {
               key: const Key('auto-accept-save'),
               onPressed: operation.isBusy || !_dirty ? null : _save,
               child: Text(
-                operation.isBusy ? 'Saving…' : 'Save auto-accept settings',
+                operation.isBusy ? tr(context, 'Saving…') : tr(context, 'Save auto-accept settings'),
               ),
             ),
             if (operation.isBusy)

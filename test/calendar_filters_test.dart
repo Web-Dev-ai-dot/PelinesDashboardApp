@@ -11,6 +11,8 @@ import 'package:pelines_admin_app/features/orders/models/orders_date_filter.dart
 import 'package:pelines_admin_app/features/orders/presentation/orders_calendar_screen.dart';
 import 'package:pelines_admin_app/features/orders/providers/orders_providers.dart';
 
+import 'order_test_data.dart';
+
 void main() {
   for (final width in [390.0, 768.0]) {
     testWidgets('Calendar controls fit at $width with enlarged text', (
@@ -378,7 +380,8 @@ class _Repository implements OrdersRepository {
   }
 
   @override
-  Future<OrderDetail> getOrderById(String id) => throw UnimplementedError();
+  Future<OrderDetail> getOrderById(String id) async =>
+      orderDetail(id: id, locationId: calls.last.$1);
   @override
   Future<OrderDetail> updateInternalNotes({
     required String orderId,

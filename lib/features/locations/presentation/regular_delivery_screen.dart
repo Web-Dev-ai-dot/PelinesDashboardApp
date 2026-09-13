@@ -1,3 +1,4 @@
+import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -56,7 +57,7 @@ class _RegularDeliveryScreenState extends ConsumerState<RegularDeliveryScreen> {
         }
       },
       child: Scaffold(
-        appBar: AdminAppBar(title: const Text('Regular Delivery')),
+        appBar: AdminAppBar(title:  Text(tr(context, 'Regular Delivery'))),
         body: ListView(
           padding: const EdgeInsets.all(PelinesSpacing.lg),
           children: <Widget>[
@@ -70,13 +71,13 @@ class _RegularDeliveryScreenState extends ConsumerState<RegularDeliveryScreen> {
               ),
             ),
             const SizedBox(height: 8),
-            const Text(
-              'Regular delivery settings affect online delivery orders for the regular menu.',
+             Text(
+              tr(context, 'Regular delivery settings affect online delivery orders for the regular menu.'),
             ),
             const SizedBox(height: 20),
             SwitchListTile(
               key: const Key('regular-delivery-enabled'),
-              title: const Text('Enabled'),
+              title:  Text(tr(context, 'Enabled')),
               value: _enabled,
               onChanged: operation.isBusy
                   ? null
@@ -90,31 +91,31 @@ class _RegularDeliveryScreenState extends ConsumerState<RegularDeliveryScreen> {
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
-              decoration: const InputDecoration(
+              decoration:  InputDecoration(
                 prefixText: r'$ ',
-                labelText: 'Delivery fee',
+                labelText: tr(context, 'Delivery fee'),
                 border: OutlineInputBorder(),
               ),
               onChanged: (_) => setState(() {}),
             ),
             const SizedBox(height: 20),
             Text(
-              'Minimum order',
+              tr(context, 'Minimum order'),
               style: Theme.of(context).textTheme.labelLarge,
             ),
             Text(
               money(_initial.minimumCents),
               style: Theme.of(context).textTheme.titleLarge,
             ),
-            const Text(
-              'This value is currently managed outside the mobile app.',
+             Text(
+              tr(context, 'This value is currently managed outside the mobile app.'),
             ),
             const SizedBox(height: 24),
             FilledButton(
               key: const Key('regular-delivery-save'),
               onPressed: operation.isBusy ? null : _save,
               child: Text(
-                operation.isBusy ? 'Saving…' : 'Save regular delivery',
+                operation.isBusy ? tr(context, 'Saving…') : tr(context, 'Save regular delivery'),
               ),
             ),
             if (operation.isBusy)

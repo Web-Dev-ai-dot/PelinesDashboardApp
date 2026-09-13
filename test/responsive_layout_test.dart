@@ -96,9 +96,9 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      for (final key in ['save-internal-notes', 'order-primary-action']) {
+      for (final key in ['save-internal-notes']) {
         final action = find.byKey(Key(key));
-        // The notes precede the operational action in the detail list.
+        // Detail retains notes, while operational actions now live in preview.
         await tester.scrollUntilVisible(
           action,
           200,

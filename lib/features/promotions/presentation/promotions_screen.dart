@@ -1,3 +1,4 @@
+import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -18,14 +19,14 @@ class PromotionsScreen extends ConsumerWidget {
     final AsyncValue<Location?> location = ref.watch(currentLocationProvider);
     final AsyncValue<List<Discount>> promotions = ref.watch(promotionsProvider);
     return Scaffold(
-      appBar: AdminAppBar(title: const Text('Promotions')),
+      appBar: AdminAppBar(title:  Text(tr(context, 'Promotions'))),
       floatingActionButton: location.value == null
           ? null
           : FloatingActionButton.extended(
               key: const Key('add-promotion'),
               onPressed: () => context.push('/app/promotions/new'),
               icon: const Icon(Icons.add),
-              label: const Text('Add Promotion'),
+              label:  Text(tr(context, 'Add Promotion')),
             ),
       body: location.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -35,7 +36,7 @@ class PromotionsScreen extends ConsumerWidget {
         ),
         data: (Location? selected) {
           if (selected == null) {
-            return const Center(child: Text('Choose a location to continue.'));
+            return  Center(child: Text(tr(context, 'Choose a location to continue.')));
           }
           return promotions.when(
             loading: () => const Center(child: CircularProgressIndicator()),
@@ -78,7 +79,7 @@ class _PromotionList extends StatelessWidget {
         onRefresh: onRefresh,
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
-          slivers: const [
+          slivers:  [
             SliverFillRemaining(
               hasScrollBody: false,
               child: Padding(
@@ -89,7 +90,7 @@ class _PromotionList extends StatelessWidget {
                     Icon(Icons.local_offer_outlined, size: 52),
                     SizedBox(height: PelinesSpacing.md),
                     Text(
-                      'No promotions available for this location.',
+                      tr(context, 'No promotions available for this location.'),
                       textAlign: TextAlign.center,
                     ),
                   ],
@@ -112,15 +113,15 @@ class _PromotionList extends StatelessWidget {
         ),
         children: <Widget>[
           if (local.isNotEmpty) ...<Widget>[
-            const _SectionTitle('This location'),
+             _SectionTitle(tr(context, 'This location')),
             for (final Discount discount in local)
-              _PromotionCard(discount: discount, scope: 'This location'),
+              _PromotionCard(discount: discount, scope: tr(context, 'This location')),
           ],
           if (global.isNotEmpty) ...<Widget>[
             if (local.isNotEmpty) const SizedBox(height: 18),
-            const _SectionTitle('All locations'),
+             _SectionTitle(tr(context, 'All locations')),
             for (final Discount discount in global)
-              _PromotionCard(discount: discount, scope: 'All locations'),
+              _PromotionCard(discount: discount, scope: tr(context, 'All locations')),
           ],
         ],
       ),
@@ -258,7 +259,7 @@ class _ErrorView extends StatelessWidget {
           const SizedBox(height: 12),
           Text(message, textAlign: TextAlign.center),
           const SizedBox(height: 16),
-          FilledButton(onPressed: onRetry, child: const Text('Try again')),
+          FilledButton(onPressed: onRetry, child:  Text(tr(context, 'Try again'))),
         ],
       ),
     ),

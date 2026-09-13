@@ -1,3 +1,4 @@
+import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'package:flutter/material.dart';
 
 import '../core/config/app_config.dart';
@@ -28,7 +29,7 @@ class StagingIndicator extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.all(PelinesSpacing.xxs),
                 child: Text(
-                  'STAGING',
+                  tr(context, 'STAGING'),
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
                     color: PelinesColors.textPrimary,

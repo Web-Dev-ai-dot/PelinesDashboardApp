@@ -1,3 +1,4 @@
+import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -16,11 +17,11 @@ class MenuLandingScreen extends StatelessWidget {
   const MenuLandingScreen({super.key});
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AdminAppBar(title: const Text('Menu')),
+    appBar: AdminAppBar(title:  Text(tr(context, 'Menu'))),
     body: ListView(
       padding: const EdgeInsets.all(PelinesSpacing.md),
       children: <Widget>[
-        const PelinesSectionHeading('Choose a menu'),
+         PelinesSectionHeading(tr(context, 'Choose a menu')),
         _MenuChoice(kind: MenuKind.store, icon: Icons.restaurant_menu),
         _MenuChoice(kind: MenuKind.catering, icon: Icons.room_service_outlined),
       ],
@@ -45,7 +46,7 @@ class _MenuChoice extends StatelessWidget {
         child: Icon(icon, color: PelinesColors.brandPrimary),
       ),
       title: Text(kind.label),
-      subtitle: const Text('Browse categories and products'),
+      subtitle:  Text(tr(context, 'Browse categories and products')),
       trailing: const Icon(Icons.chevron_right),
       onTap: () => context.push('/app/menu/${kind.name}'),
     ),
@@ -66,7 +67,7 @@ class MenuCategoriesScreen extends ConsumerWidget {
               onPressed: () =>
                   context.push('/app/menu/${kind.name}/categories/new'),
               icon: const Icon(Icons.add),
-              label: const Text('Add Category'),
+              label:  Text(tr(context, 'Add Category')),
             ),
       body: location.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -76,7 +77,7 @@ class MenuCategoriesScreen extends ConsumerWidget {
         ),
         data: (Location? value) {
           if (value == null) {
-            return const MenuEmpty('Choose a location to view the menu.');
+            return  MenuEmpty(tr(context, 'Choose a location to view the menu.'));
           }
           final CategoryQuery query = (
             locationId: value.id,
@@ -112,8 +113,8 @@ class MenuCategoriesScreen extends ConsumerWidget {
                             children: <Widget>[
                               MenuEmpty(
                                 kind == MenuKind.store
-                                    ? 'No regular menu categories for this location.'
-                                    : 'No catering categories for this location.',
+                                    ? tr(context, 'No regular menu categories for this location.')
+                                    : tr(context, 'No catering categories for this location.'),
                               ),
                             ],
                           )
@@ -127,13 +128,13 @@ class MenuCategoriesScreen extends ConsumerWidget {
                                 child: ListTile(
                                   title: Text(category.name),
                                   subtitle: Text(
-                                    '${category.isActive ? 'Active' : 'Inactive'} · Order ${category.sortOrder}',
+                                    '${category.isActive ? tr(context, 'Active') : tr(context, 'Inactive')} · Order ${category.sortOrder}',
                                   ),
                                   trailing: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: <Widget>[
                                       IconButton(
-                                        tooltip: 'Edit Category',
+                                        tooltip: tr(context, 'Edit Category'),
                                         icon: const Icon(Icons.edit_outlined),
                                         onPressed: () => context.push(
                                           '/app/menu/${kind.name}/categories/${category.id}/edit',
@@ -182,7 +183,7 @@ class MenuProductsScreen extends ConsumerWidget {
                 '/app/menu/${kind.name}/categories/$categoryId/products/new?category=${Uri.encodeQueryComponent(categoryName)}',
               ),
               icon: const Icon(Icons.add),
-              label: const Text('Add Product'),
+              label:  Text(tr(context, 'Add Product')),
             ),
       body: location.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -192,7 +193,7 @@ class MenuProductsScreen extends ConsumerWidget {
         ),
         data: (Location? value) {
           if (value == null) {
-            return const MenuEmpty('Choose a location to view products.');
+            return  MenuEmpty(tr(context, 'Choose a location to view products.'));
           }
           final ProductQuery query = (
             locationId: value.id,
@@ -215,7 +216,7 @@ class MenuProductsScreen extends ConsumerWidget {
                   ? ListView(
                       physics: const AlwaysScrollableScrollPhysics(),
                       children: <Widget>[
-                        MenuEmpty('No products in this category.'),
+                        MenuEmpty(tr(context, 'No products in this category.')),
                       ],
                     )
                   : ListView.builder(
@@ -249,7 +250,7 @@ class _ProductTile extends StatelessWidget {
       subtitle: Text(
         <String>[
           money(product.priceCents),
-          product.isAvailable ? 'Available' : 'Unavailable',
+          product.isAvailable ? tr(context, 'Available') : tr(context, 'Unavailable'),
           if (product.description?.isNotEmpty == true) product.description!,
         ].join(' · '),
         maxLines: 3,
@@ -277,8 +278,8 @@ class MenuProductDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final Location? location = ref.watch(currentLocationProvider).value;
     if (location == null) {
-      return const Scaffold(
-        body: MenuEmpty('Choose a location to view this product.'),
+      return  Scaffold(
+        body: MenuEmpty(tr(context, 'Choose a location to view this product.')),
       );
     }
     final ProductDetailQuery query = (
@@ -289,10 +290,10 @@ class MenuProductDetailScreen extends ConsumerWidget {
     final product = ref.watch(menuProductDetailProvider(query));
     return Scaffold(
       appBar: AdminAppBar(
-        title: const Text('Product Detail'),
+        title:  Text(tr(context, 'Product Detail')),
         actions: <Widget>[
           IconButton(
-            tooltip: 'Edit Product',
+            tooltip: tr(context, 'Edit Product'),
             onPressed: () => context.push(
               '/app/menu/${kind.name}/categories/$categoryId/products/$productId/edit?category=${Uri.encodeQueryComponent(categoryName)}',
             ),
@@ -327,7 +328,7 @@ class MenuProductDetailScreen extends ConsumerWidget {
             if (item.description != null) Text(item.description!),
             const SizedBox(height: 16),
             PelinesStateBadge(
-              label: item.isAvailable ? 'Available' : 'Unavailable',
+              label: item.isAvailable ? tr(context, 'Available') : tr(context, 'Unavailable'),
               foreground: item.isAvailable
                   ? PelinesColors.successForeground
                   : PelinesColors.destructive,
@@ -336,22 +337,22 @@ class MenuProductDetailScreen extends ConsumerWidget {
                   : PelinesColors.brandPrimarySoft,
             ),
             const SizedBox(height: PelinesSpacing.md),
-            _Field('Category', categoryName),
-            _Field('Menu', kind.label),
-            _Field('Location', location.name),
-            _Field('Slug', item.slug),
+            _Field(tr(context, 'Category'), categoryName),
+            _Field(tr(context, 'Menu'), kind.label),
+            _Field(tr(context, 'Location'), location.name),
+            _Field(tr(context, 'Slug'), item.slug),
             if (item.subcategory != null)
-              _Field('Subcategory', item.subcategory!),
+              _Field(tr(context, 'Subcategory'), item.subcategory!),
             if (item.servesCount != null)
-              _Field('Serves', '${item.servesCount}'),
-            if (item.disclaimer != null) _Field('Disclaimer', item.disclaimer!),
-            _Field('Sort order', '${item.sortOrder}'),
+              _Field(tr(context, 'Serves'), '${item.servesCount}'),
+            if (item.disclaimer != null) _Field(tr(context, 'Disclaimer'), item.disclaimer!),
+            _Field(tr(context, 'Sort order'), '${item.sortOrder}'),
             const SizedBox(height: 20),
             Row(
               children: <Widget>[
                 Expanded(
                   child: Text(
-                    'Modifier Administration',
+                    tr(context, 'Modifier Administration'),
                     style: Theme.of(context).textTheme.headlineSmall,
                   ),
                 ),
@@ -360,12 +361,12 @@ class MenuProductDetailScreen extends ConsumerWidget {
                     '/app/menu/${kind.name}/categories/$categoryId/products/$productId/modifiers/new',
                   ),
                   icon: const Icon(Icons.add),
-                  label: const Text('Add Group'),
+                  label:  Text(tr(context, 'Add Group')),
                 ),
               ],
             ),
             if (item.modifierGroups.isEmpty)
-              const MenuEmpty('No modifier groups.'),
+               MenuEmpty(tr(context, 'No modifier groups.')),
             for (final group in item.modifierGroups)
               Card(
                 child: Padding(
@@ -379,11 +380,11 @@ class MenuProductDetailScreen extends ConsumerWidget {
                       ),
                       Text(_modifierRule(group)),
                       if (!group.optionsLoaded)
-                        const Text('Options have not been loaded.'),
+                         Text(tr(context, 'Options have not been loaded.')),
                       if (group.optionsLoaded && group.options.isEmpty)
-                        const Padding(
+                         Padding(
                           padding: EdgeInsets.symmetric(vertical: 12),
-                          child: Text('No options in this group.'),
+                          child: Text(tr(context, 'No options in this group.')),
                         ),
                       for (final option in group.options)
                         ListTile(
@@ -393,7 +394,7 @@ class MenuProductDetailScreen extends ConsumerWidget {
                             '${_signedMoney(option.priceDeltaCents)}${option.isDefault ? ' - Default' : ''}',
                           ),
                           trailing: IconButton(
-                            tooltip: 'Edit Option',
+                            tooltip: tr(context, 'Edit Option'),
                             icon: const Icon(Icons.edit_outlined),
                             onPressed: () => context.push(
                               '/app/menu/${kind.name}/categories/$categoryId/products/$productId/modifiers/${group.id}/options/${option.id}/edit',
@@ -408,14 +409,14 @@ class MenuProductDetailScreen extends ConsumerWidget {
                               '/app/menu/${kind.name}/categories/$categoryId/products/$productId/modifiers/${group.id}/edit',
                             ),
                             icon: const Icon(Icons.edit_outlined),
-                            label: const Text('Edit Group'),
+                            label:  Text(tr(context, 'Edit Group')),
                           ),
                           OutlinedButton.icon(
                             onPressed: () => context.push(
                               '/app/menu/${kind.name}/categories/$categoryId/products/$productId/modifiers/${group.id}/options/new',
                             ),
                             icon: const Icon(Icons.add),
-                            label: const Text('Add Option'),
+                            label:  Text(tr(context, 'Add Option')),
                           ),
                         ],
                       ),
@@ -473,15 +474,15 @@ class _ProductImageAdministration extends ConsumerWidget {
       productImageMutationProvider(imageContext),
     );
     final String? stage = switch (state.phase) {
-      ProductImagePhase.picking => 'Opening gallery...',
-      ProductImagePhase.processing => 'Processing image...',
-      ProductImagePhase.requestingUploadUrl => 'Preparing secure upload...',
+      ProductImagePhase.picking => tr(context, 'Opening gallery...'),
+      ProductImagePhase.processing => tr(context, 'Processing image...'),
+      ProductImagePhase.requestingUploadUrl => tr(context, 'Preparing secure upload...'),
       ProductImagePhase.uploading =>
         state.progress == null
-            ? 'Uploading image...'
+            ? tr(context, 'Uploading image...')
             : 'Uploading image... ${(state.progress! * 100).round()}%',
-      ProductImagePhase.updatingProduct => 'Saving product...',
-      ProductImagePhase.reconciling => 'Verifying product...',
+      ProductImagePhase.updatingProduct => tr(context, 'Saving product...'),
+      ProductImagePhase.reconciling => tr(context, 'Verifying product...'),
       _ => null,
     };
     return Card(
@@ -492,7 +493,7 @@ class _ProductImageAdministration extends ConsumerWidget {
             Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                'Product Image',
+                tr(context, 'Product Image'),
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
             ),
@@ -508,14 +509,14 @@ class _ProductImageAdministration extends ConsumerWidget {
                         )
                         .changeImage(),
               icon: const Icon(Icons.photo_library_outlined),
-              label: const Text('Change Image'),
+              label:  Text(tr(context, 'Change Image')),
             ),
             if (state.canRetryPatch)
               TextButton(
                 onPressed: () => ref
                     .read(productImageMutationProvider(imageContext).notifier)
                     .retryProductUpdate(),
-                child: const Text('Retry saving uploaded image'),
+                child:  Text(tr(context, 'Retry saving uploaded image')),
               ),
             if (stage != null) ...<Widget>[
               const SizedBox(height: 8),
@@ -603,7 +604,7 @@ class _LocationHeader extends StatelessWidget {
           ),
         ),
         IconButton(
-          tooltip: 'Refresh',
+          tooltip: tr(context, 'Refresh'),
           onPressed: onRefresh,
           icon: const Icon(Icons.refresh),
         ),
@@ -648,7 +649,7 @@ class MenuError extends StatelessWidget {
         children: <Widget>[
           Text(message, textAlign: TextAlign.center),
           const SizedBox(height: 12),
-          FilledButton(onPressed: onRetry, child: const Text('Try again')),
+          FilledButton(onPressed: onRetry, child:  Text(tr(context, 'Try again'))),
         ],
       ),
     ),

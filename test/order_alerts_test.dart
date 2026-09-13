@@ -14,6 +14,8 @@ import 'package:pelines_admin_app/features/orders/presentation/order_alert_shell
 import 'package:pelines_admin_app/features/orders/providers/order_alerts_controller.dart';
 import 'package:pelines_admin_app/features/orders/providers/orders_providers.dart';
 
+import 'order_test_data.dart';
+
 void main() {
   test('first load seeds without sound and later pending/confirmed alert once per batch', () async {
     final _MemoryStore store = _MemoryStore();
@@ -206,7 +208,7 @@ void main() {
   });
 
   testWidgets(
-    'global banner shows plural count, opens order, and clears after acknowledgements',
+    'fullscreen shows queue without auto acknowledgement and clears explicitly',
     (WidgetTester tester) async {
       final _MemoryStore store = _MemoryStore()
         ..values['a'] = const StoredOrderAlerts(
@@ -241,26 +243,34 @@ void main() {
             authControllerProvider.overrideWith(_FakeAuth.new),
             currentLocationProvider.overrideWith(_FakeLocation.new),
             todayOrdersProvider.overrideWith(_FakeToday.new),
+            orderDetailProvider.overrideWith(
+              (ref, id) async => orderDetail(
+                id: id,
+                locationId: 'a',
+                status: OrderStatus.confirmed,
+              ),
+            ),
           ],
           child: MaterialApp.router(routerConfig: router),
         ),
       );
       await tester.pumpAndSettle();
 
+      expect(find.byKey(const Key('new-order-fullscreen')), findsOneWidget);
+      expect(find.text('1 of 2'), findsOneWidget);
+      final context = tester.element(
+        find.byKey(const Key('new-order-fullscreen')),
+      );
+      final container = ProviderScope.containerOf(context);
+      expect(container.read(orderAlertsProvider).value!.unseenIds, ['B', 'C']);
+      await tester.tap(find.byKey(const Key('alert-acknowledge')));
+      await tester.pumpAndSettle();
+      expect(find.text('1 of 1'), findsOneWidget);
+      expect(container.read(orderAlertsProvider).value!.unseenIds, ['C']);
+      await tester.tap(find.byKey(const Key('alert-acknowledge')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('new-order-fullscreen')), findsNothing);
       expect(find.text('Promotions'), findsOneWidget);
-      expect(find.byKey(const Key('new-orders-banner')), findsOneWidget);
-      expect(find.text('2 orders need your attention.'), findsOneWidget);
-      await tester.tap(find.byKey(const Key('view-new-order')));
-      await tester.pumpAndSettle();
-      expect(find.text('Order B'), findsOneWidget);
-      expect(find.text('1 order needs your attention.'), findsOneWidget);
-
-      final BuildContext context = tester.element(find.text('Order B'));
-      await ProviderScope.containerOf(context)
-          .read(orderAlertsProvider.notifier)
-          .acknowledge('C');
-      await tester.pumpAndSettle();
-      expect(find.byKey(const Key('new-orders-banner')), findsNothing);
     },
   );
 }

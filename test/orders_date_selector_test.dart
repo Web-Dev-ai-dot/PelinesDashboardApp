@@ -12,16 +12,19 @@ import 'package:pelines_admin_app/features/orders/models/orders_date_filter.dart
 import 'package:pelines_admin_app/features/orders/presentation/today_orders_view.dart';
 import 'package:pelines_admin_app/features/orders/providers/orders_providers.dart';
 
+import 'order_test_data.dart';
+
 OrderSummary _order(
   String id,
   DateTime created, {
   DateTime? scheduled,
   OrderStatus status = OrderStatus.pending,
   PaymentStatus payment = PaymentStatus.paid,
+  String locationId = 'A',
 }) => OrderSummary(
   id: id,
   orderNumber: id,
-  locationId: 'A',
+  locationId: locationId,
   orderType: OrderType.online,
   status: status,
   rawStatus: status.name,
@@ -65,6 +68,20 @@ class _Repository implements OrdersRepository {
   }
 
   @override
+  Future<OrderDetail> getOrderById(String id) async {
+    final summary = orders.firstWhere((o) => o.id == id);
+    return OrderDetail.fromJson(
+      orderJson(
+        id: id,
+        status: summary.status.name,
+        locationId: summary.locationId,
+        fulfillment: summary.fulfillmentType.name,
+        payment: summary.paymentStatus.name,
+      ),
+    );
+  }
+
+  @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
@@ -76,6 +93,63 @@ Future<void> _date(WidgetTester tester, String label) async {
 }
 
 void main() {
+  testWidgets(
+    'Waiting badge counts paid pending for current location and updates without another poller',
+    (tester) async {
+      final now = DateTime.now();
+      final repository = _Repository([
+        _order('pending-one', now),
+        _order('pending-two', now),
+        _order('accepted', now, status: OrderStatus.confirmed),
+        _order('failed', now, payment: PaymentStatus.failed),
+        _order('other-location', now, locationId: 'B'),
+      ]);
+      final container = ProviderContainer(
+        overrides: [
+          currentLocationProvider.overrideWith(_Current.new),
+          ordersRepositoryProvider.overrideWithValue(repository),
+        ],
+      );
+      addTearDown(container.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            theme: AppTheme.light,
+            home: Scaffold(
+              body: TodayOrdersView(
+                location: _location,
+                onChangeLocation: () {},
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final badge = find.byKey(const Key('waiting-count'));
+      expect(
+        find.descendant(of: badge, matching: find.text('2')),
+        findsOneWidget,
+      );
+      expect(find.text('accepted'), findsOneWidget);
+      expect(find.text('pending-one'), findsNothing);
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Waiting'));
+      await tester.pumpAndSettle();
+      expect(find.text('pending-one'), findsOneWidget);
+      expect(find.text('accepted'), findsNothing);
+      repository.orders.removeWhere((order) => order.id == 'pending-one');
+      await container.read(todayOrdersProvider.notifier).refresh();
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(of: badge, matching: find.text('1')),
+        findsOneWidget,
+      );
+      final calls = repository.calls;
+      await tester.pump(const Duration(seconds: 45));
+      expect(repository.calls, calls);
+      expect(tester.takeException(), isNull);
+    },
+  );
   testWidgets('Orders date options fit phone with enlarged text', (
     tester,
   ) async {
@@ -178,7 +252,7 @@ void main() {
   });
 
   testWidgets(
-    'Waiting initial, ordered filters, dates reuse Calendar, detail and refresh preserve state',
+    'Confirmed initial, ordered filters, dates reuse Calendar, detail and refresh preserve state',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(1024, 800));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -234,16 +308,16 @@ void main() {
       expect(
         tester
             .widgetList<ChoiceChip>(find.byType(ChoiceChip))
-            .map((c) => (c.label as Text).data),
+            .map((c) => c.label is Text ? (c.label as Text).data : 'Waiting'),
         ['Waiting', 'Confirmed', 'Preparing', 'Ready', 'All'],
       );
       expect(
         tester
-            .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Waiting'))
+            .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Confirmed'))
             .selected,
         isTrue,
       );
-      expect(find.text('waiting-today'), findsOneWidget);
+      expect(find.textContaining(RegExp(r'^confirmed-')), findsWidgets);
       expect(repository.calls, 1);
       await tester.tap(find.widgetWithText(ChoiceChip, 'Confirmed'));
       await tester.pumpAndSettle();

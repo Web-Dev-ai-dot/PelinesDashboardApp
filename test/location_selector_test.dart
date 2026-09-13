@@ -31,6 +31,9 @@ class _Locations extends LocationsController {
 }
 
 class _Orders extends TodayOrdersController {
+  int refreshCalls = 0;
+  @override
+  Future<void> refresh() async => refreshCalls++;
   @override
   Future<TodayOrdersState> build() async => const TodayOrdersState(orders: []);
 }
@@ -79,6 +82,29 @@ void main() {
         expect(find.text(_locations.first.name), findsOneWidget);
         expect(find.byTooltip('Change location'), findsNothing);
         final selector = find.byKey(const Key('location-selector'));
+        final refresh = find.byTooltip('Refresh orders');
+        expect(refresh, findsOneWidget);
+        expect(tester.getSize(refresh).shortestSide, greaterThanOrEqualTo(48));
+        expect(tester.getRect(refresh).right, greaterThan(width - 60));
+        expect(tester.getRect(refresh).top, lessThan(56));
+        await tester.tap(refresh);
+        expect(
+          (container.read(
+            todayOrdersProvider.notifier,
+          ) as _Orders).refreshCalls,
+          1,
+        );
+        if (width >= 768) {
+          expect(
+            tester.getCenter(selector).dy,
+            tester.getCenter(find.byKey(const Key('orders-date-selector'))).dy,
+          );
+        }
+        expect(AppTheme.light.appBarTheme.titleTextStyle?.fontSize, 28);
+        expect(
+          AppTheme.light.appBarTheme.titleTextStyle?.fontFamily,
+          'Work Sans',
+        );
         expect(tester.getSize(selector).height, greaterThanOrEqualTo(48));
         expect(tester.takeException(), isNull);
         await tester.tap(selector);

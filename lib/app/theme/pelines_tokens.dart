@@ -62,6 +62,7 @@ abstract final class PelinesTypography {
   static const String headingFamily = 'Bree Serif';
 
   static TextStyle? pageTitle(TextTheme theme) => theme.titleLarge?.copyWith(
+    fontSize: 28,
     fontFamily: bodyFamily,
     fontWeight: FontWeight.w700,
   );

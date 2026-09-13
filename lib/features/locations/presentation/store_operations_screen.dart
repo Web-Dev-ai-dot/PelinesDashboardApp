@@ -1,3 +1,4 @@
+import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -42,7 +43,7 @@ class StoreOperationsScreen extends ConsumerWidget {
     final AsyncValue<Location?> current = ref.watch(currentLocationProvider);
     final StoreOperationState operation = ref.watch(storeOperationsProvider);
     return Scaffold(
-      appBar: AdminAppBar(title: const Text('Store Operations')),
+      appBar: AdminAppBar(title:  Text(tr(context, 'Store Operations'))),
       body: current.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (Object error, StackTrace stackTrace) => Center(
@@ -52,8 +53,8 @@ class StoreOperationsScreen extends ConsumerWidget {
           ),
         ),
         data: (Location? location) => location == null
-            ? const Center(
-                child: Text('Choose a location to manage store operations.'),
+            ?  Center(
+                child: Text(tr(context, 'Choose a location to manage store operations.')),
               )
             : _OperationsContent(location: location, operation: operation),
       ),
@@ -95,7 +96,7 @@ class _OperationsContent extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 Text(
-                  'Online Orders',
+                  tr(context, 'Online Orders'),
                   style: Theme.of(context).textTheme.headlineSmall,
                 ),
                 const SizedBox(height: 16),
@@ -107,13 +108,13 @@ class _OperationsContent extends ConsumerWidget {
                     contentPadding: EdgeInsets.zero,
                     title: Text(
                       accepting
-                          ? 'Accepting online orders'
-                          : 'Online orders paused',
+                          ? tr(context, 'Accepting online orders')
+                          : tr(context, 'Online orders paused'),
                     ),
                     subtitle: Text(
                       accepting
-                          ? 'Orders can be placed online.'
-                          : 'New online orders are currently blocked.',
+                          ? tr(context, 'Orders can be placed online.')
+                          : tr(context, 'New online orders are currently blocked.'),
                     ),
                     value: accepting,
                     onChanged: operation.isBusy
@@ -123,8 +124,8 @@ class _OperationsContent extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  'When disabled, this location will stop accepting new online orders for both regular and catering orders. Existing orders are not cancelled.',
+                 Text(
+                  tr(context, 'When disabled, this location will stop accepting new online orders for both regular and catering orders. Existing orders are not cancelled.'),
                 ),
                 if (operation.isBusy) ...<Widget>[
                   const SizedBox(height: 16),
@@ -134,8 +135,8 @@ class _OperationsContent extends ConsumerWidget {
                   const SizedBox(height: 8),
                   Text(
                     operation.phase == StoreOperationPhase.submitting
-                        ? 'Saving change…'
-                        : 'Checking the current server setting…',
+                        ? tr(context, 'Saving change…')
+                        : tr(context, 'Checking the current server setting…'),
                   ),
                 ],
               ],
@@ -172,19 +173,19 @@ class _OperationsContent extends ConsumerWidget {
         ),
         content: Text(
           requested
-              ? 'This location will be allowed to receive new online orders again. Business hours and other availability rules still apply.'
-              : 'New regular and catering orders will be blocked for this location. Existing orders are not cancelled.',
+              ? tr(context, 'This location will be allowed to receive new online orders again. Business hours and other availability rules still apply.')
+              : tr(context, 'New regular and catering orders will be blocked for this location. Existing orders are not cancelled.'),
         ),
         actions: <Widget>[
           TextButton(
             key: const Key('accepting-orders-cancel'),
             onPressed: () => Navigator.pop(dialogContext, false),
-            child: Text(requested ? 'Keep closed' : 'Keep accepting'),
+            child: Text(requested ? tr(context, 'Keep closed') : tr(context, 'Keep accepting')),
           ),
           FilledButton(
             key: const Key('accepting-orders-confirm'),
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: Text(requested ? 'Start orders' : 'Stop orders'),
+            child: Text(requested ? tr(context, 'Start orders') : tr(context, 'Stop orders')),
           ),
         ],
       ),
@@ -193,8 +194,8 @@ class _OperationsContent extends ConsumerWidget {
     final Location? current = ref.read(currentLocationProvider).value;
     if (current?.id != captured.id) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('The selected location changed. Please confirm again.'),
+         SnackBar(
+          content: Text(tr(context, 'The selected location changed. Please confirm again.')),
         ),
       );
       return;
@@ -226,7 +227,7 @@ class _AutoAcceptCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               Text(
-                'Auto-Accept Orders',
+                tr(context, 'Auto-Accept Orders'),
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
               const SizedBox(height: 12),
@@ -247,22 +248,22 @@ class _AutoAcceptCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
             Text(
-              'Auto-Accept Orders',
+              tr(context, 'Auto-Accept Orders'),
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: 12),
-            const Text('Regular orders'),
+             Text(tr(context, 'Regular orders')),
             Text(
               settings.regular
-                  ? 'Automatically accepted after payment'
-                  : 'Manual acceptance',
+                  ? tr(context, 'Automatically accepted after payment')
+                  : tr(context, 'Manual acceptance'),
             ),
             const SizedBox(height: 10),
-            const Text('Catering orders'),
+             Text(tr(context, 'Catering orders')),
             Text(
               settings.catering
-                  ? 'Automatically accepted after payment'
-                  : 'Manual acceptance',
+                  ? tr(context, 'Automatically accepted after payment')
+                  : tr(context, 'Manual acceptance'),
             ),
             const SizedBox(height: 12),
             OutlinedButton(
@@ -273,7 +274,7 @@ class _AutoAcceptCard extends StatelessWidget {
                   builder: (_) => AutoAcceptScreen(location: location),
                 ),
               ),
-              child: const Text('Edit auto-accept'),
+              child:  Text(tr(context, 'Edit auto-accept')),
             ),
           ],
         ),
@@ -301,7 +302,7 @@ class _CateringDeliveryCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               Text(
-                'Catering Delivery',
+                tr(context, 'Catering Delivery'),
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
               const SizedBox(height: 12),
@@ -322,12 +323,12 @@ class _CateringDeliveryCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
             Text(
-              'Catering Delivery',
+              tr(context, 'Catering Delivery'),
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: 6),
-            Text(settings.enabled ? 'Enabled' : 'Disabled'),
-            if (settings.usesDefault) const Text('Using default setting'),
+            Text(settings.enabled ? tr(context, 'Enabled') : tr(context, 'Disabled')),
+            if (settings.usesDefault)  Text(tr(context, 'Using default setting')),
             const SizedBox(height: 12),
             Text('Delivery fee: ${money(location.deliveryFeeCents)}'),
             Text('Minimum order: ${money(location.deliveryMinimumCents)}'),
@@ -340,7 +341,7 @@ class _CateringDeliveryCard extends StatelessWidget {
                   builder: (_) => CateringDeliveryScreen(location: location),
                 ),
               ),
-              child: const Text('Edit catering delivery'),
+              child:  Text(tr(context, 'Edit catering delivery')),
             ),
           ],
         ),
@@ -365,7 +366,7 @@ class _RegularDeliveryCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               Text(
-                'Regular Delivery',
+                tr(context, 'Regular Delivery'),
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
               const SizedBox(height: 12),
@@ -385,11 +386,11 @@ class _RegularDeliveryCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
             Text(
-              'Regular Delivery',
+              tr(context, 'Regular Delivery'),
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: 6),
-            Text(settings.enabled ? 'Enabled' : 'Disabled'),
+            Text(settings.enabled ? tr(context, 'Enabled') : tr(context, 'Disabled')),
             const SizedBox(height: 12),
             Text('Delivery fee: ${money(settings.feeCents)}'),
             Text('Minimum order: ${money(settings.minimumCents)}'),
@@ -402,7 +403,7 @@ class _RegularDeliveryCard extends StatelessWidget {
                   builder: (_) => RegularDeliveryScreen(location: location),
                 ),
               ),
-              child: const Text('Edit regular delivery'),
+              child:  Text(tr(context, 'Edit regular delivery')),
             ),
           ],
         ),
@@ -427,16 +428,16 @@ class _BusinessHoursCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
             Text(
-              'Business Hours',
+              tr(context, 'Business Hours'),
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: 6),
-            const Text(
-              'Business hours affect regular online ordering. Catering availability is handled separately.',
+             Text(
+              tr(context, 'Business hours affect regular online ordering. Catering availability is handled separately.'),
             ),
             const SizedBox(height: 12),
             if (schedule == null)
-              const Text('Business hours are not configured.')
+               Text(tr(context, 'Business hours are not configured.'))
             else
               for (int index = 0; index < 7; index++)
                 Padding(
@@ -462,7 +463,7 @@ class _BusinessHoursCard extends StatelessWidget {
                   builder: (_) => BusinessHoursScreen(location: location),
                 ),
               ),
-              child: const Text('Edit business hours'),
+              child:  Text(tr(context, 'Edit business hours')),
             ),
           ],
         ),
@@ -471,7 +472,7 @@ class _BusinessHoursCard extends StatelessWidget {
   }
 
   String _summary(BuildContext context, BusinessDayHours day) {
-    if (day.closed) return 'Closed';
+    if (day.closed) return tr(context, 'Closed');
     String display(String value) {
       final List<String> parts = value.split(':');
       return TimeOfDay(
@@ -505,7 +506,7 @@ class _TemporaryClosuresCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               Text(
-                'Temporary Closures',
+                tr(context, 'Temporary Closures'),
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
               const SizedBox(height: 12),
@@ -525,18 +526,18 @@ class _TemporaryClosuresCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
             Text(
-              'Temporary Closures',
+              tr(context, 'Temporary Closures'),
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: 6),
-            const Text(
-              'Temporary closures affect regular online ordering. Catering availability is handled separately by the current backend.',
+             Text(
+              tr(context, 'Temporary closures affect regular online ordering. Catering availability is handled separately by the current backend.'),
             ),
             const SizedBox(height: 12),
             if (closures.isEmpty)
-              const Padding(
+               Padding(
                 padding: EdgeInsets.symmetric(vertical: 12),
-                child: Text('No temporary closures.'),
+                child: Text(tr(context, 'No temporary closures.')),
               )
             else
               for (final TemporaryClosure closure in closures)
@@ -545,11 +546,11 @@ class _TemporaryClosuresCard extends StatelessWidget {
                   contentPadding: EdgeInsets.zero,
                   title: Text(
                     closure.reason.isEmpty
-                        ? 'Temporary closure'
+                        ? tr(context, 'Temporary closure')
                         : closure.reason,
                   ),
                   subtitle: Text(
-                    '${_dateRange(closure)}\n${closure.active ? 'Active' : 'Inactive'}',
+                    '${_dateRange(closure)}\n${closure.active ? tr(context, 'Active') : tr(context, 'Inactive')}',
                   ),
                   isThreeLine: true,
                   trailing: const Icon(Icons.chevron_right),
@@ -560,7 +561,7 @@ class _TemporaryClosuresCard extends StatelessWidget {
               key: const Key('add-closure'),
               onPressed: () => _openForm(context, null),
               icon: const Icon(Icons.add),
-              label: const Text('Add closure'),
+              label:  Text(tr(context, 'Add closure')),
             ),
           ],
         ),

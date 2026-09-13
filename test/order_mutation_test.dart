@@ -15,6 +15,8 @@ import 'package:pelines_admin_app/features/orders/providers/orders_providers.dar
 
 import 'order_test_data.dart';
 
+import 'package:pelines_admin_app/features/orders/presentation/order_preview_action.dart';
+
 void main() {
   for (final (OrderStatus source, OrderStatus target)
       in <(OrderStatus, OrderStatus)>[
@@ -451,7 +453,7 @@ void main() {
   }
 
   testWidgets(
-    'detail shows contextual action and disables it while submitting',
+    'preview shows contextual action and disables it while submitting',
     (WidgetTester tester) async {
       final Completer<OrderDetail> patch = Completer<OrderDetail>();
       final _FakeOrdersRepository repository = _FakeOrdersRepository(
@@ -470,7 +472,7 @@ void main() {
             currentLocationProvider.overrideWith(_FakeCurrentLocation.new),
           ],
           child: const MaterialApp(
-            home: OrderDetailScreen(
+            home: _PreviewScreen(
               orderId: '11111111-1111-4111-8111-111111111111',
             ),
           ),
@@ -484,6 +486,7 @@ void main() {
         scrollable: find.byType(Scrollable).first,
       );
       expect(find.text('Accept order'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('order-primary-action')));
       await tester.tap(find.byKey(const Key('order-primary-action')));
       await tester.pump();
       final FilledButton button = tester.widget<FilledButton>(
@@ -510,12 +513,7 @@ void main() {
       ],
     );
     await _pumpDetail(tester, repository);
-    await tester.scrollUntilVisible(
-      find.byKey(const Key('order-primary-action')),
-      500,
-      scrollable: find.byType(Scrollable).first,
-    );
-    expect(find.text('Start preparing'), findsOneWidget);
+    expect(find.byKey(const Key('order-primary-action')), findsNothing);
 
     final ProviderContainer container = ProviderScope.containerOf(
       tester.element(find.byType(OrderDetailScreen)),
@@ -523,12 +521,7 @@ void main() {
     container.read(appResumeTickProvider.notifier).resumed();
     await tester.pumpAndSettle();
 
-    await tester.scrollUntilVisible(
-      find.byKey(const Key('order-primary-action')),
-      500,
-      scrollable: find.byType(Scrollable).first,
-    );
-    expect(find.text('Mark ready'), findsOneWidget);
+    expect(find.byKey(const Key('order-primary-action')), findsNothing);
     expect(find.text('Start preparing'), findsNothing);
     expect(repository.getCalls, 2);
   });
@@ -557,12 +550,7 @@ void main() {
     );
     expect(find.byKey(const Key('detail-refresh-warning')), findsOneWidget);
     expect(find.text(orderDetail().orderNumber), findsWidgets);
-    await tester.scrollUntilVisible(
-      find.byKey(const Key('order-primary-action')),
-      500,
-      scrollable: find.byType(Scrollable).first,
-    );
-    expect(find.text('Start preparing'), findsOneWidget);
+    expect(find.text('Start preparing'), findsNothing);
     expect(find.text('Retry'), findsOneWidget);
   });
 
@@ -616,7 +604,7 @@ void main() {
             ),
           ],
         );
-        await _pumpDetail(tester, repository);
+        await _pumpPreview(tester, repository);
         await tester.scrollUntilVisible(
           find.byKey(const Key('order-primary-action')),
           500,
@@ -665,7 +653,7 @@ void main() {
           patchResult: detail,
           getResult: detail,
         );
-        await _pumpDetail(tester, repository);
+        await _pumpPreview(tester, repository);
         expect(find.text('Mark picked up'), findsNothing);
         expect(find.text('Mark delivered'), findsNothing);
       }
@@ -709,7 +697,7 @@ void main() {
       patchResult: orderDetail(status: OrderStatus.delivered),
       getResult: orderDetail(status: OrderStatus.ready),
     );
-    await _pumpDetail(tester, repository);
+    await _pumpPreview(tester, repository);
     await tester.scrollUntilVisible(
       find.byKey(const Key('order-primary-action')),
       500,
@@ -720,7 +708,7 @@ void main() {
 
     repository.getResult = orderDetail(status: OrderStatus.cancelled);
     final ProviderContainer container = ProviderScope.containerOf(
-      tester.element(find.byType(OrderDetailScreen)),
+      tester.element(find.byType(_PreviewScreen)),
     );
     container.invalidate(orderDetailProvider(repository.orderId));
     await tester.pumpAndSettle();
@@ -851,4 +839,47 @@ class _FakeOrdersRepository implements OrdersRepository {
     listLocationIds.add(locationId);
     return <OrderSummary>[];
   }
+}
+
+class _PreviewScreen extends ConsumerWidget {
+  const _PreviewScreen({required this.orderId});
+  final String orderId;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final detail = ref.watch(orderDetailProvider(orderId));
+    return Scaffold(
+      body: ListView(
+        children: [
+          if (detail.value case final order?)
+            OrderPreviewAction(
+              order: OrderSummary.fromJson(
+                orderJson(
+                  id: order.id,
+                  status: order.status.name,
+                  fulfillment: order.fulfillmentType.name,
+                  payment: order.paymentStatus.name,
+                  locationId: order.locationId,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+Future<void> _pumpPreview(
+  WidgetTester tester,
+  _FakeOrdersRepository repository,
+) async {
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        ordersRepositoryProvider.overrideWithValue(repository),
+        currentLocationProvider.overrideWith(_FakeCurrentLocation.new),
+      ],
+      child: MaterialApp(home: _PreviewScreen(orderId: repository.orderId)),
+    ),
+  );
+  await tester.pumpAndSettle();
 }

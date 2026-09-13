@@ -1,3 +1,4 @@
+import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -21,8 +22,8 @@ class PromotionFormScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final Location? location = ref.watch(currentLocationProvider).value;
     if (location == null) {
-      return const Scaffold(
-        body: Center(child: Text('Choose a location to continue.')),
+      return  Scaffold(
+        body: Center(child: Text(tr(context, 'Choose a location to continue.'))),
       );
     }
     if (discountId == null) {
@@ -34,22 +35,22 @@ class PromotionFormScreen extends ConsumerWidget {
           loading: () =>
               const Scaffold(body: Center(child: CircularProgressIndicator())),
           error: (Object error, StackTrace stack) => Scaffold(
-            appBar: AdminAppBar(title: const Text('Edit Promotion')),
+            appBar: AdminAppBar(title:  Text(tr(context, 'Edit Promotion'))),
             body: Center(child: Text(error.toString())),
           ),
           data: (List<Discount> values) {
             final Discount? discount = _find(values, discountId!);
             if (discount == null) {
-              return const Scaffold(
-                body: Center(child: Text('This promotion no longer exists.')),
+              return  Scaffold(
+                body: Center(child: Text(tr(context, 'This promotion no longer exists.'))),
               );
             }
             if (discount.locationId != location.id) {
-              return const Scaffold(
+              return  Scaffold(
                 body: Center(
                   child: Padding(
                     padding: EdgeInsets.all(24),
-                    child: Text('This promotion cannot be edited from mobile.'),
+                    child: Text(tr(context, 'This promotion cannot be edited from mobile.')),
                   ),
                 ),
               );
@@ -181,7 +182,7 @@ class _PromotionFormState extends ConsumerState<_PromotionForm> {
       },
       child: Scaffold(
         appBar: AdminAppBar(
-          title: Text(_editing ? 'Edit Promotion' : 'Add Promotion'),
+          title: Text(_editing ? tr(context, 'Edit Promotion') : tr(context, 'Add Promotion')),
           leading: IconButton(
             onPressed: operation.isBusy ? null : _leave,
             icon: const Icon(Icons.arrow_back),
@@ -191,13 +192,13 @@ class _PromotionFormState extends ConsumerState<_PromotionForm> {
           padding: const EdgeInsets.all(PelinesSpacing.lg),
           children: <Widget>[
             PelinesReadOnlyField(
-              label: 'Location',
+              label: tr(context, 'Location'),
               value: widget.location.name,
             ),
             const SizedBox(height: PelinesSpacing.lg),
             _textField(
               controller: _code,
-              label: 'Code',
+              label: tr(context, 'Code'),
               capitalization: TextCapitalization.characters,
               formatters: <TextInputFormatter>[
                 LengthLimitingTextInputFormatter(40),
@@ -205,13 +206,13 @@ class _PromotionFormState extends ConsumerState<_PromotionForm> {
             ),
             DropdownButtonFormField<String>(
               initialValue: _type,
-              decoration: const InputDecoration(
-                labelText: 'Discount Type',
+              decoration:  InputDecoration(
+                labelText: tr(context, 'Discount Type'),
                 border: OutlineInputBorder(),
               ),
-              items: const <DropdownMenuItem<String>>[
-                DropdownMenuItem(value: 'percent', child: Text('Percentage')),
-                DropdownMenuItem(value: 'fixed', child: Text('Fixed amount')),
+              items:  <DropdownMenuItem<String>>[
+                DropdownMenuItem(value: 'percent', child: Text(tr(context, 'Percentage'))),
+                DropdownMenuItem(value: 'fixed', child: Text(tr(context, 'Fixed amount'))),
               ],
               onChanged: operation.isBusy
                   ? null
@@ -220,29 +221,29 @@ class _PromotionFormState extends ConsumerState<_PromotionForm> {
             const SizedBox(height: 12),
             _textField(
               controller: _value,
-              label: 'Discount',
+              label: tr(context, 'Discount'),
               prefix: _type == 'fixed' ? r'$' : null,
               suffix: _type == 'percent' ? '%' : null,
               number: true,
             ),
             DropdownButtonFormField<String>(
               initialValue: _appliesTo,
-              decoration: const InputDecoration(
-                labelText: 'Applies To',
+              decoration:  InputDecoration(
+                labelText: tr(context, 'Applies To'),
                 border: OutlineInputBorder(),
               ),
-              items: const <DropdownMenuItem<String>>[
+              items:  <DropdownMenuItem<String>>[
                 DropdownMenuItem(
                   value: 'regular',
-                  child: Text('Regular orders'),
+                  child: Text(tr(context, 'Regular orders')),
                 ),
                 DropdownMenuItem(
                   value: 'catering',
-                  child: Text('Catering orders'),
+                  child: Text(tr(context, 'Catering orders')),
                 ),
                 DropdownMenuItem(
                   value: 'both',
-                  child: Text('Regular & Catering'),
+                  child: Text(tr(context, 'Regular & Catering')),
                 ),
               ],
               onChanged: operation.isBusy
@@ -252,19 +253,19 @@ class _PromotionFormState extends ConsumerState<_PromotionForm> {
             const SizedBox(height: 12),
             _textField(
               controller: _minimum,
-              label: 'Minimum Subtotal',
+              label: tr(context, 'Minimum Subtotal'),
               prefix: r'$',
               number: true,
             ),
-            _dateTile('Start Date', _startDate, (DateTime? value) {
+            _dateTile(tr(context, 'Start Date'), _startDate, (DateTime? value) {
               setState(() => _startDate = value);
             }),
-            _dateTile('End Date', _endDate, (DateTime? value) {
+            _dateTile(tr(context, 'End Date'), _endDate, (DateTime? value) {
               setState(() => _endDate = value);
             }),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Unlimited usage'),
+              title:  Text(tr(context, 'Unlimited usage')),
               value: _unlimited,
               onChanged: operation.isBusy
                   ? null
@@ -273,25 +274,25 @@ class _PromotionFormState extends ConsumerState<_PromotionForm> {
             if (!_unlimited)
               _textField(
                 controller: _usage,
-                label: 'Usage Limit',
+                label: tr(context, 'Usage Limit'),
                 number: true,
               ),
             if (_editing) ...<Widget>[
               Text(
-                'Usage claimed',
+                tr(context, 'Usage claimed'),
                 style: Theme.of(context).textTheme.labelLarge,
               ),
               const SizedBox(height: 4),
               Text(widget.initial!.usageLabel),
               const SizedBox(height: 4),
-              const Text(
-                'Usage claimed may include orders that were created but not completed.',
+               Text(
+                tr(context, 'Usage claimed may include orders that were created but not completed.'),
               ),
               const SizedBox(height: 12),
             ],
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Active'),
+              title:  Text(tr(context, 'Active')),
               value: _active,
               onChanged: operation.isBusy
                   ? null
@@ -322,10 +323,10 @@ class _PromotionFormState extends ConsumerState<_PromotionForm> {
                   : _save,
               child: Text(
                 operation.isBusy
-                    ? 'Saving…'
+                    ? tr(context, 'Saving…')
                     : _editing
-                    ? 'Save Changes'
-                    : 'Create Promotion',
+                    ? tr(context, 'Save Changes')
+                    : tr(context, 'Create Promotion'),
               ),
             ),
             if (operation.isBusy)

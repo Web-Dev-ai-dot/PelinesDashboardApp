@@ -1,3 +1,4 @@
+import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -13,6 +14,7 @@ import '../models/order_models.dart';
 import '../models/orders_date_filter.dart';
 import '../providers/orders_providers.dart';
 import 'order_ui_helpers.dart';
+import 'order_preview_action.dart';
 
 class OrdersCalendarScreen extends ConsumerStatefulWidget {
   const OrdersCalendarScreen({super.key});
@@ -54,10 +56,10 @@ class _OrdersCalendarScreenState extends ConsumerState<OrdersCalendarScreen> {
     );
     return Scaffold(
       appBar: AdminAppBar(
-        title: const Text('Orders Calendar'),
+        title:  Text(tr(context, 'Orders Calendar')),
         actions: <Widget>[
           IconButton(
-            tooltip: 'Refresh',
+            tooltip: tr(context, 'Refresh'),
             onPressed: location.value == null
                 ? null
                 : ref.read(calendarOrdersProvider.notifier).refresh,
@@ -73,8 +75,8 @@ class _OrdersCalendarScreenState extends ConsumerState<OrdersCalendarScreen> {
         ),
         data: (Location? selected) {
           if (selected == null) {
-            return const _CalendarMessage(
-              message: 'Choose a location to view the calendar.',
+            return  _CalendarMessage(
+              message: tr(context, 'Choose a location to view the calendar.'),
             );
           }
           if (_locationId != selected.id) {
@@ -304,6 +306,8 @@ class _CalendarOrderCard extends StatelessWidget {
             Text(
               '${orderTypeLabel(order.orderType)} · ${fulfillmentLabel(order.fulfillmentType)} · ${money(order.totalCents)}',
             ),
+            const SizedBox(height: PelinesSpacing.sm),
+            OrderPreviewAction(key: ValueKey(order.id), order: order),
           ],
         ),
       ),
@@ -330,7 +334,7 @@ class _CalendarMessage extends StatelessWidget {
         Text(message, textAlign: TextAlign.center),
         if (action != null) ...<Widget>[
           const SizedBox(height: 12),
-          FilledButton(onPressed: action, child: const Text('Try again')),
+          FilledButton(onPressed: action, child:  Text(tr(context, 'Try again'))),
         ],
       ],
     ),

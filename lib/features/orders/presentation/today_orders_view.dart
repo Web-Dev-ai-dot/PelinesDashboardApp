@@ -1,3 +1,4 @@
+import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,10 +9,12 @@ import '../../../core/time/pelines_time.dart';
 import '../../locations/presentation/pelines_location_selector.dart';
 import '../../locations/models/location.dart';
 import '../models/order_models.dart';
+import '../models/order_status_action.dart';
 import '../models/orders_date_filter.dart';
 import '../providers/order_alerts_controller.dart';
 import '../providers/orders_providers.dart';
 import 'order_ui_helpers.dart';
+import 'order_preview_action.dart';
 
 class TodayOrdersView extends ConsumerStatefulWidget {
   const TodayOrdersView({
@@ -23,11 +26,11 @@ class TodayOrdersView extends ConsumerStatefulWidget {
   final VoidCallback onChangeLocation;
 
   @override
-  ConsumerState<TodayOrdersView> createState() => _TodayOrdersViewState();
+  ConsumerState<TodayOrdersView> createState() => TodayOrdersViewState();
 }
 
-class _TodayOrdersViewState extends ConsumerState<TodayOrdersView> {
-  OrderStatus? _filter = OrderStatus.pending;
+class TodayOrdersViewState extends ConsumerState<TodayOrdersView> {
+  OrderStatus? _filter = OrderStatus.confirmed;
   OrdersDateFilter _date = OrdersDateFilter.today;
   DateTime? _chosenDate;
   final _scroll = ScrollController();
@@ -54,7 +57,7 @@ class _TodayOrdersViewState extends ConsumerState<TodayOrdersView> {
     if (mounted) setState(() => _date = value);
   }
 
-  Future<void> _refresh() => _date == OrdersDateFilter.today
+  Future<void> refresh() => _date == OrdersDateFilter.today
       ? ref.read(todayOrdersProvider.notifier).refresh()
       : ref.read(calendarOrdersProvider.notifier).refresh();
 
@@ -84,72 +87,92 @@ class _TodayOrdersViewState extends ConsumerState<TodayOrdersView> {
               refreshError: state.refreshError,
             );
           });
+    // Change the view only after an explicit Accept has reconciled successfully.
+    // Polling and remote status changes never reset the selected filter.
+    for (final order in asyncOrders.value?.orders ?? <OrderSummary>[]) {
+      if (order.status != OrderStatus.pending ||
+          order.locationId != widget.location.id) {
+        continue;
+      }
+      ref.listen(orderMutationProvider(order.id), (previous, next) {
+        if (_filter == OrderStatus.pending &&
+            next.phase == OrderMutationPhase.success &&
+            next.action == OrderStatusAction.acceptOrder &&
+            next.canonicalOrder?.status == OrderStatus.confirmed) {
+          setState(() => _filter = OrderStatus.confirmed);
+        }
+      });
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         Padding(
-          padding: const EdgeInsets.fromLTRB(
-            PelinesSpacing.lg,
-            PelinesSpacing.md,
-            PelinesSpacing.sm,
-            PelinesSpacing.xs,
+          padding: const EdgeInsets.symmetric(
+            horizontal: PelinesSpacing.md,
+            vertical: PelinesSpacing.sm,
           ),
-          child: Row(
-            children: <Widget>[
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    PopupMenuButton<OrdersDateFilter>(
-                      key: const Key('orders-date-selector'),
-                      tooltip: 'Choose order date',
-                      initialValue: _date,
-                      onSelected: _selectDate,
-                      itemBuilder: (_) => [
-                        for (final value in OrdersDateFilter.values)
-                          PopupMenuItem(value: value, child: Text(value.label)),
-                      ],
-                      child: Container(
-                        constraints: const BoxConstraints(minHeight: 48),
-                        padding: const EdgeInsets.all(PelinesSpacing.xs),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: PelinesColors.border),
-                          borderRadius: BorderRadius.circular(
-                            PelinesRadius.control,
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.calendar_today_outlined),
-                            const SizedBox(width: PelinesSpacing.xs),
-                            Flexible(
-                              child: Text(
-                                _date == OrdersDateFilter.chooseDate
-                                    ? DateFormat.yMMMd().format(_chosenDate!)
-                                    : _date.label,
-                                style: Theme.of(context).textTheme.titleLarge,
-                              ),
-                            ),
-                            const Icon(Icons.expand_more),
-                          ],
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final dateSelector = PopupMenuButton<OrdersDateFilter>(
+                key: const Key('orders-date-selector'),
+                tooltip: tr(context, 'Choose order date'),
+                initialValue: _date,
+                onSelected: _selectDate,
+                itemBuilder: (_) => [
+                  for (final value in OrdersDateFilter.values)
+                    PopupMenuItem(value: value, child: Text(value.label)),
+                ],
+                child: Container(
+                  constraints: const BoxConstraints(minHeight: 48),
+                  padding: const EdgeInsets.all(PelinesSpacing.xs),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: PelinesColors.border),
+                    borderRadius: BorderRadius.circular(PelinesRadius.control),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.calendar_today_outlined),
+                      const SizedBox(width: PelinesSpacing.xs),
+                      Flexible(
+                        child: Text(
+                          _date == OrdersDateFilter.chooseDate
+                              ? DateFormat.yMMMd().format(_chosenDate!)
+                              : _date.label,
+                          style: Theme.of(context).textTheme.titleLarge,
                         ),
                       ),
-                    ),
-                    const SizedBox(height: PelinesSpacing.xs),
-                    PelinesLocationSelector(
-                      locationName: widget.location.name,
-                      onPressed: widget.onChangeLocation,
-                    ),
-                  ],
+                      const Icon(Icons.expand_more),
+                    ],
+                  ),
                 ),
-              ),
-              IconButton(
-                onPressed: _refresh,
-                tooltip: 'Refresh',
-                icon: const Icon(Icons.refresh),
-              ),
-            ],
+              );
+              final locationSelector = PelinesLocationSelector(
+                locationName: widget.location.name,
+                onPressed: widget.onChangeLocation,
+              );
+              final narrow =
+                  constraints.maxWidth < 330 ||
+                  (constraints.maxWidth < 600 &&
+                      MediaQuery.textScalerOf(context).scale(1) > 1.5);
+              return narrow
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        dateSelector,
+                        const SizedBox(height: PelinesSpacing.xs),
+                        locationSelector,
+                      ],
+                    )
+                  : Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(child: dateSelector),
+                        const SizedBox(width: PelinesSpacing.sm),
+                        Expanded(child: locationSelector),
+                      ],
+                    );
+            },
           ),
         ),
         if (_date != OrdersDateFilter.today)
@@ -157,13 +180,23 @@ class _TodayOrdersViewState extends ConsumerState<TodayOrdersView> {
             padding: const EdgeInsets.symmetric(horizontal: PelinesSpacing.lg),
             child: Text(
               _date == OrdersDateFilter.upcoming
-                  ? 'From tomorrow · Pacific time · Available orders only'
-                  : 'Pacific time · Available orders only; not a complete history',
+                  ? tr(context, 'From tomorrow · Pacific time · Available orders only')
+                  : tr(context, 'Pacific time · Available orders only; not a complete history'),
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ),
         _Filters(
           selected: _filter,
+          waitingCount:
+              asyncOrders.value?.orders
+                  .where(
+                    (order) =>
+                        order.status == OrderStatus.pending &&
+                        order.locationId == widget.location.id &&
+                        order.paymentStatus.isOperationallyPaid,
+                  )
+                  .length ??
+              0,
           onSelected: (OrderStatus? value) => setState(() => _filter = value),
         ),
         Expanded(
@@ -178,7 +211,7 @@ class _TodayOrdersViewState extends ConsumerState<TodayOrdersView> {
                         .where((OrderSummary order) => order.status == _filter)
                         .toList();
               return RefreshIndicator(
-                onRefresh: _refresh,
+                onRefresh: refresh,
                 child: CustomScrollView(
                   controller: _scroll,
                   physics: const AlwaysScrollableScrollPhysics(),
@@ -195,8 +228,8 @@ class _TodayOrdersViewState extends ConsumerState<TodayOrdersView> {
                           ),
                           actions: <Widget>[
                             TextButton(
-                              onPressed: _refresh,
-                              child: const Text('Retry'),
+                              onPressed: refresh,
+                              child:  Text(tr(context, 'Retry')),
                             ),
                           ],
                         ),
@@ -232,37 +265,69 @@ class _TodayOrdersViewState extends ConsumerState<TodayOrdersView> {
 }
 
 class _Filters extends StatelessWidget {
-  const _Filters({required this.selected, required this.onSelected});
+  const _Filters({
+    required this.selected,
+    required this.onSelected,
+    required this.waitingCount,
+  });
+  final int waitingCount;
   final OrderStatus? selected;
   final ValueChanged<OrderStatus?> onSelected;
   @override
-  Widget build(BuildContext context) => SingleChildScrollView(
-    scrollDirection: Axis.horizontal,
+  Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.symmetric(
       horizontal: PelinesSpacing.md,
       vertical: PelinesSpacing.xs,
     ),
     child: Row(
       children: <Widget>[
-        for (final (OrderStatus status, String label)
-            in <(OrderStatus, String)>[
-              (OrderStatus.pending, 'Waiting'),
-              (OrderStatus.confirmed, 'Confirmed'),
-              (OrderStatus.preparing, 'Preparing'),
-              (OrderStatus.ready, 'Ready'),
-            ]) ...<Widget>[
-          const SizedBox(width: PelinesSpacing.xs),
-          ChoiceChip(
-            label: Text(label),
-            selected: selected == status,
-            onSelected: (_) => onSelected(status),
-          ),
-        ],
-        const SizedBox(width: PelinesSpacing.xs),
         ChoiceChip(
-          label: const Text('All'),
-          selected: selected == null,
-          onSelected: (_) => onSelected(null),
+          label: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+               Text(tr(context, 'Waiting')),
+              if (waitingCount > 0) ...[
+                const SizedBox(width: PelinesSpacing.xs),
+                Semantics(
+                  label: '$waitingCount pending orders',
+                  child: Badge(
+                    key: const Key('waiting-count'),
+                    label: Text('$waitingCount'),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          selected: selected == OrderStatus.pending,
+          onSelected: (_) => onSelected(OrderStatus.pending),
+        ),
+        Expanded(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: <Widget>[
+                for (final (OrderStatus status, String label)
+                    in <(OrderStatus, String)>[
+                      (OrderStatus.confirmed, tr(context, 'Confirmed')),
+                      (OrderStatus.preparing, tr(context, 'Preparing')),
+                      (OrderStatus.ready, tr(context, 'Ready')),
+                    ]) ...<Widget>[
+                  const SizedBox(width: PelinesSpacing.xs),
+                  ChoiceChip(
+                    label: Text(label),
+                    selected: selected == status,
+                    onSelected: (_) => onSelected(status),
+                  ),
+                ],
+                const SizedBox(width: PelinesSpacing.xs),
+                ChoiceChip(
+                  label:  Text(tr(context, 'All')),
+                  selected: selected == null,
+                  onSelected: (_) => onSelected(null),
+                ),
+              ],
+            ),
+          ),
         ),
       ],
     ),
@@ -345,6 +410,8 @@ class _OrderCard extends ConsumerWidget {
                   ),
                 ],
               ),
+              const SizedBox(height: PelinesSpacing.sm),
+              OrderPreviewAction(key: ValueKey(order.id), order: order),
             ],
           ),
         ),
@@ -369,13 +436,13 @@ class _EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: PelinesSpacing.md),
           Text(
-            'No active orders',
+            tr(context, 'No active orders'),
             style: Theme.of(context).textTheme.headlineSmall,
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: PelinesSpacing.xs),
           Text(
-            'No active orders match the selected date and status.',
+            tr(context, 'No active orders match the selected date and status.'),
             style: Theme.of(context).textTheme.bodyMedium
                 ?.copyWith(color: PelinesColors.textSecondary),
             textAlign: TextAlign.center,
@@ -401,7 +468,7 @@ class _ErrorState extends StatelessWidget {
           const SizedBox(height: 12),
           Text(message, textAlign: TextAlign.center),
           const SizedBox(height: 12),
-          FilledButton(onPressed: onRetry, child: const Text('Try again')),
+          FilledButton(onPressed: onRetry, child:  Text(tr(context, 'Try again'))),
         ],
       ),
     ),

@@ -1,3 +1,4 @@
+import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -21,8 +22,8 @@ class CategoryFormScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final Location? location = ref.watch(currentLocationProvider).value;
     if (location == null) {
-      return const Scaffold(
-        body: MenuEmpty('Choose a location to edit categories.'),
+      return  Scaffold(
+        body: MenuEmpty(tr(context, 'Choose a location to edit categories.')),
       );
     }
     if (categoryId == null) {
@@ -40,7 +41,7 @@ class CategoryFormScreen extends ConsumerWidget {
           loading: () =>
               const Scaffold(body: Center(child: CircularProgressIndicator())),
           error: (Object error, StackTrace stackTrace) => Scaffold(
-            appBar: AdminAppBar(title: const Text('Edit Category')),
+            appBar: AdminAppBar(title:  Text(tr(context, 'Edit Category'))),
             body: MenuError(
               message: error.toString(),
               onRetry: () => ref.invalidate(menuCategoryDetailProvider(query)),
@@ -165,7 +166,7 @@ class _CategoryFormState extends ConsumerState<_CategoryForm> {
       child: Scaffold(
         appBar: AdminAppBar(
           title: Text(
-            widget.initial == null ? 'New Category' : 'Edit Category',
+            widget.initial == null ? tr(context, 'New Category') : tr(context, 'Edit Category'),
           ),
           leading: IconButton(
             onPressed: _leave,
@@ -182,8 +183,8 @@ class _CategoryFormState extends ConsumerState<_CategoryForm> {
                 controller: _name,
                 enabled: !mutation.isBusy,
                 maxLength: 80,
-                decoration: const InputDecoration(
-                  labelText: 'Name',
+                decoration:  InputDecoration(
+                  labelText: tr(context, 'Name'),
                   border: OutlineInputBorder(),
                 ),
               ),
@@ -192,22 +193,22 @@ class _CategoryFormState extends ConsumerState<_CategoryForm> {
                 controller: _sortOrder,
                 enabled: !mutation.isBusy,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Sort order',
+                decoration:  InputDecoration(
+                  labelText: tr(context, 'Sort order'),
                   border: OutlineInputBorder(),
                 ),
               ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Active'),
+                title:  Text(tr(context, 'Active')),
                 value: _active,
                 onChanged: mutation.isBusy
                     ? null
                     : (bool value) => setState(() => _active = value),
               ),
               if (input == null)
-                const Text(
-                  'Enter a name up to 80 characters and a non-negative sort order.',
+                 Text(
+                  tr(context, 'Enter a name up to 80 characters and a non-negative sort order.'),
                   style: TextStyle(color: PelinesColors.destructive),
                 ),
               if (mutation.message != null) Text(mutation.message!),
@@ -216,7 +217,7 @@ class _CategoryFormState extends ConsumerState<_CategoryForm> {
                 children: <Widget>[
                   OutlinedButton(
                     onPressed: mutation.isBusy ? null : _leave,
-                    child: const Text('Cancel'),
+                    child:  Text(tr(context, 'Cancel')),
                   ),
                   FilledButton(
                     onPressed: input == null || !_dirty || mutation.isBusy
@@ -232,17 +233,17 @@ class _CategoryFormState extends ConsumerState<_CategoryForm> {
                     child: PelinesButtonLabel(
                       busy: mutation.isBusy,
                       label: mutation.isBusy
-                          ? 'Saving...'
+                          ? tr(context, 'Saving...')
                           : widget.initial == null
-                          ? 'Create Category'
-                          : 'Save',
+                          ? tr(context, 'Create Category')
+                          : tr(context, 'Save'),
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 12),
-              const Text(
-                'Subcategory schedules are preserved and are not edited in this form.',
+               Text(
+                tr(context, 'Subcategory schedules are preserved and are not edited in this form.'),
               ),
             ],
           ),

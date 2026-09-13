@@ -1,3 +1,4 @@
+import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -22,13 +23,13 @@ class PrinterSettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final location = ref.watch(currentLocationProvider);
     return Scaffold(
-      appBar: AdminAppBar(title: const Text('Printer Settings')),
+      appBar: AdminAppBar(title:  Text(tr(context, 'Printer Settings'))),
       body: location.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, _) =>
-            const Center(child: Text('Current location could not be loaded.')),
+             Center(child: Text(tr(context, 'Current location could not be loaded.'))),
         data: (value) => value == null
-            ? const Center(child: Text('Choose a location on the home screen.'))
+            ?  Center(child: Text(tr(context, 'Choose a location on the home screen.')))
             : _SettingsBody(
                 key: ValueKey(value.id),
                 locationId: value.id,
@@ -131,11 +132,11 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('Printing storage could not be opened.'),
+             Text(tr(context, 'Printing storage could not be opened.')),
             TextButton(
               onPressed: () =>
                   ref.invalidate(printerControllerProvider(widget.locationId)),
-              child: const Text('Retry'),
+              child:  Text(tr(context, 'Retry')),
             ),
           ],
         ),
@@ -173,8 +174,8 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
               const SizedBox(height: 8),
               Text(
                 network
-                    ? 'Manual network printing. Check the physical ticket after sending.'
-                    : 'Simulation only. No physical printer is connected.',
+                    ? tr(context, 'Manual network printing. Check the physical ticket after sending.')
+                    : tr(context, 'Simulation only. No physical printer is connected.'),
               ),
               if (_error ?? engine.queue.lastError case final String message)
                 Padding(
@@ -188,9 +189,9 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
                 ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Enable Printing on This Tablet'),
-                subtitle: const Text(
-                  'Enabling this location disables printing for other locations on this tablet.',
+                title:  Text(tr(context, 'Enable Printing on This Tablet')),
+                subtitle:  Text(
+                  tr(context, 'Enabling this location disables printing for other locations on this tablet.'),
                 ),
                 value: config.enabled && !_dirty,
                 onChanged: _busy || _dirty
@@ -203,24 +204,24 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
                 alignment: AlignmentDirectional.centerStart,
                 itemHeight: null,
                 initialValue: _type ?? config.transport,
-                decoration: _printerSelectorDecoration('Printer Type'),
-                selectedItemBuilder: (_) => const [
-                  _PrinterSelectedLabel('Fake Printer'),
-                  _PrinterSelectedLabel('Network Epson / ESC-POS'),
+                decoration: _printerSelectorDecoration(tr(context, 'Printer Type')),
+                selectedItemBuilder: (_) =>  [
+                  _PrinterSelectedLabel(tr(context, 'Fake Printer')),
+                  _PrinterSelectedLabel(tr(context, 'Network Epson / ESC-POS')),
                 ],
-                items: const [
+                items:  [
                   DropdownMenuItem(
                     value: PrinterTransport.fake,
                     child: Padding(
                       padding: EdgeInsets.symmetric(vertical: 8),
-                      child: Text('Fake Printer'),
+                      child: Text(tr(context, 'Fake Printer')),
                     ),
                   ),
                   DropdownMenuItem(
                     value: PrinterTransport.network,
                     child: Padding(
                       padding: EdgeInsets.symmetric(vertical: 8),
-                      child: Text('Network Epson / ESC-POS'),
+                      child: Text(tr(context, 'Network Epson / ESC-POS')),
                     ),
                   ),
                 ],
@@ -258,7 +259,7 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
                   controller: _name,
                   enabled: !_busy,
                   onChanged: _edit,
-                  decoration: const InputDecoration(labelText: 'Printer Name'),
+                  decoration:  InputDecoration(labelText: tr(context, 'Printer Name')),
                 ),
                 const SizedBox(height: PelinesSpacing.md),
                 TextField(
@@ -267,8 +268,8 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
                   onChanged: _edit,
                   autocorrect: false,
                   keyboardType: TextInputType.url,
-                  decoration: const InputDecoration(
-                    labelText: 'IP address / hostname',
+                  decoration:  InputDecoration(
+                    labelText: tr(context, 'IP address / hostname'),
                     hintText: '192.168.1.50',
                   ),
                 ),
@@ -278,16 +279,16 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
                   enabled: !_busy,
                   onChanged: _edit,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Port',
-                    helperText: 'Raw TCP printing; Epson default is 9100.',
+                  decoration:  InputDecoration(
+                    labelText: tr(context, 'Port'),
+                    helperText: tr(context, 'Raw TCP printing; Epson default is 9100.'),
                   ),
                 ),
                 const SizedBox(height: PelinesSpacing.sm),
-                const Text(
-                  '80 mm paper, conservative Font A layout. Save changes before enabling or printing.',
+                 Text(
+                  tr(context, '80 mm paper, conservative Font A layout. Save changes before enabling or printing.'),
                 ),
-                if (_dirty) const Text('Unsaved printer settings'),
+                if (_dirty)  Text(tr(context, 'Unsaved printer settings')),
                 const SizedBox(height: PelinesSpacing.sm),
                 OutlinedButton(
                   onPressed: _busy || _networkConfig(config) == null
@@ -314,7 +315,7 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
                             });
                           }
                         }),
-                  child: const Text('Save Printer'),
+                  child:  Text(tr(context, 'Save Printer')),
                 ),
               ],
               const SizedBox(height: 12),
@@ -343,7 +344,7 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
                                 );
                               }
                             }),
-                      child: const Text('Test Connection'),
+                      child:  Text(tr(context, 'Test Connection')),
                     ),
                   if (!network)
                     FilledButton(
@@ -358,7 +359,7 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
                               }
                               engine.queue.kick();
                             }),
-                      child: const Text('Connect'),
+                      child:  Text(tr(context, 'Connect')),
                     ),
                   if (!network)
                     OutlinedButton(
@@ -370,7 +371,7 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
                           : () => _act(() async {
                               await adapter.disconnect();
                             }),
-                      child: const Text('Disconnect'),
+                      child:  Text(tr(context, 'Disconnect')),
                     ),
                   FilledButton.tonal(
                     onPressed:
@@ -382,21 +383,21 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
                               locationName: widget.locationName,
                             );
                           }),
-                    child: const Text('Test Print'),
+                    child:  Text(tr(context, 'Test Print')),
                   ),
                 ],
               ),
               const Divider(height: 32),
               Text(
-                'Automatic printing preferences',
+                tr(context, 'Automatic printing preferences'),
                 style: Theme.of(context).textTheme.titleMedium,
               ),
-              const Text(
-                'Saved for a future block. These switches do not start automatic printing.',
+               Text(
+                tr(context, 'Saved for a future block. These switches do not start automatic printing.'),
               ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Auto-print Regular ASAP'),
+                title:  Text(tr(context, 'Auto-print Regular ASAP')),
                 value: config.autoPrintRegularAsap,
                 onChanged: _busy || _dirty
                     ? null
@@ -404,7 +405,7 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
               ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Auto-print Scheduled'),
+                title:  Text(tr(context, 'Auto-print Scheduled')),
                 value: config.autoPrintScheduled,
                 onChanged: _busy || _dirty
                     ? null
@@ -415,16 +416,16 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
                 initialValue: '${config.scheduledLeadMinutes}',
                 enabled: !_busy && !_dirty,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Scheduled lead time (minutes)',
-                  helperText: '0–1440 minutes. Press Done to save.',
+                decoration:  InputDecoration(
+                  labelText: tr(context, 'Scheduled lead time (minutes)'),
+                  helperText: tr(context, '0–1440 minutes. Press Done to save.'),
                 ),
                 textInputAction: TextInputAction.done,
                 onFieldSubmitted: (value) {
                   final lead = int.tryParse(value);
                   if (lead == null || lead < 0 || lead > 1440) {
                     setState(
-                      () => _error = 'Enter a whole number from 0 to 1440.',
+                      () => _error = tr(context, 'Enter a whole number from 0 to 1440.'),
                     );
                     return;
                   }
@@ -434,12 +435,12 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
               if (!network) ...[
                 const Divider(height: 32),
                 Text(
-                  'Simulation controls',
+                  tr(context, 'Simulation controls'),
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('Simulate connection failure'),
+                  title:  Text(tr(context, 'Simulate connection failure')),
                   value: adapter.connectionFails,
                   onChanged: _busy
                       ? null
@@ -452,7 +453,7 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
                   itemHeight: null,
                   initialValue: adapter.outcome,
                   decoration: _printerSelectorDecoration(
-                    'Next simulated result',
+                    tr(context, 'Next simulated result'),
                   ),
                   selectedItemBuilder: (_) => PrintOutcome.values
                       .map((v) => _PrinterSelectedLabel(_outcomeLabel(v)))
@@ -477,19 +478,19 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
               ],
               const SizedBox(height: 20),
               Text(
-                'Print jobs',
+                tr(context, 'Print jobs'),
                 style: Theme.of(context).textTheme.titleMedium,
               ),
-              const Text(
-                'Submitted means sent, not physically confirmed. Fake Printer jobs are simulated.',
+               Text(
+                tr(context, 'Submitted means sent, not physically confirmed. Fake Printer jobs are simulated.'),
               ),
               jobs.when(
                 loading: () => const LinearProgressIndicator(),
-                error: (_, _) => const Text('Jobs could not be loaded.'),
+                error: (_, _) =>  Text(tr(context, 'Jobs could not be loaded.')),
                 data: (list) => list.isEmpty
-                    ? const Padding(
+                    ?  Padding(
                         padding: EdgeInsets.all(12),
-                        child: Text('No print jobs yet.'),
+                        child: Text(tr(context, 'No print jobs yet.')),
                       )
                     : Column(
                         children: list.reversed
@@ -520,7 +521,7 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
                                                     job.id,
                                                   ),
                                                 ),
-                                          child: const Text('Retry'),
+                                          child:  Text(tr(context, 'Retry')),
                                         )
                                       : job.status == PrintJobStatus.unknown
                                       ? TextButton(
@@ -528,7 +529,7 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
                                               ? null
                                               : () =>
                                                     _reviewUnknown(engine, job),
-                                          child: const Text('Review'),
+                                          child:  Text(tr(context, 'Review')),
                                         )
                                       : job.status == PrintJobStatus.queued
                                       ? TextButton(
@@ -539,7 +540,7 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
                                                     job.id,
                                                   ),
                                                 ),
-                                          child: const Text('Cancel'),
+                                          child:  Text(tr(context, 'Cancel')),
                                         )
                                       : null,
                                 ),
@@ -559,18 +560,18 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
     final cancel = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delivery is unknown'),
-        content: const Text(
-          'This job will not be resent. After reviewing it, you can close the job. An intentional reprint is a separate operation.',
+        title:  Text(tr(context, 'Delivery is unknown')),
+        content:  Text(
+          tr(context, 'This job will not be resent. After reviewing it, you can close the job. An intentional reprint is a separate operation.'),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Keep for review'),
+            child:  Text(tr(context, 'Keep for review')),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Close job'),
+            child:  Text(tr(context, 'Close job')),
           ),
         ],
       ),

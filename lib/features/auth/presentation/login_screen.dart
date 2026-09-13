@@ -1,3 +1,4 @@
+import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -104,7 +105,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                       CrossAxisAlignment.stretch,
                                   children: <Widget>[
                                     Text(
-                                      'Admin Dashboard',
+                                      tr(context, 'Admin Dashboard'),
                                       style: Theme.of(context)
                                           .textTheme
                                           .headlineMedium,
@@ -112,7 +113,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                     ),
                                     const SizedBox(height: PelinesSpacing.xs),
                                     Text(
-                                      'Administrator sign in',
+                                      tr(context, 'Administrator sign in'),
                                       style: Theme.of(context)
                                           .textTheme
                                           .bodyMedium
@@ -122,7 +123,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                       textAlign: TextAlign.center,
                                     ),
                                     const SizedBox(height: PelinesSpacing.xl),
-                                    const _FieldLabel('Email'),
+                                     _FieldLabel(tr(context, 'Email')),
                                     const SizedBox(height: PelinesSpacing.xs),
                                     TextFormField(
                                       controller: _emailController,
@@ -132,16 +133,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                       autofillHints: const <String>[
                                         AutofillHints.email,
                                       ],
-                                      decoration: const InputDecoration(
-                                        hintText: 'Enter your email address',
+                                      decoration:  InputDecoration(
+                                        hintText: tr(context, 'Enter your email address'),
                                       ),
                                       validator: (String? value) =>
                                           value == null || value.trim().isEmpty
-                                          ? 'Enter your email.'
+                                          ? tr(context, 'Enter your email.')
                                           : null,
                                     ),
                                     const SizedBox(height: PelinesSpacing.md),
-                                    const _FieldLabel('Password'),
+                                     _FieldLabel(tr(context, 'Password')),
                                     const SizedBox(height: PelinesSpacing.xs),
                                     TextFormField(
                                       controller: _passwordController,
@@ -155,7 +156,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                           ? null
                                           : (_) => _submit(),
                                       decoration: InputDecoration(
-                                        hintText: 'Enter your password',
+                                        hintText: tr(context, 'Enter your password'),
                                         suffixIcon: IconButton(
                                           onPressed: loading
                                               ? null
@@ -172,7 +173,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                       ),
                                       validator: (String? value) =>
                                           value == null || value.isEmpty
-                                          ? 'Enter your password.'
+                                          ? tr(context, 'Enter your password.')
                                           : null,
                                     ),
                                     if (errorMessage != null) ...<Widget>[
@@ -210,7 +211,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                                 strokeWidth: 2,
                                               ),
                                             )
-                                          : const Text('Sign In'),
+                                          :  Text(tr(context, 'Sign In')),
                                     ),
                                   ],
                                 ),

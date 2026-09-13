@@ -1,3 +1,4 @@
+import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -62,7 +63,7 @@ class _CateringDeliveryScreenState
         }
       },
       child: Scaffold(
-        appBar: AdminAppBar(title: const Text('Catering Delivery')),
+        appBar: AdminAppBar(title:  Text(tr(context, 'Catering Delivery'))),
         body: ListView(
           padding: const EdgeInsets.all(PelinesSpacing.lg),
           children: <Widget>[
@@ -76,16 +77,16 @@ class _CateringDeliveryScreenState
               ),
             ),
             const SizedBox(height: 8),
-            const Text(
-              'Catering Delivery controls delivery availability for catering orders only.',
+             Text(
+              tr(context, 'Catering Delivery controls delivery availability for catering orders only.'),
             ),
             const SizedBox(height: 20),
             SwitchListTile(
               key: const Key('catering-delivery-enabled'),
               contentPadding: EdgeInsets.zero,
-              title: const Text('Enabled'),
+              title:  Text(tr(context, 'Enabled')),
               subtitle: _initial.usesDefault && !_enabledDirty
-                  ? const Text('Using default setting')
+                  ?  Text(tr(context, 'Using default setting'))
                   : null,
               value: _enabled,
               onChanged: operation.isBusy
@@ -100,16 +101,16 @@ class _CateringDeliveryScreenState
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
-              decoration: const InputDecoration(
+              decoration:  InputDecoration(
                 prefixText: r'$ ',
-                labelText: 'Delivery fee',
+                labelText: tr(context, 'Delivery fee'),
                 border: OutlineInputBorder(),
               ),
               onChanged: (_) => setState(() {}),
             ),
             const SizedBox(height: 20),
             Text(
-              'Minimum order',
+              tr(context, 'Minimum order'),
               style: Theme.of(context).textTheme.labelLarge,
             ),
             Text(
@@ -117,15 +118,15 @@ class _CateringDeliveryScreenState
               key: const Key('catering-delivery-minimum'),
               style: Theme.of(context).textTheme.titleLarge,
             ),
-            const Text(
-              'This value is currently managed outside the mobile app.',
+             Text(
+              tr(context, 'This value is currently managed outside the mobile app.'),
             ),
             const SizedBox(height: 24),
             FilledButton(
               key: const Key('catering-delivery-save'),
               onPressed: operation.isBusy || !_dirty ? null : _save,
               child: Text(
-                operation.isBusy ? 'Saving…' : 'Save catering delivery',
+                operation.isBusy ? tr(context, 'Saving…') : tr(context, 'Save catering delivery'),
               ),
             ),
             if (operation.isBusy)

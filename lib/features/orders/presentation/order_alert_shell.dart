@@ -2,9 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
-import '../../../app/theme/pelines_tokens.dart';
+import 'new_order_alert.dart';
 import '../../auth/models/admin_session.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../locations/models/location.dart';
@@ -25,10 +24,15 @@ class _OrderAlertShellState extends ConsumerState<OrderAlertShell>
     with WidgetsBindingObserver {
   Timer? _timer;
   bool _isResumed = true;
+  RawDialogRoute<void>? _alertRoute;
+  NavigatorState? _alertNavigator;
+  String? _alertLocation;
+  late final FullscreenAlertVisibility _visibility;
 
   @override
   void initState() {
     super.initState();
+    _visibility = ref.read(fullscreenOrderAlertVisibleProvider.notifier);
     WidgetsBinding.instance.addObserver(this);
     _isResumed =
         WidgetsBinding.instance.lifecycleState == null ||
@@ -39,6 +43,14 @@ class _OrderAlertShellState extends ConsumerState<OrderAlertShell>
   @override
   void dispose() {
     _timer?.cancel();
+    final route = _alertRoute;
+    final navigator = _alertNavigator;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (route?.isActive == true && navigator?.mounted == true) {
+        navigator!.removeRoute(route!);
+      }
+      _visibility.setVisible(false);
+    });
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -66,9 +78,9 @@ class _OrderAlertShellState extends ConsumerState<OrderAlertShell>
 
   @override
   Widget build(BuildContext context) {
-    final AsyncValue<Location?> location = ref.watch(currentLocationProvider);
+    ref.watch(currentLocationProvider);
     ref.watch(todayOrdersProvider);
-    final AsyncValue<OrderAlertsState> alerts = ref.watch(orderAlertsProvider);
+    ref.watch(orderAlertsProvider);
 
     ref.listen<AsyncValue<TodayOrdersState>>(todayOrdersProvider, (_, next) {
       final Location? selected = ref.read(currentLocationProvider).value;
@@ -98,112 +110,60 @@ class _OrderAlertShellState extends ConsumerState<OrderAlertShell>
       }
     });
 
-    final OrderAlertsState? alertState = alerts.value;
-    final bool showBanner =
-        location.value?.id == alertState?.locationId &&
-        (alertState?.unseenCount ?? 0) > 0;
-    return Stack(
-      children: <Widget>[
-        widget.child,
-        if (showBanner)
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(
-                PelinesSpacing.sm,
-                PelinesSpacing.xs,
-                PelinesSpacing.sm,
-                0,
-              ),
-              child: Align(
-                alignment: Alignment.topCenter,
-                child: _NewOrdersBanner(
-                  count: alertState!.unseenCount,
-                  onView: () =>
-                      context.push('/app/orders/${alertState.unseenIds.first}'),
-                ),
-              ),
-            ),
-          ),
-      ],
+    WidgetsBinding.instance.addPostFrameCallback((_) => _syncAlert());
+    return widget.child;
+  }
+
+  void _syncAlert() {
+    if (!mounted) return;
+    final location = ref.read(currentLocationProvider).value;
+    final alerts = ref.read(orderAlertsProvider).value;
+    if (_alertRoute != null) {
+      if (location?.id != _alertLocation ||
+          alerts?.locationId != _alertLocation) {
+        _closeAlert();
+      }
+      return;
+    }
+    if (!_isResumed ||
+        location == null ||
+        alerts?.locationId != location.id ||
+        alerts!.unseenIds.isEmpty) {
+      return;
+    }
+    final container = ProviderScope.containerOf(context);
+    final navigator = Navigator.of(context, rootNavigator: true);
+    final route = RawDialogRoute<void>(
+      barrierDismissible: false,
+      barrierColor: Colors.black54,
+      transitionDuration: Duration.zero,
+      pageBuilder: (_, _, _) => UncontrolledProviderScope(
+        container: container,
+        child: NewOrderAlertQueue(location: location, onEmpty: _closeAlert),
+      ),
+    );
+    _alertRoute = route;
+    _alertLocation = location.id;
+    _alertNavigator = navigator;
+    _visibility.setVisible(true);
+    unawaited(
+      navigator.push(route).whenComplete(() {
+        if (_alertRoute == route) {
+          _alertRoute = null;
+          _alertLocation = null;
+          _visibility.setVisible(false);
+        }
+      }),
     );
   }
-}
 
-class _NewOrdersBanner extends StatelessWidget {
-  const _NewOrdersBanner({required this.count, required this.onView});
-
-  final int count;
-  final VoidCallback onView;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      key: const Key('new-orders-banner'),
-      constraints: const BoxConstraints(maxWidth: 560),
-      decoration: BoxDecoration(
-        color: PelinesColors.brandYellowSoft,
-        border: Border.all(color: PelinesColors.brandYellow),
-        borderRadius: BorderRadius.circular(PelinesRadius.prominentCard),
-        boxShadow: PelinesShadows.prominent,
-      ),
-      child: Material(
-        color: PelinesColors.card.withValues(alpha: 0),
-        borderRadius: BorderRadius.circular(PelinesRadius.prominentCard),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            PelinesSpacing.sm,
-            PelinesSpacing.xs,
-            PelinesSpacing.xs,
-            PelinesSpacing.xs,
-          ),
-          child: Row(
-            children: <Widget>[
-              Container(
-                width: 40,
-                height: 40,
-                decoration: const BoxDecoration(
-                  color: PelinesColors.brandPrimary,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.notifications_active_outlined,
-                  color: PelinesColors.card,
-                ),
-              ),
-              const SizedBox(width: PelinesSpacing.sm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Text(
-                      count == 1 ? 'New order' : 'New orders',
-                      style: Theme.of(context).textTheme.titleMedium
-                          ?.copyWith(fontWeight: FontWeight.w700),
-                    ),
-                    Text(
-                      count == 1
-                          ? '1 order needs your attention.'
-                          : '$count orders need your attention.',
-                      style: Theme.of(context).textTheme.bodySmall
-                          ?.copyWith(color: PelinesColors.textSecondary),
-                    ),
-                  ],
-                ),
-              ),
-              TextButton(
-                key: const Key('view-new-order'),
-                onPressed: onView,
-                style: TextButton.styleFrom(
-                  foregroundColor: PelinesColors.brandPrimary,
-                  minimumSize: const Size(64, 48),
-                ),
-                child: const Text('View'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+  void _closeAlert() {
+    final route = _alertRoute;
+    _alertRoute = null;
+    _alertLocation = null;
+    _visibility.setVisible(false);
+    if (route?.isActive == true && _alertNavigator?.mounted == true) {
+      _alertNavigator!.removeRoute(route!);
+    }
   }
 }

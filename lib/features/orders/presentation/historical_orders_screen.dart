@@ -1,3 +1,4 @@
+import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -38,15 +39,15 @@ class _HistoricalOrdersScreenState
       HistoricalOrdersKind.cancelled => ref.watch(cancelledOrdersProvider),
     };
     final String title = widget.kind == HistoricalOrdersKind.completed
-        ? 'Completed Orders'
-        : 'Cancelled Orders';
+        ? tr(context, 'Completed Orders')
+        : tr(context, 'Cancelled Orders');
 
     return Scaffold(
       appBar: AdminAppBar(
         title: Text(title),
         actions: <Widget>[
           IconButton(
-            tooltip: 'Refresh',
+            tooltip: tr(context, 'Refresh'),
             onPressed: location.value == null ? null : () => _refresh(ref),
             icon: const Icon(Icons.refresh),
           ),
@@ -60,10 +61,10 @@ class _HistoricalOrdersScreenState
         ),
         data: (Location? selected) {
           if (selected == null) {
-            return const Center(
+            return  Center(
               child: Padding(
                 padding: EdgeInsets.all(24),
-                child: Text('Choose a location to view orders.'),
+                child: Text(tr(context, 'Choose a location to view orders.')),
               ),
             );
           }
@@ -234,23 +235,23 @@ class _HistoryFilterBar extends StatelessWidget {
       children: <Widget>[
         _MenuFilter<HistoryDateFilter>(
           label: switch (filters.date) {
-            HistoryDateFilter.allLoaded => 'All loaded',
-            HistoryDateFilter.today => 'Today',
-            HistoryDateFilter.last7Days => 'Last 7 days',
-            HistoryDateFilter.last30Days => 'Last 30 days',
+            HistoryDateFilter.allLoaded => tr(context, 'All loaded'),
+            HistoryDateFilter.today => tr(context, 'Today'),
+            HistoryDateFilter.last7Days => tr(context, 'Last 7 days'),
+            HistoryDateFilter.last30Days => tr(context, 'Last 30 days'),
           },
           values: HistoryDateFilter.values,
           valueLabel: (value) => switch (value) {
-            HistoryDateFilter.allLoaded => 'All loaded',
-            HistoryDateFilter.today => 'Today',
-            HistoryDateFilter.last7Days => 'Last 7 days',
-            HistoryDateFilter.last30Days => 'Last 30 days',
+            HistoryDateFilter.allLoaded => tr(context, 'All loaded'),
+            HistoryDateFilter.today => tr(context, 'Today'),
+            HistoryDateFilter.last7Days => tr(context, 'Last 7 days'),
+            HistoryDateFilter.last30Days => tr(context, 'Last 30 days'),
           },
           onSelected: (value) => onChanged(filters.copyWith(date: value)),
         ),
         _MenuFilter<OrderType?>(
           label: filters.orderType == null
-              ? 'All types'
+              ? tr(context, 'All types')
               : orderTypeLabel(filters.orderType!),
           values: const <OrderType?>[
             null,
@@ -258,14 +259,14 @@ class _HistoryFilterBar extends StatelessWidget {
             OrderType.catering,
           ],
           valueLabel: (value) =>
-              value == null ? 'All types' : orderTypeLabel(value),
+              value == null ? tr(context, 'All types') : orderTypeLabel(value),
           onSelected: (value) => onChanged(
             filters.copyWith(orderType: value, clearOrderType: value == null),
           ),
         ),
         _MenuFilter<FulfillmentType?>(
           label: filters.fulfillment == null
-              ? 'All fulfillment'
+              ? tr(context, 'All fulfillment')
               : fulfillmentLabel(filters.fulfillment!),
           values: const <FulfillmentType?>[
             null,
@@ -273,7 +274,7 @@ class _HistoryFilterBar extends StatelessWidget {
             FulfillmentType.delivery,
           ],
           valueLabel: (value) =>
-              value == null ? 'All fulfillment' : fulfillmentLabel(value),
+              value == null ? tr(context, 'All fulfillment') : fulfillmentLabel(value),
           onSelected: (value) => onChanged(
             filters.copyWith(
               fulfillment: value,
@@ -284,7 +285,7 @@ class _HistoryFilterBar extends StatelessWidget {
         if (showPayment)
           _MenuFilter<PaymentStatus?>(
             label: filters.payment == null
-                ? 'All payments'
+                ? tr(context, 'All payments')
                 : paymentStatusLabel(filters.payment!),
             values: const <PaymentStatus?>[
               null,
@@ -294,13 +295,13 @@ class _HistoryFilterBar extends StatelessWidget {
               PaymentStatus.unpaid,
             ],
             valueLabel: (value) =>
-                value == null ? 'All payments' : paymentStatusLabel(value),
+                value == null ? tr(context, 'All payments') : paymentStatusLabel(value),
             onSelected: (value) => onChanged(
               filters.copyWith(payment: value, clearPayment: value == null),
             ),
           ),
         if (!filters.isClear)
-          TextButton(onPressed: onClear, child: const Text('Clear filters')),
+          TextButton(onPressed: onClear, child:  Text(tr(context, 'Clear filters'))),
       ],
     ),
   );
@@ -350,8 +351,8 @@ class _HistoricalOrderCard extends StatelessWidget {
     final String? terminalLabel = order.deliveredAt == null
         ? null
         : order.fulfillmentType == FulfillmentType.pickup
-        ? 'Picked up'
-        : 'Delivered';
+        ? tr(context, 'Picked up')
+        : tr(context, 'Delivered');
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       clipBehavior: Clip.antiAlias,
@@ -445,7 +446,7 @@ class _HistoryError extends StatelessWidget {
           const SizedBox(height: 12),
           Text(message, textAlign: TextAlign.center),
           const SizedBox(height: 12),
-          FilledButton(onPressed: onRetry, child: const Text('Try again')),
+          FilledButton(onPressed: onRetry, child:  Text(tr(context, 'Try again'))),
         ],
       ),
     ),

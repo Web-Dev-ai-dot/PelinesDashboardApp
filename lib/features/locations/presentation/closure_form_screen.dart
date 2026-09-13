@@ -1,3 +1,4 @@
+import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -50,7 +51,7 @@ class _ClosureFormScreenState extends ConsumerState<ClosureFormScreen> {
     final ClosureSaveState operation = ref.watch(closureSaveProvider);
     return Scaffold(
       appBar: AdminAppBar(
-        title: Text(widget.closure == null ? 'Add Closure' : 'Edit Closure'),
+        title: Text(widget.closure == null ? tr(context, 'Add Closure') : tr(context, 'Edit Closure')),
       ),
       body: PelinesPageBody(
         child: ListView(
@@ -66,21 +67,21 @@ class _ClosureFormScreenState extends ConsumerState<ClosureFormScreen> {
               ),
             ),
             const SizedBox(height: 4),
-            const Text('Temporary closure for regular online orders'),
+             Text(tr(context, 'Temporary closure for regular online orders')),
             const SizedBox(height: 24),
             TextField(
               key: const Key('closure-reason'),
               controller: _reason,
               enabled: !operation.isBusy,
-              decoration: const InputDecoration(
-                labelText: 'Reason (optional)',
+              decoration:  InputDecoration(
+                labelText: tr(context, 'Reason (optional)'),
                 border: OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 16),
             _DateField(
               key: const Key('closure-start'),
-              label: 'Start date',
+              label: tr(context, 'Start date'),
               value: _start,
               enabled: !operation.isBusy,
               onPick: (DateTime value) => setState(() => _start = value),
@@ -88,7 +89,7 @@ class _ClosureFormScreenState extends ConsumerState<ClosureFormScreen> {
             const SizedBox(height: 12),
             _DateField(
               key: const Key('closure-end'),
-              label: 'End date',
+              label: tr(context, 'End date'),
               value: _end,
               enabled: !operation.isBusy,
               onPick: (DateTime value) => setState(() => _end = value),
@@ -106,8 +107,8 @@ class _ClosureFormScreenState extends ConsumerState<ClosureFormScreen> {
               controller: _notes,
               enabled: !operation.isBusy,
               maxLines: 3,
-              decoration: const InputDecoration(
-                labelText: 'Notes',
+              decoration:  InputDecoration(
+                labelText: tr(context, 'Notes'),
                 border: OutlineInputBorder(),
               ),
             ),
@@ -115,9 +116,9 @@ class _ClosureFormScreenState extends ConsumerState<ClosureFormScreen> {
             SwitchListTile(
               key: const Key('closure-active'),
               contentPadding: EdgeInsets.zero,
-              title: const Text('Active'),
-              subtitle: const Text(
-                'Inactive closures remain saved but do not block regular orders.',
+              title:  Text(tr(context, 'Active')),
+              subtitle:  Text(
+                tr(context, 'Inactive closures remain saved but do not block regular orders.'),
               ),
               value: _active,
               onChanged: operation.isBusy
@@ -128,7 +129,7 @@ class _ClosureFormScreenState extends ConsumerState<ClosureFormScreen> {
             FilledButton(
               key: const Key('closure-save'),
               onPressed: operation.isBusy ? null : _save,
-              child: Text(operation.isBusy ? 'Saving…' : 'Save closure'),
+              child: Text(operation.isBusy ? tr(context, 'Saving…') : tr(context, 'Save closure')),
             ),
             if (operation.isBusy) ...<Widget>[
               const SizedBox(height: 12),

@@ -1,3 +1,4 @@
+import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -17,7 +18,7 @@ class AccountScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final AsyncValue<AdminSession?> session = ref.watch(authControllerProvider);
     return Scaffold(
-      appBar: AdminAppBar(title: const Text('Account')),
+      appBar: AdminAppBar(title:  Text(tr(context, 'Account'))),
       body: session.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (Object error, StackTrace stack) => _AccountError(
@@ -27,7 +28,7 @@ class AccountScreen extends ConsumerWidget {
         data: (AdminSession? value) {
           if (value == null || value.email == null || value.email!.isEmpty) {
             return _AccountError(
-              message: 'Your authenticated email is unavailable. Please sign in again.',
+              message: tr(context, 'Your authenticated email is unavailable. Please sign in again.'),
               onRetry: ref.read(authControllerProvider.notifier).retrySession,
             );
           }
@@ -49,20 +50,20 @@ class _AccountContent extends ConsumerWidget {
       child: ListView(
         padding: const EdgeInsets.all(PelinesSpacing.lg),
         children: <Widget>[
-          const PelinesSectionHeading('Profile'),
+           PelinesSectionHeading(tr(context, 'Profile')),
           const SizedBox(height: PelinesSpacing.xs),
           Card(
             child: Padding(
               padding: const EdgeInsets.all(PelinesSpacing.md),
               child: Column(
                 children: <Widget>[
-                  _ProfileRow('Full name', _display(profile.fullName)),
+                  _ProfileRow(tr(context, 'Full name'), _display(profile.fullName)),
                   const Divider(),
-                  _ProfileRow('Phone', _display(profile.phone)),
+                  _ProfileRow(tr(context, 'Phone'), _display(profile.phone)),
                   const Divider(),
-                  _ProfileRow('Email', session.email!, helper: 'Read-only'),
+                  _ProfileRow(tr(context, 'Email'), session.email!, helper: tr(context, 'Read-only')),
                   const Divider(),
-                  const _ProfileRow('Role', 'Admin', helper: 'Read-only'),
+                   _ProfileRow(tr(context, 'Role'), tr(context, 'Admin'), helper: tr(context, 'Read-only')),
                 ],
               ),
             ),
@@ -78,7 +79,7 @@ class _AccountContent extends ConsumerWidget {
               ),
             ),
             icon: const Icon(Icons.edit_outlined),
-            label: const Text('Edit Profile'),
+            label:  Text(tr(context, 'Edit Profile')),
           ),
         ],
       ),
@@ -143,7 +144,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       },
       child: Scaffold(
         appBar: AdminAppBar(
-          title: const Text('Edit Profile'),
+          title:  Text(tr(context, 'Edit Profile')),
           leading: IconButton(
             onPressed: operation.isBusy ? null : _leave,
             icon: const Icon(Icons.arrow_back),
@@ -158,8 +159,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                 controller: _name,
                 enabled: !operation.isBusy,
                 maxLength: 120,
-                decoration: const InputDecoration(
-                  labelText: 'Full name',
+                decoration:  InputDecoration(
+                  labelText: tr(context, 'Full name'),
                   border: OutlineInputBorder(),
                 ),
               ),
@@ -170,15 +171,15 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                 enabled: !operation.isBusy,
                 maxLength: 40,
                 keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(
-                  labelText: 'Phone',
+                decoration:  InputDecoration(
+                  labelText: tr(context, 'Phone'),
                   border: OutlineInputBorder(),
                 ),
               ),
               const SizedBox(height: PelinesSpacing.sm),
-              PelinesReadOnlyField(label: 'Email', value: widget.email),
+              PelinesReadOnlyField(label: tr(context, 'Email'), value: widget.email),
               const SizedBox(height: PelinesSpacing.sm),
-              const PelinesReadOnlyField(label: 'Role', value: 'Admin'),
+               PelinesReadOnlyField(label: tr(context, 'Role'), value: tr(context, 'Admin')),
               const SizedBox(height: PelinesSpacing.xl),
               if (desired.message != null)
                 Padding(
@@ -206,7 +207,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                 onPressed: operation.isBusy || !desired.isValid || !_dirty
                     ? null
                     : _save,
-                child: Text(operation.isBusy ? 'Saving...' : 'Save Changes'),
+                child: Text(operation.isBusy ? tr(context, 'Saving...') : tr(context, 'Save Changes')),
               ),
               if (operation.isBusy)
                 const Padding(
@@ -352,7 +353,7 @@ class _AccountError extends StatelessWidget {
           const SizedBox(height: 12),
           Text(message, textAlign: TextAlign.center),
           const SizedBox(height: 16),
-          FilledButton(onPressed: onRetry, child: const Text('Try again')),
+          FilledButton(onPressed: onRetry, child:  Text(tr(context, 'Try again'))),
         ],
       ),
     ),
