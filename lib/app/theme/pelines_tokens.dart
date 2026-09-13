@@ -40,6 +40,13 @@ abstract final class PelinesRadius {
   static const double pill = 999;
 }
 
+abstract final class PelinesLayout {
+  static const double compactWidth = 600;
+  static const double contentMaxWidth = 760;
+  static const double labelPairMinWidth = 400;
+  static const double touchTarget = 48;
+}
+
 abstract final class PelinesShadows {
   static const List<BoxShadow> subtle = <BoxShadow>[
     BoxShadow(color: Color(0x14000000), blurRadius: 12, offset: Offset(0, 3)),
@@ -53,6 +60,11 @@ abstract final class PelinesShadows {
 abstract final class PelinesTypography {
   static const String bodyFamily = 'Work Sans';
   static const String headingFamily = 'Bree Serif';
+
+  static TextStyle? pageTitle(TextTheme theme) => theme.titleLarge?.copyWith(
+    fontFamily: bodyFamily,
+    fontWeight: FontWeight.w700,
+  );
 
   static TextTheme textTheme(TextTheme base) {
     final TextTheme body = base.apply(

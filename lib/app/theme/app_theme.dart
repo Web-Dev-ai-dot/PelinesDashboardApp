@@ -68,7 +68,10 @@ abstract final class AppTheme {
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          minimumSize: const Size(48, 48),
+          minimumSize: const Size(
+            PelinesLayout.touchTarget,
+            PelinesLayout.touchTarget,
+          ),
           backgroundColor: PelinesColors.brandPrimary,
           foregroundColor: PelinesColors.card,
           disabledBackgroundColor: PelinesColors.brandPrimarySoft,
@@ -83,7 +86,10 @@ abstract final class AppTheme {
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          minimumSize: const Size(48, 48),
+          minimumSize: const Size(
+            PelinesLayout.touchTarget,
+            PelinesLayout.touchTarget,
+          ),
           foregroundColor: PelinesColors.textPrimary,
           side: const BorderSide(color: PelinesColors.border),
           textStyle: const TextStyle(
@@ -91,6 +97,22 @@ abstract final class AppTheme {
             fontWeight: FontWeight.w600,
           ),
           shape: const StadiumBorder(),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          minimumSize: const Size(
+            PelinesLayout.touchTarget,
+            PelinesLayout.touchTarget,
+          ),
+        ),
+      ),
+      iconButtonTheme: IconButtonThemeData(
+        style: IconButton.styleFrom(
+          minimumSize: const Size(
+            PelinesLayout.touchTarget,
+            PelinesLayout.touchTarget,
+          ),
         ),
       ),
       switchTheme: SwitchThemeData(
@@ -155,7 +177,8 @@ abstract final class AppTheme {
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: false,
-        titleTextStyle: textTheme.headlineSmall,
+        titleTextStyle: PelinesTypography.pageTitle(textTheme),
+        titleSpacing: PelinesSpacing.md,
       ),
     );
   }

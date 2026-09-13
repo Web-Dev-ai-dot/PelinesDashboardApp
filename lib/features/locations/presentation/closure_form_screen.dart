@@ -51,88 +51,90 @@ class _ClosureFormScreenState extends ConsumerState<ClosureFormScreen> {
       appBar: AppBar(
         title: Text(widget.closure == null ? 'Add Closure' : 'Edit Closure'),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(PelinesSpacing.lg),
-        children: <Widget>[
-          Align(
-            alignment: Alignment.centerLeft,
-            child: PelinesStateBadge(
-              label: widget.location.name,
-              foreground: PelinesColors.brandPrimary,
-              background: PelinesColors.brandPrimarySoft,
-              icon: Icons.storefront_outlined,
+      body: PelinesPageBody(
+        child: ListView(
+          padding: const EdgeInsets.all(PelinesSpacing.lg),
+          children: <Widget>[
+            Align(
+              alignment: Alignment.centerLeft,
+              child: PelinesStateBadge(
+                label: widget.location.name,
+                foreground: PelinesColors.brandPrimary,
+                background: PelinesColors.brandPrimarySoft,
+                icon: Icons.storefront_outlined,
+              ),
             ),
-          ),
-          const SizedBox(height: 4),
-          const Text('Temporary closure for regular online orders'),
-          const SizedBox(height: 24),
-          TextField(
-            key: const Key('closure-reason'),
-            controller: _reason,
-            enabled: !operation.isBusy,
-            decoration: const InputDecoration(
-              labelText: 'Reason (optional)',
-              border: OutlineInputBorder(),
+            const SizedBox(height: 4),
+            const Text('Temporary closure for regular online orders'),
+            const SizedBox(height: 24),
+            TextField(
+              key: const Key('closure-reason'),
+              controller: _reason,
+              enabled: !operation.isBusy,
+              decoration: const InputDecoration(
+                labelText: 'Reason (optional)',
+                border: OutlineInputBorder(),
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
-          _DateField(
-            key: const Key('closure-start'),
-            label: 'Start date',
-            value: _start,
-            enabled: !operation.isBusy,
-            onPick: (DateTime value) => setState(() => _start = value),
-          ),
-          const SizedBox(height: 12),
-          _DateField(
-            key: const Key('closure-end'),
-            label: 'End date',
-            value: _end,
-            enabled: !operation.isBusy,
-            onPick: (DateTime value) => setState(() => _end = value),
-          ),
-          if (_dateError != null) ...<Widget>[
-            const SizedBox(height: 8),
-            Text(
-              _dateError!,
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            const SizedBox(height: 16),
+            _DateField(
+              key: const Key('closure-start'),
+              label: 'Start date',
+              value: _start,
+              enabled: !operation.isBusy,
+              onPick: (DateTime value) => setState(() => _start = value),
             ),
-          ],
-          const SizedBox(height: 16),
-          TextField(
-            key: const Key('closure-notes'),
-            controller: _notes,
-            enabled: !operation.isBusy,
-            maxLines: 3,
-            decoration: const InputDecoration(
-              labelText: 'Notes',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 8),
-          SwitchListTile(
-            key: const Key('closure-active'),
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Active'),
-            subtitle: const Text(
-              'Inactive closures remain saved but do not block regular orders.',
-            ),
-            value: _active,
-            onChanged: operation.isBusy
-                ? null
-                : (bool value) => setState(() => _active = value),
-          ),
-          const SizedBox(height: 20),
-          FilledButton(
-            key: const Key('closure-save'),
-            onPressed: operation.isBusy ? null : _save,
-            child: Text(operation.isBusy ? 'Saving…' : 'Save closure'),
-          ),
-          if (operation.isBusy) ...<Widget>[
             const SizedBox(height: 12),
-            const LinearProgressIndicator(),
+            _DateField(
+              key: const Key('closure-end'),
+              label: 'End date',
+              value: _end,
+              enabled: !operation.isBusy,
+              onPick: (DateTime value) => setState(() => _end = value),
+            ),
+            if (_dateError != null) ...<Widget>[
+              const SizedBox(height: 8),
+              Text(
+                _dateError!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ],
+            const SizedBox(height: 16),
+            TextField(
+              key: const Key('closure-notes'),
+              controller: _notes,
+              enabled: !operation.isBusy,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                labelText: 'Notes',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 8),
+            SwitchListTile(
+              key: const Key('closure-active'),
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Active'),
+              subtitle: const Text(
+                'Inactive closures remain saved but do not block regular orders.',
+              ),
+              value: _active,
+              onChanged: operation.isBusy
+                  ? null
+                  : (bool value) => setState(() => _active = value),
+            ),
+            const SizedBox(height: 20),
+            FilledButton(
+              key: const Key('closure-save'),
+              onPressed: operation.isBusy ? null : _save,
+              child: Text(operation.isBusy ? 'Saving…' : 'Save closure'),
+            ),
+            if (operation.isBusy) ...<Widget>[
+              const SizedBox(height: 12),
+              const LinearProgressIndicator(),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -244,11 +246,14 @@ class _DateField extends StatelessWidget {
     child: Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: <Widget>[
-        Text(
-          value == null
-              ? label
-              : '$label: ${DateFormat.yMMMd().format(value!)}',
+        Expanded(
+          child: Text(
+            value == null
+                ? label
+                : '$label: ${DateFormat.yMMMd().format(value!)}',
+          ),
         ),
+        const SizedBox(width: PelinesSpacing.sm),
         const Icon(Icons.calendar_today_outlined),
       ],
     ),

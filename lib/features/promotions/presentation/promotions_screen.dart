@@ -75,13 +75,26 @@ class _PromotionList extends StatelessWidget {
     if (local.isEmpty && global.isEmpty) {
       return RefreshIndicator(
         onRefresh: onRefresh,
-        child: ListView(
+        child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
-          children: const <Widget>[
-            SizedBox(height: 180),
-            Icon(Icons.local_offer_outlined, size: 52),
-            SizedBox(height: 16),
-            Center(child: Text('No promotions available for this location.')),
+          slivers: const [
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: Padding(
+                padding: EdgeInsets.all(PelinesSpacing.xl),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.local_offer_outlined, size: 52),
+                    SizedBox(height: PelinesSpacing.md),
+                    Text(
+                      'No promotions available for this location.',
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
       );

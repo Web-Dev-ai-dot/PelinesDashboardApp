@@ -44,50 +44,52 @@ class _AccountContent extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final Profile profile = session.profile;
-    return ListView(
-      padding: const EdgeInsets.all(PelinesSpacing.lg),
-      children: <Widget>[
-        const PelinesSectionHeading('Profile'),
-        const SizedBox(height: PelinesSpacing.xs),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(PelinesSpacing.md),
-            child: Column(
-              children: <Widget>[
-                _ProfileRow('Full name', _display(profile.fullName)),
-                const Divider(),
-                _ProfileRow('Phone', _display(profile.phone)),
-                const Divider(),
-                _ProfileRow('Email', session.email!, helper: 'Read-only'),
-                const Divider(),
-                const _ProfileRow('Role', 'Admin', helper: 'Read-only'),
-              ],
+    return PelinesPageBody(
+      child: ListView(
+        padding: const EdgeInsets.all(PelinesSpacing.lg),
+        children: <Widget>[
+          const PelinesSectionHeading('Profile'),
+          const SizedBox(height: PelinesSpacing.xs),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(PelinesSpacing.md),
+              child: Column(
+                children: <Widget>[
+                  _ProfileRow('Full name', _display(profile.fullName)),
+                  const Divider(),
+                  _ProfileRow('Phone', _display(profile.phone)),
+                  const Divider(),
+                  _ProfileRow('Email', session.email!, helper: 'Read-only'),
+                  const Divider(),
+                  const _ProfileRow('Role', 'Admin', helper: 'Read-only'),
+                ],
+              ),
             ),
           ),
-        ),
-        const SizedBox(height: PelinesSpacing.md),
-        FilledButton.icon(
-          key: const Key('edit-profile'),
-          onPressed: () => Navigator.push<void>(
-            context,
-            MaterialPageRoute<void>(
-              builder: (_) =>
-                  EditProfileScreen(profile: profile, email: session.email!),
+          const SizedBox(height: PelinesSpacing.md),
+          FilledButton.icon(
+            key: const Key('edit-profile'),
+            onPressed: () => Navigator.push<void>(
+              context,
+              MaterialPageRoute<void>(
+                builder: (_) =>
+                    EditProfileScreen(profile: profile, email: session.email!),
+              ),
             ),
+            icon: const Icon(Icons.edit_outlined),
+            label: const Text('Edit Profile'),
           ),
-          icon: const Icon(Icons.edit_outlined),
-          label: const Text('Edit Profile'),
-        ),
-        const SizedBox(height: PelinesSpacing.xxl),
-        const Divider(),
-        const SizedBox(height: PelinesSpacing.md),
-        OutlinedButton.icon(
-          key: const Key('account-log-out'),
-          onPressed: () => _confirmLogout(context, ref),
-          icon: const Icon(Icons.logout),
-          label: const Text('Log Out'),
-        ),
-      ],
+          const SizedBox(height: PelinesSpacing.xxl),
+          const Divider(),
+          const SizedBox(height: PelinesSpacing.md),
+          OutlinedButton.icon(
+            key: const Key('account-log-out'),
+            onPressed: () => _confirmLogout(context, ref),
+            icon: const Icon(Icons.logout),
+            label: const Text('Log Out'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -184,66 +186,72 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
             icon: const Icon(Icons.arrow_back),
           ),
         ),
-        body: ListView(
-          padding: const EdgeInsets.all(PelinesSpacing.lg),
-          children: <Widget>[
-            TextField(
-              key: const Key('profile-full-name'),
-              controller: _name,
-              enabled: !operation.isBusy,
-              maxLength: 120,
-              decoration: const InputDecoration(
-                labelText: 'Full name',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: PelinesSpacing.sm),
-            TextField(
-              key: const Key('profile-phone'),
-              controller: _phone,
-              enabled: !operation.isBusy,
-              maxLength: 40,
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(
-                labelText: 'Phone',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: PelinesSpacing.sm),
-            PelinesReadOnlyField(label: 'Email', value: widget.email),
-            const SizedBox(height: PelinesSpacing.sm),
-            const PelinesReadOnlyField(label: 'Role', value: 'Admin'),
-            const SizedBox(height: PelinesSpacing.xl),
-            if (desired.message != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Text(
-                  desired.message!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+        body: PelinesPageBody(
+          child: ListView(
+            padding: const EdgeInsets.all(PelinesSpacing.lg),
+            children: <Widget>[
+              TextField(
+                key: const Key('profile-full-name'),
+                controller: _name,
+                enabled: !operation.isBusy,
+                maxLength: 120,
+                decoration: const InputDecoration(
+                  labelText: 'Full name',
+                  border: OutlineInputBorder(),
                 ),
               ),
-            if (operation.phase == ProfileMutationPhase.error &&
-                operation.message != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Text(
-                  operation.message!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+              const SizedBox(height: PelinesSpacing.sm),
+              TextField(
+                key: const Key('profile-phone'),
+                controller: _phone,
+                enabled: !operation.isBusy,
+                maxLength: 40,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(
+                  labelText: 'Phone',
+                  border: OutlineInputBorder(),
                 ),
               ),
-            FilledButton(
-              key: const Key('profile-save'),
-              onPressed: operation.isBusy || !desired.isValid || !_dirty
-                  ? null
-                  : _save,
-              child: Text(operation.isBusy ? 'Saving...' : 'Save Changes'),
-            ),
-            if (operation.isBusy)
-              const Padding(
-                padding: EdgeInsets.only(top: 12),
-                child: LinearProgressIndicator(),
+              const SizedBox(height: PelinesSpacing.sm),
+              PelinesReadOnlyField(label: 'Email', value: widget.email),
+              const SizedBox(height: PelinesSpacing.sm),
+              const PelinesReadOnlyField(label: 'Role', value: 'Admin'),
+              const SizedBox(height: PelinesSpacing.xl),
+              if (desired.message != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Text(
+                    desired.message!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ),
+              if (operation.phase == ProfileMutationPhase.error &&
+                  operation.message != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Text(
+                    operation.message!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ),
+              FilledButton(
+                key: const Key('profile-save'),
+                onPressed: operation.isBusy || !desired.isValid || !_dirty
+                    ? null
+                    : _save,
+                child: Text(operation.isBusy ? 'Saving...' : 'Save Changes'),
               ),
-          ],
+              if (operation.isBusy)
+                const Padding(
+                  padding: EdgeInsets.only(top: 12),
+                  child: LinearProgressIndicator(),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -335,26 +343,29 @@ class _ProfileRow extends StatelessWidget {
   final String? helper;
 
   @override
-  Widget build(BuildContext context) => ListTile(
-    contentPadding: EdgeInsets.zero,
-    title: Text(
-      label.toUpperCase(),
-      style: Theme.of(context).textTheme.labelSmall
-          ?.copyWith(color: PelinesColors.textSecondary, letterSpacing: 0.5),
-    ),
-    subtitle: helper == null
-        ? null
-        : Text(
-            helper!,
-            style: const TextStyle(color: PelinesColors.textSecondary),
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: PelinesSpacing.xs),
+    child: PelinesLabelValueRow(
+      label: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label.toUpperCase(),
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: PelinesColors.textSecondary,
+              letterSpacing: 0.5,
+            ),
           ),
-    trailing: SizedBox(
-      width: MediaQuery.sizeOf(context).width * 0.45,
-      child: Text(
+          if (helper != null)
+            Text(
+              helper!,
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: PelinesColors.textSecondary),
+            ),
+        ],
+      ),
+      value: Text(
         value,
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-        textAlign: TextAlign.end,
         style: Theme.of(context).textTheme.bodyLarge
             ?.copyWith(fontWeight: FontWeight.w600),
       ),

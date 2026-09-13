@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/theme/pelines_components.dart';
 import '../../../app/theme/pelines_tokens.dart';
 import '../../../core/api/api_exception.dart';
 import '../../../core/time/pelines_time.dart';
@@ -497,25 +498,11 @@ class _OrderActions extends StatelessWidget {
             onPressed: busy ? null : onPressed,
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 12),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  if (busy) ...<Widget>[
-                    const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                    const SizedBox(width: 10),
-                  ],
-                  Text(
-                    busy
-                        ? (mutation.action ?? action).progressLabelFor(
-                            fulfillment,
-                          )
-                        : action.labelFor(fulfillment),
-                  ),
-                ],
+              child: PelinesButtonLabel(
+                busy: busy,
+                label: busy
+                    ? (mutation.action ?? action).progressLabelFor(fulfillment)
+                    : action.labelFor(fulfillment),
               ),
             ),
           ),
@@ -637,28 +624,17 @@ class _InternalNotesEditorState extends ConsumerState<_InternalNotesEditor> {
           ),
           const SizedBox(height: 10),
         ],
-        Row(
-          mainAxisAlignment: MainAxisAlignment.end,
+        PelinesActionBar(
           children: <Widget>[
             if (notes.phase == OrderNotesPhase.saved) ...<Widget>[
               const Text('Saved', key: Key('notes-saved')),
-              const SizedBox(width: 12),
             ],
             FilledButton(
               key: const Key('save-internal-notes'),
               onPressed: canSave ? _save : null,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  if (notes.isBusy) ...<Widget>[
-                    const SizedBox.square(
-                      dimension: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                    const SizedBox(width: 8),
-                  ],
-                  Text(notes.isBusy ? 'Saving...' : 'Save notes'),
-                ],
+              child: PelinesButtonLabel(
+                busy: notes.isBusy,
+                label: notes.isBusy ? 'Saving...' : 'Save notes',
               ),
             ),
           ],
@@ -828,33 +804,15 @@ class _Row extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.symmetric(vertical: PelinesSpacing.xxs),
-    child: LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints constraints) {
-        final Text labelWidget = Text(
-          label,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: PelinesColors.textSecondary,
-            fontWeight: FontWeight.w600,
-          ),
-        );
-        if (constraints.maxWidth < 320) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              labelWidget,
-              const SizedBox(height: PelinesSpacing.xxs),
-              Text(value),
-            ],
-          );
-        }
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            SizedBox(width: 120, child: labelWidget),
-            Expanded(child: Text(value)),
-          ],
-        );
-      },
+    child: PelinesLabelValueRow(
+      label: Text(
+        label,
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          color: PelinesColors.textSecondary,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      value: Text(value),
     ),
   );
 }
@@ -867,27 +825,25 @@ class _MoneyRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.symmetric(vertical: PelinesSpacing.xxs),
-    child: Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: <Widget>[
-        Text(
-          label,
-          style: emphasized
-              ? Theme.of(context).textTheme.titleMedium
-                    ?.copyWith(fontWeight: FontWeight.w700)
-              : null,
-        ),
-        Text(
-          money(cents),
-          style: emphasized
-              ? Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: PelinesColors.brandPrimary,
-                  fontFamily: PelinesTypography.bodyFamily,
-                  fontWeight: FontWeight.w700,
-                )
-              : null,
-        ),
-      ],
+    child: PelinesLabelValueRow(
+      alignValueEnd: true,
+      label: Text(
+        label,
+        style: emphasized
+            ? Theme.of(context).textTheme.titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w700)
+            : null,
+      ),
+      value: Text(
+        money(cents),
+        style: emphasized
+            ? Theme.of(context).textTheme.titleLarge?.copyWith(
+                color: PelinesColors.brandPrimary,
+                fontFamily: PelinesTypography.bodyFamily,
+                fontWeight: FontWeight.w700,
+              )
+            : null,
+      ),
     ),
   );
 }

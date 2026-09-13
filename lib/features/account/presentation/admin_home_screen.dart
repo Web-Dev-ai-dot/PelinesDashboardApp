@@ -22,10 +22,7 @@ class AdminHomeScreen extends ConsumerWidget {
       appBar: AppBar(
         title: Text(
           'Pelines Admin',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            fontFamily: PelinesTypography.bodyFamily,
-            fontWeight: FontWeight.w700,
-          ),
+          style: PelinesTypography.pageTitle(Theme.of(context).textTheme),
         ),
         actions: <Widget>[
           PopupMenuButton<String>(

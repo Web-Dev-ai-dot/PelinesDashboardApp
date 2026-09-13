@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/theme/pelines_components.dart';
 import '../../../app/theme/pelines_tokens.dart';
 import '../../locations/providers/locations_providers.dart';
 import '../data/menu_repository.dart';
@@ -428,35 +429,30 @@ class _ModifierScaffold extends StatelessWidget {
           icon: const Icon(Icons.arrow_back),
         ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(PelinesSpacing.lg),
-        children: <Widget>[
-          ...children,
-          if (message != null) Text(message!),
-          const SizedBox(height: 12),
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: OutlinedButton(
+      body: PelinesPageBody(
+        child: ListView(
+          padding: const EdgeInsets.all(PelinesSpacing.lg),
+          children: <Widget>[
+            ...children,
+            if (message != null) Text(message!),
+            const SizedBox(height: 12),
+            PelinesActionBar(
+              children: <Widget>[
+                OutlinedButton(
                   onPressed: busy ? null : () => _leave(context),
                   child: const Text('Cancel'),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: FilledButton(
+                FilledButton(
                   onPressed: busy ? null : onSave,
-                  child: busy
-                      ? const SizedBox.square(
-                          dimension: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Text(saveLabel),
+                  child: PelinesButtonLabel(
+                    busy: busy,
+                    label: busy ? 'Saving...' : saveLabel,
+                  ),
                 ),
-              ),
-            ],
-          ),
-        ],
+              ],
+            ),
+          ],
+        ),
       ),
     ),
   );

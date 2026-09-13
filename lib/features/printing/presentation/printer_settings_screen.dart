@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/theme/pelines_components.dart';
 import '../../../app/theme/pelines_tokens.dart';
 import '../../../core/time/pelines_time.dart';
 import '../../locations/providers/locations_providers.dart';
@@ -160,374 +161,393 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
         final adapter = engine.adapter;
         final status = adapter.printer.status;
         final jobs = ref.watch(printJobsProvider(widget.locationId));
-        return Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 760),
-            child: ListView(
-              padding: const EdgeInsets.all(PelinesSpacing.lg),
-              children: [
-                Text(
-                  widget.locationName,
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  network
-                      ? 'Manual network printing. Check the physical ticket after sending.'
-                      : 'Simulation only. No physical printer is connected.',
-                ),
-                if (_error ?? engine.queue.lastError case final String message)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    child: Text(
-                      message,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
+        return PelinesPageBody(
+          child: ListView(
+            padding: const EdgeInsets.all(PelinesSpacing.lg),
+            children: [
+              Text(
+                widget.locationName,
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                network
+                    ? 'Manual network printing. Check the physical ticket after sending.'
+                    : 'Simulation only. No physical printer is connected.',
+              ),
+              if (_error ?? engine.queue.lastError case final String message)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Text(
+                    message,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
                     ),
                   ),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Enable Printing on This Tablet'),
-                  subtitle: const Text(
-                    'Enabling this location disables printing for other locations on this tablet.',
-                  ),
-                  value: config.enabled && !_dirty,
-                  onChanged: _busy || _dirty
-                      ? null
-                      : (v) => _save(config.copyWith(enabled: v)),
                 ),
-                DropdownButtonFormField<PrinterTransport>(
-                  initialValue: _type ?? config.transport,
-                  decoration: const InputDecoration(labelText: 'Printer Type'),
-                  items: const [
-                    DropdownMenuItem(
-                      value: PrinterTransport.fake,
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Enable Printing on This Tablet'),
+                subtitle: const Text(
+                  'Enabling this location disables printing for other locations on this tablet.',
+                ),
+                value: config.enabled && !_dirty,
+                onChanged: _busy || _dirty
+                    ? null
+                    : (v) => _save(config.copyWith(enabled: v)),
+              ),
+              DropdownButtonFormField<PrinterTransport>(
+                isExpanded: true,
+                isDense: true,
+                alignment: AlignmentDirectional.centerStart,
+                itemHeight: null,
+                initialValue: _type ?? config.transport,
+                decoration: _printerSelectorDecoration('Printer Type'),
+                selectedItemBuilder: (_) => const [
+                  _PrinterSelectedLabel('Fake Printer'),
+                  _PrinterSelectedLabel('Network Epson / ESC-POS'),
+                ],
+                items: const [
+                  DropdownMenuItem(
+                    value: PrinterTransport.fake,
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
                       child: Text('Fake Printer'),
                     ),
-                    DropdownMenuItem(
-                      value: PrinterTransport.network,
+                  ),
+                  DropdownMenuItem(
+                    value: PrinterTransport.network,
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
                       child: Text('Network Epson / ESC-POS'),
                     ),
-                  ],
-                  onChanged: _busy
-                      ? null
-                      : (type) async {
-                          if (type == null) return;
-                          setState(() {
-                            _type = type;
-                            _dirty = true;
-                            _connectionMessage = null;
-                          });
-                          if (type == PrinterTransport.fake) {
-                            await _act(() async {
-                              await ref
-                                  .read(
-                                    printerControllerProvider(widget.locationId)
-                                        .notifier,
-                                  )
-                                  .save(
-                                    config.copyWith(
-                                      printerId: 'fake',
-                                      transport: type,
-                                      enabled: false,
-                                    ),
-                                  );
-                              if (mounted) setState(() => _dirty = false);
-                            });
-                          }
-                        },
-                ),
-                if (network) ...[
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _name,
-                    enabled: !_busy,
-                    onChanged: _edit,
-                    decoration: const InputDecoration(
-                      labelText: 'Printer Name',
-                    ),
                   ),
-                  TextField(
-                    controller: _host,
-                    enabled: !_busy,
-                    onChanged: _edit,
-                    autocorrect: false,
-                    keyboardType: TextInputType.url,
-                    decoration: const InputDecoration(
-                      labelText: 'IP address / hostname',
-                      hintText: '192.168.1.50',
-                    ),
-                  ),
-                  TextField(
-                    controller: _port,
-                    enabled: !_busy,
-                    onChanged: _edit,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Port',
-                      helperText: 'Raw TCP printing; Epson default is 9100.',
-                    ),
-                  ),
-                  const Text(
-                    '80 mm paper, conservative Font A layout. Save changes before enabling or printing.',
-                  ),
-                  if (_dirty) const Text('Unsaved printer settings'),
-                  OutlinedButton(
-                    onPressed: _busy || _networkConfig(config) == null
-                        ? null
-                        : () => _act(() async {
-                            final draft = _networkConfig(config)!;
+                ],
+                onChanged: _busy
+                    ? null
+                    : (type) async {
+                        if (type == null) return;
+                        setState(() {
+                          _type = type;
+                          _dirty = true;
+                          _connectionMessage = null;
+                        });
+                        if (type == PrinterTransport.fake) {
+                          await _act(() async {
                             await ref
                                 .read(
                                   printerControllerProvider(widget.locationId)
                                       .notifier,
                                 )
                                 .save(
-                                  draft.copyWith(
-                                    enabled:
-                                        config.transport ==
-                                            PrinterTransport.network &&
-                                        config.enabled,
+                                  config.copyWith(
+                                    printerId: 'fake',
+                                    transport: type,
+                                    enabled: false,
                                   ),
                                 );
-                            if (mounted) {
-                              setState(() {
-                                _dirty = false;
-                                _connectionMessage = null;
-                              });
-                            }
-                          }),
-                    child: const Text('Save Printer'),
-                  ),
-                ],
+                            if (mounted) setState(() => _dirty = false);
+                          });
+                        }
+                      },
+              ),
+              if (network) ...[
                 const SizedBox(height: 12),
-                Text(
-                  network
-                      ? 'Connection status: ${_connectionMessage ?? 'Not tested'}'
-                      : 'Status: ${status.name}',
+                TextField(
+                  controller: _name,
+                  enabled: !_busy,
+                  onChanged: _edit,
+                  decoration: const InputDecoration(labelText: 'Printer Name'),
                 ),
-                Wrap(
-                  spacing: 12,
-                  children: [
-                    if (network)
-                      FilledButton(
-                        onPressed:
-                            _busy ||
-                                _networkConfig(config) == null ||
-                                engine.queue.isSending
-                            ? null
-                            : () => _act(() async {
-                                final result = await engine
-                                    .createAdapter(_networkConfig(config)!)
-                                    .connect();
-                                if (mounted) {
-                                  setState(
-                                    () => _connectionMessage = result.message,
-                                  );
-                                }
-                              }),
-                        child: const Text('Test Connection'),
-                      ),
-                    if (!network)
-                      FilledButton(
-                        onPressed: _busy || status == PrinterStatus.connected
-                            ? null
-                            : () => _act(() async {
-                                final connecting = adapter.connect();
-                                setState(() {});
-                                final result = await connecting;
-                                if (result.message != null && mounted) {
-                                  setState(() => _error = result.message);
-                                }
-                                engine.queue.kick();
-                              }),
-                        child: const Text('Connect'),
-                      ),
-                    if (!network)
-                      OutlinedButton(
-                        onPressed:
-                            _busy ||
-                                engine.queue.isSending ||
-                                status != PrinterStatus.connected
-                            ? null
-                            : () => _act(() async {
-                                await adapter.disconnect();
-                              }),
-                        child: const Text('Disconnect'),
-                      ),
-                    FilledButton.tonal(
-                      onPressed:
-                          _busy || _dirty || !config.enabled || !config.isValid
-                          ? null
-                          : () => _act(() async {
-                              await engine.service.queueTestPrint(
-                                widget.locationId,
-                                locationName: widget.locationName,
-                              );
-                            }),
-                      child: const Text('Test Print'),
-                    ),
-                  ],
+                const SizedBox(height: PelinesSpacing.md),
+                TextField(
+                  controller: _host,
+                  enabled: !_busy,
+                  onChanged: _edit,
+                  autocorrect: false,
+                  keyboardType: TextInputType.url,
+                  decoration: const InputDecoration(
+                    labelText: 'IP address / hostname',
+                    hintText: '192.168.1.50',
+                  ),
                 ),
-                const Divider(height: 32),
-                Text(
-                  'Automatic printing preferences',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const Text(
-                  'Saved for a future block. These switches do not start automatic printing.',
-                ),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Auto-print Regular ASAP'),
-                  value: config.autoPrintRegularAsap,
-                  onChanged: _busy || _dirty
-                      ? null
-                      : (v) => _save(config.copyWith(autoPrintRegularAsap: v)),
-                ),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Auto-print Scheduled'),
-                  value: config.autoPrintScheduled,
-                  onChanged: _busy || _dirty
-                      ? null
-                      : (v) => _save(config.copyWith(autoPrintScheduled: v)),
-                ),
-                TextFormField(
-                  key: ValueKey(config.scheduledLeadMinutes),
-                  initialValue: '${config.scheduledLeadMinutes}',
-                  enabled: !_busy && !_dirty,
+                const SizedBox(height: PelinesSpacing.md),
+                TextField(
+                  controller: _port,
+                  enabled: !_busy,
+                  onChanged: _edit,
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
-                    labelText: 'Scheduled lead time (minutes)',
-                    helperText: '0–1440 minutes. Press Done to save.',
+                    labelText: 'Port',
+                    helperText: 'Raw TCP printing; Epson default is 9100.',
                   ),
-                  textInputAction: TextInputAction.done,
-                  onFieldSubmitted: (value) {
-                    final lead = int.tryParse(value);
-                    if (lead == null || lead < 0 || lead > 1440) {
-                      setState(
-                        () => _error = 'Enter a whole number from 0 to 1440.',
-                      );
-                      return;
-                    }
-                    unawaited(
-                      _save(config.copyWith(scheduledLeadMinutes: lead)),
-                    );
-                  },
                 ),
-                if (!network) ...[
-                  const Divider(height: 32),
-                  Text(
-                    'Simulation controls',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Simulate connection failure'),
-                    value: adapter.connectionFails,
-                    onChanged: _busy
-                        ? null
-                        : (v) => setState(() => adapter.connectionFails = v),
-                  ),
-                  DropdownButtonFormField<PrintOutcome>(
-                    initialValue: adapter.outcome,
-                    decoration: const InputDecoration(
-                      labelText: 'Next simulated result',
-                    ),
-                    items: PrintOutcome.values
-                        .map(
-                          (v) => DropdownMenuItem(
-                            value: v,
-                            child: Text(_outcomeLabel(v)),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: _busy
-                        ? null
-                        : (v) {
-                            if (v != null) setState(() => adapter.outcome = v);
-                          },
-                  ),
-                ],
-                const SizedBox(height: 20),
-                Text(
-                  'Print jobs',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
+                const SizedBox(height: PelinesSpacing.sm),
                 const Text(
-                  'Submitted means sent, not physically confirmed. Fake Printer jobs are simulated.',
+                  '80 mm paper, conservative Font A layout. Save changes before enabling or printing.',
                 ),
-                jobs.when(
-                  loading: () => const LinearProgressIndicator(),
-                  error: (_, _) => const Text('Jobs could not be loaded.'),
-                  data: (list) => list.isEmpty
-                      ? const Padding(
-                          padding: EdgeInsets.all(12),
-                          child: Text('No print jobs yet.'),
-                        )
-                      : Column(
-                          children: list.reversed
-                              .map(
-                                (job) => Card(
-                                  child: ListTile(
-                                    title: Text(
-                                      '${job.ticket.orderNumber} · ${job.purpose.name} · ${_statusLabel(job.status)}',
-                                    ),
-                                    subtitle: Text(
-                                      '${PelinesTime.formatDateTime(job.createdAt)} · Attempts: ${job.attemptCount}${job.lastError == null ? '' : '\n${job.lastError}'}',
-                                    ),
-                                    trailing:
-                                        job.status ==
-                                            PrintJobStatus.failedBeforeSend
-                                        ? TextButton(
-                                            onPressed:
-                                                _busy ||
-                                                    _dirty ||
-                                                    job.printerId !=
-                                                        engine
-                                                            .selectedAdapter
-                                                            .printer
-                                                            .id
-                                                ? null
-                                                : () => _act(
-                                                    () => engine.queue.retry(
-                                                      job.id,
-                                                    ),
-                                                  ),
-                                            child: const Text('Retry'),
-                                          )
-                                        : job.status == PrintJobStatus.unknown
-                                        ? TextButton(
-                                            onPressed: _busy
-                                                ? null
-                                                : () => _reviewUnknown(
-                                                    engine,
-                                                    job,
-                                                  ),
-                                            child: const Text('Review'),
-                                          )
-                                        : job.status == PrintJobStatus.queued
-                                        ? TextButton(
-                                            onPressed: _busy
-                                                ? null
-                                                : () => _act(
-                                                    () => engine.queue.cancel(
-                                                      job.id,
-                                                    ),
-                                                  ),
-                                            child: const Text('Cancel'),
-                                          )
-                                        : null,
-                                  ),
-                                ),
+                if (_dirty) const Text('Unsaved printer settings'),
+                const SizedBox(height: PelinesSpacing.sm),
+                OutlinedButton(
+                  onPressed: _busy || _networkConfig(config) == null
+                      ? null
+                      : () => _act(() async {
+                          final draft = _networkConfig(config)!;
+                          await ref
+                              .read(
+                                printerControllerProvider(widget.locationId)
+                                    .notifier,
                               )
-                              .toList(),
-                        ),
+                              .save(
+                                draft.copyWith(
+                                  enabled:
+                                      config.transport ==
+                                          PrinterTransport.network &&
+                                      config.enabled,
+                                ),
+                              );
+                          if (mounted) {
+                            setState(() {
+                              _dirty = false;
+                              _connectionMessage = null;
+                            });
+                          }
+                        }),
+                  child: const Text('Save Printer'),
                 ),
               ],
-            ),
+              const SizedBox(height: 12),
+              Text(
+                network
+                    ? 'Connection status: ${_connectionMessage ?? 'Not tested'}'
+                    : 'Status: ${status.name}',
+              ),
+              const SizedBox(height: PelinesSpacing.xs),
+              PelinesActionBar(
+                children: [
+                  if (network)
+                    FilledButton(
+                      onPressed:
+                          _busy ||
+                              _networkConfig(config) == null ||
+                              engine.queue.isSending
+                          ? null
+                          : () => _act(() async {
+                              final result = await engine
+                                  .createAdapter(_networkConfig(config)!)
+                                  .connect();
+                              if (mounted) {
+                                setState(
+                                  () => _connectionMessage = result.message,
+                                );
+                              }
+                            }),
+                      child: const Text('Test Connection'),
+                    ),
+                  if (!network)
+                    FilledButton(
+                      onPressed: _busy || status == PrinterStatus.connected
+                          ? null
+                          : () => _act(() async {
+                              final connecting = adapter.connect();
+                              setState(() {});
+                              final result = await connecting;
+                              if (result.message != null && mounted) {
+                                setState(() => _error = result.message);
+                              }
+                              engine.queue.kick();
+                            }),
+                      child: const Text('Connect'),
+                    ),
+                  if (!network)
+                    OutlinedButton(
+                      onPressed:
+                          _busy ||
+                              engine.queue.isSending ||
+                              status != PrinterStatus.connected
+                          ? null
+                          : () => _act(() async {
+                              await adapter.disconnect();
+                            }),
+                      child: const Text('Disconnect'),
+                    ),
+                  FilledButton.tonal(
+                    onPressed:
+                        _busy || _dirty || !config.enabled || !config.isValid
+                        ? null
+                        : () => _act(() async {
+                            await engine.service.queueTestPrint(
+                              widget.locationId,
+                              locationName: widget.locationName,
+                            );
+                          }),
+                    child: const Text('Test Print'),
+                  ),
+                ],
+              ),
+              const Divider(height: 32),
+              Text(
+                'Automatic printing preferences',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const Text(
+                'Saved for a future block. These switches do not start automatic printing.',
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Auto-print Regular ASAP'),
+                value: config.autoPrintRegularAsap,
+                onChanged: _busy || _dirty
+                    ? null
+                    : (v) => _save(config.copyWith(autoPrintRegularAsap: v)),
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Auto-print Scheduled'),
+                value: config.autoPrintScheduled,
+                onChanged: _busy || _dirty
+                    ? null
+                    : (v) => _save(config.copyWith(autoPrintScheduled: v)),
+              ),
+              TextFormField(
+                key: ValueKey(config.scheduledLeadMinutes),
+                initialValue: '${config.scheduledLeadMinutes}',
+                enabled: !_busy && !_dirty,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Scheduled lead time (minutes)',
+                  helperText: '0–1440 minutes. Press Done to save.',
+                ),
+                textInputAction: TextInputAction.done,
+                onFieldSubmitted: (value) {
+                  final lead = int.tryParse(value);
+                  if (lead == null || lead < 0 || lead > 1440) {
+                    setState(
+                      () => _error = 'Enter a whole number from 0 to 1440.',
+                    );
+                    return;
+                  }
+                  unawaited(_save(config.copyWith(scheduledLeadMinutes: lead)));
+                },
+              ),
+              if (!network) ...[
+                const Divider(height: 32),
+                Text(
+                  'Simulation controls',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Simulate connection failure'),
+                  value: adapter.connectionFails,
+                  onChanged: _busy
+                      ? null
+                      : (v) => setState(() => adapter.connectionFails = v),
+                ),
+                DropdownButtonFormField<PrintOutcome>(
+                  isExpanded: true,
+                  isDense: true,
+                  alignment: AlignmentDirectional.centerStart,
+                  itemHeight: null,
+                  initialValue: adapter.outcome,
+                  decoration: _printerSelectorDecoration(
+                    'Next simulated result',
+                  ),
+                  selectedItemBuilder: (_) => PrintOutcome.values
+                      .map((v) => _PrinterSelectedLabel(_outcomeLabel(v)))
+                      .toList(),
+                  items: PrintOutcome.values
+                      .map(
+                        (v) => DropdownMenuItem(
+                          value: v,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: Text(_outcomeLabel(v)),
+                          ),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: _busy
+                      ? null
+                      : (v) {
+                          if (v != null) setState(() => adapter.outcome = v);
+                        },
+                ),
+              ],
+              const SizedBox(height: 20),
+              Text(
+                'Print jobs',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const Text(
+                'Submitted means sent, not physically confirmed. Fake Printer jobs are simulated.',
+              ),
+              jobs.when(
+                loading: () => const LinearProgressIndicator(),
+                error: (_, _) => const Text('Jobs could not be loaded.'),
+                data: (list) => list.isEmpty
+                    ? const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: Text('No print jobs yet.'),
+                      )
+                    : Column(
+                        children: list.reversed
+                            .map(
+                              (job) => Card(
+                                child: _PrintJobTile(
+                                  title: Text(
+                                    '${job.ticket.orderNumber} · ${job.purpose.name} · ${_statusLabel(job.status)}',
+                                  ),
+                                  subtitle: Text(
+                                    '${PelinesTime.formatDateTime(job.createdAt)} · Attempts: ${job.attemptCount}${job.lastError == null ? '' : '\n${job.lastError}'}',
+                                  ),
+                                  trailing:
+                                      job.status ==
+                                          PrintJobStatus.failedBeforeSend
+                                      ? TextButton(
+                                          onPressed:
+                                              _busy ||
+                                                  _dirty ||
+                                                  job.printerId !=
+                                                      engine
+                                                          .selectedAdapter
+                                                          .printer
+                                                          .id
+                                              ? null
+                                              : () => _act(
+                                                  () => engine.queue.retry(
+                                                    job.id,
+                                                  ),
+                                                ),
+                                          child: const Text('Retry'),
+                                        )
+                                      : job.status == PrintJobStatus.unknown
+                                      ? TextButton(
+                                          onPressed: _busy
+                                              ? null
+                                              : () =>
+                                                    _reviewUnknown(engine, job),
+                                          child: const Text('Review'),
+                                        )
+                                      : job.status == PrintJobStatus.queued
+                                      ? TextButton(
+                                          onPressed: _busy
+                                              ? null
+                                              : () => _act(
+                                                  () => engine.queue.cancel(
+                                                    job.id,
+                                                  ),
+                                                ),
+                                          child: const Text('Cancel'),
+                                        )
+                                      : null,
+                                ),
+                              ),
+                            )
+                            .toList(),
+                      ),
+              ),
+            ],
           ),
         );
       },
@@ -566,6 +586,38 @@ String _outcomeLabel(PrintOutcome outcome) => switch (outcome) {
   PrintOutcome.failedBeforeSend => 'Failed before send',
   PrintOutcome.unknown => 'Unknown',
 };
+
+InputDecoration _printerSelectorDecoration(String label) => InputDecoration(
+  labelText: label,
+  floatingLabelBehavior: FloatingLabelBehavior.always,
+  contentPadding: const EdgeInsets.symmetric(
+    horizontal: PelinesSpacing.lg,
+    vertical: PelinesSpacing.sm,
+  ),
+  constraints: const BoxConstraints(minHeight: 64),
+);
+
+/// The closed field has one line; popup options retain their complete labels.
+class _PrinterSelectedLabel extends StatelessWidget {
+  const _PrinterSelectedLabel(this.label);
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Align(
+    alignment: AlignmentDirectional.centerStart,
+    child: Tooltip(
+      message: label,
+      excludeFromSemantics: true,
+      child: Text(
+        label,
+        maxLines: 1,
+        softWrap: false,
+        overflow: TextOverflow.ellipsis,
+      ),
+    ),
+  );
+}
+
 String _statusLabel(PrintJobStatus status) => switch (status) {
   PrintJobStatus.queued => 'Queued',
   PrintJobStatus.sending => 'Sending',
@@ -575,3 +627,61 @@ String _statusLabel(PrintJobStatus status) => switch (status) {
   PrintJobStatus.unknown => 'Unknown',
   PrintJobStatus.cancelled => 'Cancelled',
 };
+
+/// Gives the job summary priority over secondary actions at narrow widths.
+class _PrintJobTile extends StatelessWidget {
+  const _PrintJobTile({
+    required this.title,
+    required this.subtitle,
+    this.trailing,
+  });
+  final Widget title;
+  final Widget subtitle;
+  final Widget? trailing;
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.all(PelinesSpacing.md),
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final summary = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            DefaultTextStyle.merge(
+              style: Theme.of(context).textTheme.titleMedium,
+              child: title,
+            ),
+            const SizedBox(height: PelinesSpacing.xs),
+            DefaultTextStyle.merge(
+              style: Theme.of(context).textTheme.bodyMedium
+                  ?.copyWith(color: PelinesColors.textSecondary),
+              child: subtitle,
+            ),
+          ],
+        );
+        final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+        if (constraints.maxWidth < PelinesLayout.compactWidth * scale) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              summary,
+              if (trailing != null) ...[
+                const SizedBox(height: PelinesSpacing.sm),
+                trailing!,
+              ],
+            ],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: summary),
+            if (trailing != null) ...[
+              const SizedBox(width: PelinesSpacing.sm),
+              trailing!,
+            ],
+          ],
+        );
+      },
+    ),
+  );
+}

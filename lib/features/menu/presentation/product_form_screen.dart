@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/theme/pelines_components.dart';
 import '../../../app/theme/pelines_tokens.dart';
 import '../../locations/models/location.dart';
 import '../../locations/providers/locations_providers.dart';
@@ -222,44 +223,41 @@ class _FormState extends ConsumerState<_Form> {
             icon: const Icon(Icons.arrow_back),
           ),
         ),
-        body: ListView(
-          padding: const EdgeInsets.all(PelinesSpacing.lg),
-          children: <Widget>[
-            Text('${widget.categoryName} · ${widget.location.name}'),
-            const SizedBox(height: 16),
-            _text(name, 'Name'),
-            _text(description, 'Description', lines: 3),
-            _text(price, 'Price', number: true),
-            _text(subcategory, 'Subcategory'),
-            _text(serves, 'Serves', number: true),
-            _text(disclaimer, 'Disclaimer', lines: 2),
-            _text(sortOrder, 'Sort order', number: true),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Available'),
-              value: available,
-              onChanged: mutation.isBusy
-                  ? null
-                  : (value) => setState(() => available = value),
-            ),
-            if (input == null)
-              const Text(
-                'Enter a name, a valid non-negative price, and valid numeric values.',
-                style: TextStyle(color: PelinesColors.destructive),
+        body: PelinesPageBody(
+          child: ListView(
+            padding: const EdgeInsets.all(PelinesSpacing.lg),
+            children: <Widget>[
+              Text('${widget.categoryName} · ${widget.location.name}'),
+              const SizedBox(height: 16),
+              _text(name, 'Name'),
+              _text(description, 'Description', lines: 3),
+              _text(price, 'Price', number: true),
+              _text(subcategory, 'Subcategory'),
+              _text(serves, 'Serves', number: true),
+              _text(disclaimer, 'Disclaimer', lines: 2),
+              _text(sortOrder, 'Sort order', number: true),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Available'),
+                value: available,
+                onChanged: mutation.isBusy
+                    ? null
+                    : (value) => setState(() => available = value),
               ),
-            if (mutation.message != null) Text(mutation.message!),
-            const SizedBox(height: 12),
-            Row(
-              children: <Widget>[
-                Expanded(
-                  child: OutlinedButton(
+              if (input == null)
+                const Text(
+                  'Enter a name, a valid non-negative price, and valid numeric values.',
+                  style: TextStyle(color: PelinesColors.destructive),
+                ),
+              if (mutation.message != null) Text(mutation.message!),
+              const SizedBox(height: 12),
+              PelinesActionBar(
+                children: <Widget>[
+                  OutlinedButton(
                     onPressed: mutation.isBusy ? null : _leave,
                     child: const Text('Cancel'),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: FilledButton(
+                  FilledButton(
                     onPressed: input == null || !dirty || mutation.isBusy
                         ? null
                         : () async {
@@ -270,19 +268,19 @@ class _FormState extends ConsumerState<_Form> {
                               Navigator.of(this.context).pop(true);
                             }
                           },
-                    child: mutation.isBusy
-                        ? const SizedBox.square(
-                            dimension: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : Text(
-                            widget.initial == null ? 'Create Product' : 'Save',
-                          ),
+                    child: PelinesButtonLabel(
+                      busy: mutation.isBusy,
+                      label: mutation.isBusy
+                          ? 'Saving...'
+                          : widget.initial == null
+                          ? 'Create Product'
+                          : 'Save',
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ],
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/theme/pelines_components.dart';
 import '../../../app/theme/pelines_tokens.dart';
 import '../../locations/models/location.dart';
 import '../../locations/providers/locations_providers.dart';
@@ -170,56 +171,53 @@ class _CategoryFormState extends ConsumerState<_CategoryForm> {
             icon: const Icon(Icons.arrow_back),
           ),
         ),
-        body: ListView(
-          padding: const EdgeInsets.all(PelinesSpacing.lg),
-          children: <Widget>[
-            Text('${widget.kind.label} - ${widget.location.name}'),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _name,
-              enabled: !mutation.isBusy,
-              maxLength: 80,
-              decoration: const InputDecoration(
-                labelText: 'Name',
-                border: OutlineInputBorder(),
+        body: PelinesPageBody(
+          child: ListView(
+            padding: const EdgeInsets.all(PelinesSpacing.lg),
+            children: <Widget>[
+              Text('${widget.kind.label} - ${widget.location.name}'),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _name,
+                enabled: !mutation.isBusy,
+                maxLength: 80,
+                decoration: const InputDecoration(
+                  labelText: 'Name',
+                  border: OutlineInputBorder(),
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _sortOrder,
-              enabled: !mutation.isBusy,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Sort order',
-                border: OutlineInputBorder(),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _sortOrder,
+                enabled: !mutation.isBusy,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Sort order',
+                  border: OutlineInputBorder(),
+                ),
               ),
-            ),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Active'),
-              value: _active,
-              onChanged: mutation.isBusy
-                  ? null
-                  : (bool value) => setState(() => _active = value),
-            ),
-            if (input == null)
-              const Text(
-                'Enter a name up to 80 characters and a non-negative sort order.',
-                style: TextStyle(color: PelinesColors.destructive),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Active'),
+                value: _active,
+                onChanged: mutation.isBusy
+                    ? null
+                    : (bool value) => setState(() => _active = value),
               ),
-            if (mutation.message != null) Text(mutation.message!),
-            const SizedBox(height: 12),
-            Row(
-              children: <Widget>[
-                Expanded(
-                  child: OutlinedButton(
+              if (input == null)
+                const Text(
+                  'Enter a name up to 80 characters and a non-negative sort order.',
+                  style: TextStyle(color: PelinesColors.destructive),
+                ),
+              if (mutation.message != null) Text(mutation.message!),
+              const SizedBox(height: 12),
+              PelinesActionBar(
+                children: <Widget>[
+                  OutlinedButton(
                     onPressed: mutation.isBusy ? null : _leave,
                     child: const Text('Cancel'),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: FilledButton(
+                  FilledButton(
                     onPressed: input == null || !_dirty || mutation.isBusy
                         ? null
                         : () async {
@@ -230,23 +228,23 @@ class _CategoryFormState extends ConsumerState<_CategoryForm> {
                               Navigator.pop(this.context, true);
                             }
                           },
-                    child: mutation.isBusy
-                        ? const SizedBox.square(
-                            dimension: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : Text(
-                            widget.initial == null ? 'Create Category' : 'Save',
-                          ),
+                    child: PelinesButtonLabel(
+                      busy: mutation.isBusy,
+                      label: mutation.isBusy
+                          ? 'Saving...'
+                          : widget.initial == null
+                          ? 'Create Category'
+                          : 'Save',
+                    ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'Subcategory schedules are preserved and are not edited in this form.',
-            ),
-          ],
+                ],
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Subcategory schedules are preserved and are not edited in this form.',
+              ),
+            ],
+          ),
         ),
       ),
     );

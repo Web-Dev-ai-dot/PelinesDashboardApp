@@ -540,18 +540,9 @@ class _Field extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 5),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        SizedBox(
-          width: 110,
-          child: Text(
-            label,
-            style: const TextStyle(fontWeight: FontWeight.w600),
-          ),
-        ),
-        Expanded(child: Text(value)),
-      ],
+    child: PelinesLabelValueRow(
+      label: Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+      value: Text(value),
     ),
   );
 }

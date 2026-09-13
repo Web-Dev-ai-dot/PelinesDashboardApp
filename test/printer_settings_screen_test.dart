@@ -13,6 +13,9 @@ import 'package:pelines_admin_app/features/printing/models/print_job.dart';
 import 'package:pelines_admin_app/features/printing/models/print_result.dart';
 import 'package:pelines_admin_app/features/printing/presentation/printer_settings_screen.dart';
 import 'package:pelines_admin_app/features/printing/providers/printing_providers.dart';
+import 'package:pelines_admin_app/features/printing/application/ticket_builder.dart';
+
+import 'order_test_data.dart';
 
 class _Location extends CurrentLocationController {
   @override
@@ -31,6 +34,193 @@ class _Location extends CurrentLocationController {
 
 void main() {
   sqfliteFfiInit();
+  for (final (width, height, scale) in <(double, double, double)>[
+    (390, 844, 1),
+    (320, 700, 2),
+    (768, 1024, 1.5),
+  ]) {
+    testWidgets('printer controls fit at $width with text scale $scale', (
+      tester,
+    ) async {
+      await tester.binding.setSurfaceSize(Size(width, height));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.runAsync(() async {
+        final runtime = PrintingRuntime(
+          await openPrintingDatabase(
+            factory: databaseFactoryFfiNoIsolate,
+            path: inMemoryDatabasePath,
+          ),
+          connector: _Connector(),
+        );
+        await runtime.start();
+        final container = ProviderContainer(
+          overrides: [
+            printingRuntimeProvider.overrideWith((ref) async => runtime),
+            currentLocationProvider.overrideWith(_Location.new),
+          ],
+        );
+        Future<void> settle() async {
+          for (var i = 0; i < 8; i++) {
+            await Future<void>.delayed(const Duration(milliseconds: 10));
+            await tester.pump();
+          }
+          expect(tester.takeException(), isNull);
+        }
+
+        Future<void> reach(Finder finder) async {
+          await tester.scrollUntilVisible(
+            finder,
+            180,
+            scrollable: find.byType(Scrollable).first,
+            maxScrolls: 80,
+          );
+          await settle();
+          expect(finder.hitTestable(), findsOneWidget);
+        }
+
+        try {
+          await tester.pumpWidget(
+            UncontrolledProviderScope(
+              container: container,
+              child: MaterialApp(
+                theme: AppTheme.light,
+                builder: (context, child) => MediaQuery(
+                  data: MediaQuery.of(context)
+                      .copyWith(textScaler: TextScaler.linear(scale)),
+                  child: child!,
+                ),
+                home: const PrinterSettingsScreen(),
+              ),
+            ),
+          );
+          await settle();
+          // Exercise the longest simulation label in both the field and popup.
+          final outcome = find.byType(DropdownButtonFormField<PrintOutcome>);
+          await reach(outcome);
+          final outcomeHeight = tester.getSize(outcome).height;
+          expect(outcomeHeight, greaterThanOrEqualTo(48));
+          final selectedOutcome = find.descendant(
+            of: outcome,
+            matching: find.text('Submitted (not physical confirmation)'),
+          );
+          expect(tester.widget<Text>(selectedOutcome).maxLines, 1);
+          expect(
+            tester.widget<Text>(selectedOutcome).overflow,
+            TextOverflow.ellipsis,
+          );
+          await tester.tap(outcome);
+          await settle();
+          await tester.tap(
+            find.text('Submitted (not physical confirmation)').last,
+          );
+          await settle();
+          // Return to the top before locating the lazily built transport field.
+          await tester.drag(find.byType(ListView).first, const Offset(0, 5000));
+          await settle();
+          final transport = find.byType(
+            DropdownButtonFormField<PrinterTransport>,
+          );
+          await reach(transport);
+          final transportHeight = tester.getSize(transport).height;
+          expect(transportHeight, closeTo(outcomeHeight, 1));
+          await tester.tap(transport);
+          await settle();
+          await tester.tap(find.text('Network Epson / ESC-POS').last);
+          await settle();
+          expect(tester.getSize(transport).height, closeTo(transportHeight, 1));
+          final selectedTransport = find.descendant(
+            of: transport,
+            matching: find.text('Network Epson / ESC-POS'),
+          );
+          expect(tester.widget<Text>(selectedTransport).maxLines, 1);
+          final chevron = find.descendant(
+            of: transport,
+            matching: find.byIcon(Icons.arrow_drop_down),
+          );
+          expect(
+            (tester.getCenter(selectedTransport).dy -
+                    tester.getCenter(chevron).dy)
+                .abs(),
+            lessThanOrEqualTo(2),
+          );
+          await reach(find.widgetWithText(TextField, 'IP address / hostname'));
+          await tester.enterText(
+            find.widgetWithText(TextField, 'IP address / hostname'),
+            '192.168.1.50',
+          );
+          await settle();
+          final probe = find.widgetWithText(FilledButton, 'Test Connection');
+          await reach(probe);
+          expect(tester.getSize(probe).height, greaterThanOrEqualTo(48));
+          await tester.tap(probe);
+          await settle();
+          await tester.scrollUntilVisible(
+            find.text('Connection status: Printer reachable'),
+            -120,
+            scrollable: find.byType(Scrollable).first,
+          );
+          await settle();
+          expect(
+            find.text('Connection status: Printer reachable'),
+            findsOneWidget,
+          );
+          await reach(find.widgetWithText(FilledButton, 'Test Print'));
+          expect(
+            tester
+                .widget<FilledButton>(
+                  find.widgetWithText(FilledButton, 'Test Print'),
+                )
+                .onPressed,
+            isNull,
+          );
+          expect(await runtime.jobs.list(), isEmpty);
+          for (final status in [
+            PrintJobStatus.failedBeforeSend,
+            PrintJobStatus.unknown,
+            PrintJobStatus.queued,
+          ]) {
+            final now = DateTime.utc(2026, 9, 12);
+            await runtime.jobs.insert(
+              PrintJob(
+                id: status.name,
+                orderId: status.name,
+                locationId: 'location-id',
+                purpose: PrintPurpose.test,
+                status: status,
+                createdAt: now,
+                updatedAt: now,
+                printerId: 'fake',
+                ticket: const TicketBuilder().build(orderDetail()),
+                lastError: 'A long connection message that must wrap without hiding the job action or overlapping its text.',
+              ),
+            );
+          }
+          await settle();
+          for (final label in ['Cancel', 'Review', 'Retry']) {
+            final action = find.widgetWithText(TextButton, label);
+            await tester.scrollUntilVisible(
+              action,
+              180,
+              scrollable: find.byType(Scrollable).first,
+              maxScrolls: 80,
+            );
+            await Scrollable.ensureVisible(
+              tester.element(action),
+              alignment: 0.5,
+            );
+            await settle();
+            expect(tester.getSize(action).height, greaterThanOrEqualTo(48));
+            expect(tester.getRect(action).bottom, lessThanOrEqualTo(height));
+          }
+        } finally {
+          await tester.pumpWidget(const SizedBox.shrink());
+          container.dispose();
+          await runtime.dispose();
+        }
+      });
+    });
+  }
+
   testWidgets(
     'network form validates, probes without job, saves and prints via queue',
     (tester) async {

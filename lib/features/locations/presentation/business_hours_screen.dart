@@ -43,42 +43,46 @@ class _BusinessHoursScreenState extends ConsumerState<BusinessHoursScreen> {
       },
       child: Scaffold(
         appBar: AppBar(title: const Text('Business Hours')),
-        body: ListView(
-          padding: const EdgeInsets.all(PelinesSpacing.lg),
-          children: <Widget>[
-            Align(
-              alignment: Alignment.centerLeft,
-              child: PelinesStateBadge(
-                label: widget.location.name,
-                foreground: PelinesColors.brandPrimary,
-                background: PelinesColors.brandPrimarySoft,
-                icon: Icons.storefront_outlined,
+        body: PelinesPageBody(
+          child: ListView(
+            padding: const EdgeInsets.all(PelinesSpacing.lg),
+            children: <Widget>[
+              Align(
+                alignment: Alignment.centerLeft,
+                child: PelinesStateBadge(
+                  label: widget.location.name,
+                  foreground: PelinesColors.brandPrimary,
+                  background: PelinesColors.brandPrimarySoft,
+                  icon: Icons.storefront_outlined,
+                ),
               ),
-            ),
-            const SizedBox(height: 4),
-            const Text('Times are recurring business times in Pacific Time.'),
-            const SizedBox(height: 8),
-            const Text(
-              'Business hours affect regular online ordering. Catering availability is handled separately.',
-            ),
-            const SizedBox(height: 4),
-            const Text(
-              'Temporary closures can override regular business hours.',
-            ),
-            const SizedBox(height: 20),
-            for (int index = 0; index < 7; index++)
-              _dayEditor(index, operation.isBusy),
-            const SizedBox(height: 20),
-            FilledButton(
-              key: const Key('business-hours-save'),
-              onPressed: operation.isBusy ? null : _save,
-              child: Text(operation.isBusy ? 'Saving…' : 'Save business hours'),
-            ),
-            if (operation.isBusy) ...<Widget>[
-              const SizedBox(height: 12),
-              const LinearProgressIndicator(),
+              const SizedBox(height: 4),
+              const Text('Times are recurring business times in Pacific Time.'),
+              const SizedBox(height: 8),
+              const Text(
+                'Business hours affect regular online ordering. Catering availability is handled separately.',
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Temporary closures can override regular business hours.',
+              ),
+              const SizedBox(height: 20),
+              for (int index = 0; index < 7; index++)
+                _dayEditor(index, operation.isBusy),
+              const SizedBox(height: 20),
+              FilledButton(
+                key: const Key('business-hours-save'),
+                onPressed: operation.isBusy ? null : _save,
+                child: Text(
+                  operation.isBusy ? 'Saving…' : 'Save business hours',
+                ),
+              ),
+              if (operation.isBusy) ...<Widget>[
+                const SizedBox(height: 12),
+                const LinearProgressIndicator(),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -102,11 +106,10 @@ class _BusinessHoursScreenState extends ConsumerState<BusinessHoursScreen> {
                   : (bool open) => _replace(index, day.copyWith(closed: !open)),
             ),
             if (!day.closed)
-              Row(
+              PelinesActionBar(
                 children: <Widget>[
-                  Expanded(child: _timeButton(index, true, day.open, busy)),
-                  const SizedBox(width: 12),
-                  Expanded(child: _timeButton(index, false, day.close, busy)),
+                  _timeButton(index, true, day.open, busy),
+                  _timeButton(index, false, day.close, busy),
                 ],
               ),
           ],

@@ -2,6 +2,122 @@ import 'package:flutter/material.dart';
 
 import 'pelines_tokens.dart';
 
+/// Uses the space left by the page, including split view and page padding.
+class PelinesActionBar extends StatelessWidget {
+  const PelinesActionBar({required this.children, super.key});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+      final stacked = constraints.maxWidth < PelinesLayout.compactWidth * scale;
+      if (stacked) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (var i = 0; i < children.length; i++) ...[
+              if (i > 0) const SizedBox(height: PelinesSpacing.sm),
+              children[i],
+            ],
+          ],
+        );
+      }
+      return Wrap(
+        spacing: PelinesSpacing.sm,
+        runSpacing: PelinesSpacing.sm,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: children,
+      );
+    },
+  );
+}
+
+class PelinesLabelValueRow extends StatelessWidget {
+  const PelinesLabelValueRow({
+    required this.label,
+    required this.value,
+    this.alignValueEnd = false,
+    super.key,
+  });
+
+  final Widget label;
+  final Widget value;
+  final bool alignValueEnd;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+      if (constraints.maxWidth < PelinesLayout.labelPairMinWidth * scale) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            label,
+            const SizedBox(height: PelinesSpacing.xxs),
+            value,
+          ],
+        );
+      }
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: label),
+          const SizedBox(width: PelinesSpacing.sm),
+          Expanded(
+            flex: 2,
+            child: alignValueEnd
+                ? Align(alignment: AlignmentDirectional.topEnd, child: value)
+                : value,
+          ),
+        ],
+      );
+    },
+  );
+}
+
+/// Constrains scrolling content without imposing a fixed height.
+class PelinesPageBody extends StatelessWidget {
+  const PelinesPageBody({required this.child, super.key});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Align(
+    alignment: Alignment.topCenter,
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(
+        maxWidth: PelinesLayout.contentMaxWidth,
+      ),
+      child: child,
+    ),
+  );
+}
+
+/// Keeps the action name readable while work is in progress.
+class PelinesButtonLabel extends StatelessWidget {
+  const PelinesButtonLabel({required this.label, this.busy = false, super.key});
+  final String label;
+  final bool busy;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    mainAxisAlignment: MainAxisAlignment.center,
+    children: [
+      if (busy) ...[
+        const SizedBox.square(
+          dimension: 18,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+        const SizedBox(width: PelinesSpacing.xs),
+      ],
+      Flexible(child: Text(label, textAlign: TextAlign.center)),
+    ],
+  );
+}
+
 class PelinesSectionHeading extends StatelessWidget {
   const PelinesSectionHeading(this.label, {super.key});
 
@@ -49,10 +165,12 @@ class PelinesStateBadge extends StatelessWidget {
           Icon(icon, size: 14, color: foreground),
           const SizedBox(width: PelinesSpacing.xxs),
         ],
-        Text(
-          label,
-          style: Theme.of(context).textTheme.labelMedium
-              ?.copyWith(color: foreground, fontWeight: FontWeight.w700),
+        Flexible(
+          child: Text(
+            label,
+            style: Theme.of(context).textTheme.labelMedium
+                ?.copyWith(color: foreground, fontWeight: FontWeight.w700),
+          ),
         ),
       ],
     ),
