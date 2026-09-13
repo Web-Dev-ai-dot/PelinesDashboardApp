@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../../app/theme/pelines_tokens.dart';
+import '../../../core/time/pelines_time.dart';
 import '../../locations/presentation/pelines_location_selector.dart';
 import '../../locations/models/location.dart';
 import '../models/order_models.dart';
+import '../models/orders_date_filter.dart';
 import '../providers/order_alerts_controller.dart';
 import '../providers/orders_providers.dart';
 import 'order_ui_helpers.dart';
@@ -24,13 +27,63 @@ class TodayOrdersView extends ConsumerStatefulWidget {
 }
 
 class _TodayOrdersViewState extends ConsumerState<TodayOrdersView> {
-  OrderStatus? _filter;
+  OrderStatus? _filter = OrderStatus.pending;
+  OrdersDateFilter _date = OrdersDateFilter.today;
+  DateTime? _chosenDate;
+  final _scroll = ScrollController();
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  Future<void> _selectDate(OrdersDateFilter value) async {
+    if (value == OrdersDateFilter.chooseDate) {
+      final now = PelinesTime.now();
+      final selected = await showDatePicker(
+        context: context,
+        initialDate: _chosenDate ?? DateTime(now.year, now.month, now.day),
+        currentDate: DateTime(now.year, now.month, now.day),
+        firstDate: DateTime(2020),
+        lastDate: DateTime(2100, 12, 31),
+      );
+      if (selected == null || !mounted) return;
+      _chosenDate = selected;
+    }
+    if (mounted) setState(() => _date = value);
+  }
+
+  Future<void> _refresh() => _date == OrdersDateFilter.today
+      ? ref.read(todayOrdersProvider.notifier).refresh()
+      : ref.read(calendarOrdersProvider.notifier).refresh();
+
+  void _retry() {
+    if (_date == OrdersDateFilter.today) {
+      ref.invalidate(todayOrdersProvider);
+    } else {
+      ref.invalidate(calendarOrdersProvider);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final AsyncValue<TodayOrdersState> asyncOrders = ref.watch(
-      todayOrdersProvider,
-    );
+    final today = ref.watch(todayOrdersProvider);
+    final AsyncValue<TodayOrdersState> asyncOrders =
+        _date == OrdersDateFilter.today
+        ? today
+        : ref.watch(calendarOrdersProvider).whenData((state) {
+            final orders = filterOrdersByDate(
+              state.orders,
+              _date,
+              chosenDate: _chosenDate,
+            )..sort(compareOperationalOrders);
+            return TodayOrdersState(
+              orders: orders,
+              isRefreshing: state.isRefreshing,
+              refreshError: state.refreshError,
+            );
+          });
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
@@ -47,9 +100,41 @@ class _TodayOrdersViewState extends ConsumerState<TodayOrdersView> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Text(
-                      'Today',
-                      style: Theme.of(context).textTheme.headlineMedium,
+                    PopupMenuButton<OrdersDateFilter>(
+                      key: const Key('orders-date-selector'),
+                      tooltip: 'Choose order date',
+                      initialValue: _date,
+                      onSelected: _selectDate,
+                      itemBuilder: (_) => [
+                        for (final value in OrdersDateFilter.values)
+                          PopupMenuItem(value: value, child: Text(value.label)),
+                      ],
+                      child: Container(
+                        constraints: const BoxConstraints(minHeight: 48),
+                        padding: const EdgeInsets.all(PelinesSpacing.xs),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: PelinesColors.border),
+                          borderRadius: BorderRadius.circular(
+                            PelinesRadius.control,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.calendar_today_outlined),
+                            const SizedBox(width: PelinesSpacing.xs),
+                            Flexible(
+                              child: Text(
+                                _date == OrdersDateFilter.chooseDate
+                                    ? DateFormat.yMMMd().format(_chosenDate!)
+                                    : _date.label,
+                                style: Theme.of(context).textTheme.titleLarge,
+                              ),
+                            ),
+                            const Icon(Icons.expand_more),
+                          ],
+                        ),
+                      ),
                     ),
                     const SizedBox(height: PelinesSpacing.xs),
                     PelinesLocationSelector(
@@ -60,14 +145,23 @@ class _TodayOrdersViewState extends ConsumerState<TodayOrdersView> {
                 ),
               ),
               IconButton(
-                onPressed: () =>
-                    ref.read(todayOrdersProvider.notifier).refresh(),
+                onPressed: _refresh,
                 tooltip: 'Refresh',
                 icon: const Icon(Icons.refresh),
               ),
             ],
           ),
         ),
+        if (_date != OrdersDateFilter.today)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: PelinesSpacing.lg),
+            child: Text(
+              _date == OrdersDateFilter.upcoming
+                  ? 'From tomorrow · Pacific time · Available orders only'
+                  : 'Pacific time · Available orders only; not a complete history',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
         _Filters(
           selected: _filter,
           onSelected: (OrderStatus? value) => setState(() => _filter = value),
@@ -75,10 +169,8 @@ class _TodayOrdersViewState extends ConsumerState<TodayOrdersView> {
         Expanded(
           child: asyncOrders.when(
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (Object error, StackTrace stack) => _ErrorState(
-              message: error.toString(),
-              onRetry: () => ref.invalidate(todayOrdersProvider),
-            ),
+            error: (Object error, StackTrace stack) =>
+                _ErrorState(message: error.toString(), onRetry: _retry),
             data: (TodayOrdersState state) {
               final List<OrderSummary> visible = _filter == null
                   ? state.orders
@@ -86,8 +178,9 @@ class _TodayOrdersViewState extends ConsumerState<TodayOrdersView> {
                         .where((OrderSummary order) => order.status == _filter)
                         .toList();
               return RefreshIndicator(
-                onRefresh: ref.read(todayOrdersProvider.notifier).refresh,
+                onRefresh: _refresh,
                 child: CustomScrollView(
+                  controller: _scroll,
                   physics: const AlwaysScrollableScrollPhysics(),
                   slivers: <Widget>[
                     if (state.isRefreshing)
@@ -102,9 +195,7 @@ class _TodayOrdersViewState extends ConsumerState<TodayOrdersView> {
                           ),
                           actions: <Widget>[
                             TextButton(
-                              onPressed: () => ref
-                                  .read(todayOrdersProvider.notifier)
-                                  .refresh(),
+                              onPressed: _refresh,
                               child: const Text('Retry'),
                             ),
                           ],
@@ -153,11 +244,6 @@ class _Filters extends StatelessWidget {
     ),
     child: Row(
       children: <Widget>[
-        ChoiceChip(
-          label: const Text('All'),
-          selected: selected == null,
-          onSelected: (_) => onSelected(null),
-        ),
         for (final (OrderStatus status, String label)
             in <(OrderStatus, String)>[
               (OrderStatus.pending, 'Waiting'),
@@ -172,6 +258,12 @@ class _Filters extends StatelessWidget {
             onSelected: (_) => onSelected(status),
           ),
         ],
+        const SizedBox(width: PelinesSpacing.xs),
+        ChoiceChip(
+          label: const Text('All'),
+          selected: selected == null,
+          onSelected: (_) => onSelected(null),
+        ),
       ],
     ),
   );
@@ -283,7 +375,7 @@ class _EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: PelinesSpacing.xs),
           Text(
-            'New orders for today will appear here.',
+            'No active orders match the selected date and status.',
             style: Theme.of(context).textTheme.bodyMedium
                 ?.copyWith(color: PelinesColors.textSecondary),
             textAlign: TextAlign.center,

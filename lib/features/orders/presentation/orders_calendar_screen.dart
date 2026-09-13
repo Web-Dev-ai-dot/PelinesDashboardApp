@@ -10,6 +10,7 @@ import '../../../core/time/pelines_time.dart';
 import '../../locations/models/location.dart';
 import '../../locations/providers/locations_providers.dart';
 import '../models/order_models.dart';
+import '../models/orders_date_filter.dart';
 import '../providers/orders_providers.dart';
 import 'order_ui_helpers.dart';
 
@@ -23,6 +24,8 @@ class OrdersCalendarScreen extends ConsumerStatefulWidget {
 
 class _OrdersCalendarScreenState extends ConsumerState<OrdersCalendarScreen> {
   late DateTime _selectedDay;
+  late DateTime _displayedMonth;
+  int _pickerRevision = 0;
   String? _locationId;
 
   @override
@@ -30,6 +33,17 @@ class _OrdersCalendarScreenState extends ConsumerState<OrdersCalendarScreen> {
     super.initState();
     final DateTime pacific = PelinesTime.now();
     _selectedDay = DateTime(pacific.year, pacific.month, pacific.day);
+    _displayedMonth = DateTime(pacific.year, pacific.month);
+  }
+
+  void _jumpToMonth(int year, int month) {
+    setState(() {
+      _selectedDay = dayInMonth(_selectedDay, year, month);
+      _displayedMonth = DateTime(year, month);
+      // CalendarDatePicker only consumes initialDate when its State is created.
+      // Recreate it for explicit jumps, never for swipe or ordinary rebuilds.
+      _pickerRevision++;
+    });
   }
 
   @override
@@ -67,6 +81,8 @@ class _OrdersCalendarScreenState extends ConsumerState<OrdersCalendarScreen> {
             _locationId = selected.id;
             final DateTime pacific = PelinesTime.now();
             _selectedDay = DateTime(pacific.year, pacific.month, pacific.day);
+            _displayedMonth = DateTime(pacific.year, pacific.month);
+            _pickerRevision++;
           }
           return orders.when(
             loading: () => const Center(child: CircularProgressIndicator()),
@@ -124,10 +140,43 @@ class _OrdersCalendarScreenState extends ConsumerState<OrdersCalendarScreen> {
               ),
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.all(PelinesSpacing.md),
+            child: Wrap(
+              spacing: PelinesSpacing.sm,
+              runSpacing: PelinesSpacing.sm,
+              children: [
+                _monthControl(
+                  label: 'Month',
+                  value: _displayedMonth.month,
+                  values: List.generate(12, (index) => index + 1),
+                  text: (month) =>
+                      DateFormat.MMMM().format(DateTime(2024, month)),
+                  onChanged: (month) =>
+                      _jumpToMonth(_displayedMonth.year, month),
+                  width: 200,
+                ),
+                _monthControl(
+                  label: 'Year',
+                  value: _displayedMonth.year,
+                  values: List.generate(81, (index) => index + 2020),
+                  text: (year) => '$year',
+                  onChanged: (year) =>
+                      _jumpToMonth(year, _displayedMonth.month),
+                  width: 132,
+                ),
+              ],
+            ),
+          ),
           CalendarDatePicker(
+            key: ValueKey('calendar-picker-$_pickerRevision'),
             initialDate: _selectedDay,
+            currentDate: PelinesTime.now(),
             firstDate: DateTime(2020),
-            lastDate: DateTime(2100),
+            lastDate: DateTime(2100, 12, 31),
+            onDisplayedMonthChanged: (value) => setState(
+              () => _displayedMonth = DateTime(value.year, value.month),
+            ),
             onDateChanged: (DateTime value) =>
                 setState(() => _selectedDay = value),
           ),
@@ -168,6 +217,44 @@ class _OrdersCalendarScreenState extends ConsumerState<OrdersCalendarScreen> {
       ),
     );
   }
+
+  Widget _monthControl({
+    required String label,
+    required int value,
+    required List<int> values,
+    required String Function(int) text,
+    required ValueChanged<int> onChanged,
+    required double width,
+  }) => SizedBox(
+    width: width,
+    child: DropdownButtonFormField<int>(
+      key: ValueKey('calendar-$label-$value'),
+      initialValue: value,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: label,
+        border: const OutlineInputBorder(),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: PelinesSpacing.sm,
+          vertical: PelinesSpacing.sm,
+        ),
+      ),
+      items: [
+        for (final option in values)
+          DropdownMenuItem(
+            value: option,
+            child: Text(
+              text(option),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+      ],
+      onChanged: (next) {
+        if (next != null) onChanged(next);
+      },
+    ),
+  );
 }
 
 String _localDayKey(DateTime value) =>

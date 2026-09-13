@@ -7,10 +7,125 @@ import 'package:pelines_admin_app/features/locations/providers/locations_provide
 import 'package:pelines_admin_app/features/orders/data/orders_repository.dart';
 import 'package:pelines_admin_app/features/orders/models/history_filters.dart';
 import 'package:pelines_admin_app/features/orders/models/order_models.dart';
+import 'package:pelines_admin_app/features/orders/models/orders_date_filter.dart';
 import 'package:pelines_admin_app/features/orders/presentation/orders_calendar_screen.dart';
 import 'package:pelines_admin_app/features/orders/providers/orders_providers.dart';
 
 void main() {
+  for (final width in [390.0, 768.0]) {
+    testWidgets('Calendar controls fit at $width with enlarged text', (
+      tester,
+    ) async {
+      await tester.binding.setSurfaceSize(Size(width, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            currentLocationProvider.overrideWith(_CurrentLocation.new),
+            ordersRepositoryProvider.overrideWithValue(_Repository()),
+          ],
+          child: MaterialApp(
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(context)
+                  .copyWith(textScaler: const TextScaler.linear(2)),
+              child: child!,
+            ),
+            home: const OrdersCalendarScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      for (final field
+          in find.byType(DropdownButtonFormField<int>).evaluate()) {
+        expect(
+          tester.getSize(find.byWidget(field.widget)).height,
+          greaterThanOrEqualTo(48),
+        );
+      }
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  test(
+    'direct month selection clamps day for leap years and year boundaries',
+    () {
+      expect(dayInMonth(DateTime(2024, 1, 31), 2024, 2), DateTime(2024, 2, 29));
+      expect(dayInMonth(DateTime(2024, 2, 29), 2025, 2), DateTime(2025, 2, 28));
+      expect(
+        dayInMonth(DateTime(2026, 12, 31), 2027, 1),
+        DateTime(2027, 1, 31),
+      );
+      expect(
+        dayInMonth(DateTime(2027, 1, 31), 2026, 12),
+        DateTime(2026, 12, 31),
+      );
+    },
+  );
+
+  testWidgets(
+    'Calendar month/year controls synchronize swipe and direct jumps',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(768, 1000));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            currentLocationProvider.overrideWith(_CurrentLocation.new),
+            ordersRepositoryProvider.overrideWithValue(_Repository()),
+          ],
+          child: const MaterialApp(home: OrdersCalendarScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+      Future<void> select(String label, String text) async {
+        final field = find.byWidgetPredicate(
+          (w) =>
+              w is DropdownButtonFormField<int> &&
+              w.decoration.labelText == label,
+        );
+        await tester.ensureVisible(field);
+        await tester.tap(field);
+        await tester.pumpAndSettle();
+        await Scrollable.ensureVisible(
+          tester.element(find.text(text).last),
+          alignment: 0.5,
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text(text).last);
+        await tester.pumpAndSettle();
+      }
+
+      CalendarDatePicker picker() =>
+          tester.widget<CalendarDatePicker>(find.byType(CalendarDatePicker));
+      await select('Year', '2024');
+      await select('Month', 'January');
+      await tester.tap(find.text('31').hitTestable());
+      await tester.pumpAndSettle();
+      await select('Month', 'February');
+      expect(picker().initialDate, DateTime(2024, 2, 29));
+      await select('Year', '2025');
+      expect(picker().initialDate, DateTime(2025, 2, 28));
+      await select('Month', 'December');
+      final beforeSwipeKey = picker().key;
+      await tester.drag(find.byType(PageView), const Offset(-600, 0));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('calendar-Month-1')), findsOneWidget);
+      expect(find.byKey(const ValueKey('calendar-Year-2026')), findsOneWidget);
+      expect(picker().key, beforeSwipeKey);
+      await select('Month', 'March');
+      expect(picker().initialDate, DateTime(2026, 3, 28));
+      expect(picker().key, isNot(beforeSwipeKey));
+      await select('Month', 'January');
+      await tester.drag(find.byType(PageView), const Offset(600, 0));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('calendar-Month-12')), findsOneWidget);
+      expect(find.byKey(const ValueKey('calendar-Year-2025')), findsOneWidget);
+      await select('Year', '2024');
+      expect(picker().initialDate, DateTime(2024, 12, 28));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   test('calendar includes only active statuses', () {
     final List<OrderSummary> result = calendarRelevantOrders(
       OrderStatus.values
