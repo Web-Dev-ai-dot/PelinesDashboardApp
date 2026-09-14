@@ -1,5 +1,9 @@
 // English source messages and their Spanish UI translations. Backend values are never catalog keys.
 const spanishCatalog = <String, String>{
+  "Language": "Idioma",
+  "navigation.completed": "Completados",
+  "navigation.cancelled": "Cancelados",
+  "navigation.operations": "Operaciones de tienda",
   " AND ": " Y ",
   "0–1440 minutes. Press Done to save.": "0–1440 minutos. Pulsa Listo para guardar.",
   "80 mm paper, conservative Font A layout. Save changes before enabling or printing.": "Papel de 80 mm, diseño conservador con fuente A. Guarda los cambios antes de activar o imprimir.",

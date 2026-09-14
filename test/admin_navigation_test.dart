@@ -1,9 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
+import 'package:pelines_admin_app/app/l10n/locale_controller.dart';
+import 'package:pelines_admin_app/app/l10n/language_toggle.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pelines_admin_app/app/navigation/admin_navigation.dart';
 import 'package:pelines_admin_app/app/theme/app_theme.dart';
+
+class _LanguageStore implements LanguageStore {
+  @override
+  Future<String?> read() async => 'en';
+  @override
+  Future<void> write(String language) async {}
+}
 
 GoRouter _router({
   String initial = '/app',
@@ -112,13 +123,24 @@ Future<void> _pump(
 }) async {
   await tester.pumpWidget(
     ProviderScope(
-      child: MaterialApp.router(
-        theme: AppTheme.light,
-        routerConfig: router,
-        builder: (context, child) => MediaQuery(
-          data: MediaQuery.of(context)
-              .copyWith(textScaler: TextScaler.linear(scale)),
-          child: child!,
+      overrides: [languageStoreProvider.overrideWithValue(_LanguageStore())],
+      child: Consumer(
+        builder: (context, ref, _) => MaterialApp.router(
+          locale: ref.watch(localeProvider),
+          supportedLocales: AdminLocalizations.supportedLocales,
+          localizationsDelegates: const [
+            AdminLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          theme: AppTheme.light,
+          routerConfig: router,
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: TextScaler.linear(scale)),
+            child: child!,
+          ),
         ),
       ),
     ),
@@ -138,6 +160,114 @@ Future<void> _tapDestination(WidgetTester tester, String name) async {
 }
 
 void main() {
+  for (final width in [390.0, 768.0, 1366.0]) {
+    testWidgets(
+      'navigation EN ES updates immediately with Language after Account at $width',
+      (tester) async {
+        await tester.binding.setSurfaceSize(Size(width, 1100));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        final router = _router();
+        addTearDown(router.dispose);
+        await _pump(tester, router, scale: width == 768 ? 2 : 1);
+        if (width < 600) {
+          await tester.tap(find.byKey(const Key('admin-open-drawer')));
+          await tester.pumpAndSettle();
+        }
+        const esLabels = [
+          'Pedidos',
+          'Calendario',
+          'Completados',
+          'Cancelados',
+          'Menú',
+          'Operaciones de tienda',
+          'Promociones',
+          'Configuración de impresora',
+          'Cuenta',
+        ];
+        for (final language in ['en', 'es', 'en']) {
+          final toggle = find.byKey(Key('language-$language'));
+          final navigationScroll = tester.state<ScrollableState>(
+            find
+                .descendant(
+                  of: find.byType(ListView),
+                  matching: find.byType(Scrollable),
+                )
+                .first,
+          );
+          navigationScroll.position.jumpTo(
+            navigationScroll.position.maxScrollExtent,
+          );
+          await tester.pumpAndSettle();
+          await Scrollable.ensureVisible(
+            tester.element(toggle),
+            alignment: 0.5,
+          );
+          await tester.pumpAndSettle();
+          await tester.tap(toggle);
+          await tester.pumpAndSettle();
+          // Spanish labels can increase the list extent with enlarged text.
+          navigationScroll.position.jumpTo(
+            navigationScroll.position.maxScrollExtent,
+          );
+          await tester.pumpAndSettle();
+          expect(router.routeInformationProvider.value.uri.path, '/app');
+          expect(
+            find.byTooltip(language == 'es' ? 'Idioma' : 'Language'),
+            findsOneWidget,
+          );
+          final account = find.byKey(const Key('nav-account'));
+          final section = find.byType(LanguageToggle);
+          expect(
+            tester.getRect(account).bottom,
+            lessThanOrEqualTo(tester.getRect(section).top),
+          );
+          final divider = find.byKey(const Key('admin-sign-out-divider'));
+          expect(
+            tester.getRect(section).bottom,
+            lessThanOrEqualTo(tester.getRect(divider).top + 1),
+          );
+          final signOut = find.byKey(const Key('admin-sign-out'));
+          expect(
+            find.descendant(
+              of: signOut,
+              matching: find.text(
+                language == 'es' ? 'Cerrar sesión' : 'Sign Out',
+              ),
+            ),
+            findsOneWidget,
+          );
+          expect(
+            tester.getRect(divider).bottom,
+            lessThanOrEqualTo(tester.getRect(signOut).top),
+          );
+          for (var i = AdminDestination.values.length - 1; i >= 0; i--) {
+            final destination = AdminDestination.values[i];
+            final item = find.byKey(Key('nav-${destination.name}'));
+            await tester.scrollUntilVisible(
+              item,
+              -160,
+              scrollable: find
+                  .descendant(
+                    of: find.byType(ListView),
+                    matching: find.byType(Scrollable),
+                  )
+                  .first,
+            );
+            expect(
+              find.descendant(
+                of: item,
+                matching: find.text(
+                  language == 'es' ? esLabels[i] : destination.label,
+                ),
+              ),
+              findsOneWidget,
+            );
+          }
+          expect(tester.takeException(), isNull);
+        }
+      },
+    );
+  }
   testWidgets('phone drawer control stays left and preserves Back', (
     tester,
   ) async {
