@@ -20,7 +20,7 @@ const spanishCatalog = <String, String>{
   "Product Sales uses item totals before order discounts; excludes tips and fees.": "Ventas del producto usa los importes de artículos antes de descuentos del pedido; excluye propinas y cargos.",
   "No products in the loaded sales.": "No hay productos en las ventas cargadas.",
   "Cancelled eligible orders / all eligible orders.": "Pedidos elegibles cancelados / total de pedidos elegibles.",
-  "Analytics": "Analíticas",
+  "Analytics": "Analítica",
   "7 Days": "7 días",
   "30 Days": "30 días",
   "90 Days": "90 días",

@@ -24,8 +24,10 @@ class AnalyticsDatasetState {
   final Object? refreshError;
 }
 
+// Keep the current dataset across navigation; build still invalidates it on
+// session/location changes. No timer or polling is introduced.
 final analyticsDatasetProvider =
-    NotifierProvider.autoDispose<
+    NotifierProvider<
       AnalyticsDatasetController,
       AsyncValue<AnalyticsDatasetState?>
     >(AnalyticsDatasetController.new);

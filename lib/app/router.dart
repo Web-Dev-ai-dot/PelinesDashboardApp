@@ -9,6 +9,7 @@ import '../features/printing/presentation/printing_shell.dart';
 
 import '../features/account/presentation/admin_home_screen.dart';
 import '../features/account/presentation/account_screen.dart';
+import '../features/analytics/presentation/analytics_screen.dart';
 import '../features/auth/models/admin_session.dart';
 import '../features/auth/presentation/login_screen.dart';
 import '../features/auth/providers/auth_providers.dart';
@@ -96,6 +97,10 @@ final routerProvider = Provider<GoRouter>((Ref ref) {
             builder: (BuildContext context, GoRouterState state) =>
                 const AdminHomeScreen(),
             routes: <RouteBase>[
+              GoRoute(
+                path: 'analytics',
+                builder: (_, _) => const AnalyticsScreen(),
+              ),
               GoRoute(
                 path: 'printing',
                 builder: (_, _) => const PrinterSettingsScreen(),

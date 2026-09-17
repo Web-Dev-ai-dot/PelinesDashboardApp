@@ -12,6 +12,7 @@ import '../l10n/language_toggle.dart';
 
 enum AdminDestination {
   orders('/app', 'Orders', Icons.receipt_long_outlined),
+  analytics('/app/analytics', 'Analytics', Icons.analytics_outlined),
   calendar('/app/orders/calendar', 'Calendar', Icons.calendar_month_outlined),
   completed('/app/orders/completed', 'Completed', Icons.check_circle_outline),
   cancelled('/app/orders/cancelled', 'Cancelled', Icons.cancel_outlined),

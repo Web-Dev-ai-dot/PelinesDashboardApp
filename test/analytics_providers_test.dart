@@ -21,6 +21,7 @@ void main() {
   late FakeAuth auth;
   late FakeLocation location;
   late ProviderContainer container;
+  late void Function() stopListening;
 
   setUp(() async {
     repository = FakeRepository();
@@ -33,10 +34,47 @@ void main() {
         currentLocationProvider.overrideWith(() => location),
       ],
     );
-    container.listen(analyticsResultProvider, (_, _) {});
+    final subscription = container.listen(analyticsResultProvider, (_, _) {});
+    stopListening = subscription.close;
     await settle(container);
   });
   tearDown(() => container.dispose());
+
+  test(
+    'leaving and returning retains the same location dataset without polling',
+    () async {
+      repository.requests.single.complete(data('a'));
+      await settle(container);
+      final original = container.read(analyticsDatasetProvider).value!.dataset;
+      stopListening();
+      await settle(container);
+      final subscription = container.listen(analyticsResultProvider, (_, _) {});
+      await settle(container);
+      expect(repository.requests.length, 1);
+      expect(
+        container.read(analyticsDatasetProvider).value!.dataset,
+        same(original),
+      );
+      subscription.close();
+    },
+  );
+
+  test(
+    'session changes while away cannot expose cached analytics on return',
+    () async {
+      repository.requests.single.complete(data('a'));
+      await settle(container);
+      stopListening();
+      await settle(container);
+      auth.replace(null);
+      await settle(container);
+      final subscription = container.listen(analyticsResultProvider, (_, _) {});
+      await settle(container);
+      expect(container.read(analyticsResultProvider).value, isNull);
+      expect(container.read(analyticsDatasetProvider).value, isNull);
+      subscription.close();
+    },
+  );
 
   test(
     'loads current location; range and custom recalculate without a GET',

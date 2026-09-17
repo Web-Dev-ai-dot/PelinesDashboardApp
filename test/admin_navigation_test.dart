@@ -160,6 +160,70 @@ Future<void> _tapDestination(WidgetTester tester, String name) async {
 }
 
 void main() {
+  test(
+    'Analytics is between Orders and Calendar and resolves its selected state',
+    () {
+      expect(AdminDestination.values.take(3), [
+        AdminDestination.orders,
+        AdminDestination.analytics,
+        AdminDestination.calendar,
+      ]);
+      expect(
+        AdminDestination.forPath('/app/analytics'),
+        AdminDestination.analytics,
+      );
+      expect(
+        AdminDestination.forPath('/app/analytics?range=7'),
+        AdminDestination.analytics,
+      );
+    },
+  );
+  for (final width in [390.0, 768.0, 1366.0]) {
+    testWidgets('Orders Analytics Calendar uses shared navigation at $width', (
+      tester,
+    ) async {
+      await tester.binding.setSurfaceSize(Size(width, 1100));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final router = _router();
+      addTearDown(router.dispose);
+      await _pump(tester, router, scale: width == 768 ? 2 : 1);
+      Future<void> openDrawer() async {
+        if (width < 600) {
+          await tester.tap(find.byKey(const Key('admin-open-drawer')));
+          await tester.pumpAndSettle();
+        }
+      }
+
+      await openDrawer();
+      await _tapDestination(tester, 'analytics');
+      expect(router.routeInformationProvider.value.uri.path, '/app/analytics');
+      await openDrawer();
+      final selected = find.byWidgetPredicate(
+        (w) => w is Semantics && w.properties.selected == true,
+      );
+      expect(
+        find.descendant(
+          of: selected,
+          matching: find.byKey(const Key('nav-analytics')),
+        ),
+        findsOneWidget,
+      );
+      if (width >= 600) {
+        await tester.tap(find.byKey(const Key('admin-toggle-navigation')));
+        await tester.pumpAndSettle();
+        expect(
+          router.routeInformationProvider.value.uri.path,
+          '/app/analytics',
+        );
+      }
+      await _tapDestination(tester, 'calendar');
+      expect(
+        router.routeInformationProvider.value.uri.path,
+        '/app/orders/calendar',
+      );
+      expect(tester.takeException(), isNull);
+    });
+  }
   for (final width in [390.0, 768.0, 1366.0]) {
     testWidgets(
       'navigation EN ES updates immediately with Language after Account at $width',
@@ -175,6 +239,7 @@ void main() {
         }
         const esLabels = [
           'Pedidos',
+          'Analítica',
           'Calendario',
           'Completados',
           'Cancelados',
