@@ -160,7 +160,13 @@ void main() {
     repository.requests.single.complete(sample(count: 0));
     await tester.pumpAndSettle();
     expect(find.text('No eligible orders in this period.'), findsOneWidget);
-    expect(find.text('—'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('analytics-kpi-Average Order')),
+        matching: find.text('—'),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('Spanish KPIs and truncation metadata', (tester) async {
@@ -180,7 +186,49 @@ void main() {
     }
     expect(find.textContaining('Pedido más antiguo cargado'), findsOneWidget);
     expect(find.textContaining('Pedidos cargados'), findsOneWidget);
+    expect(
+      find.byKey(const Key('analytics-comparison-unavailable')),
+      findsOneWidget,
+    );
+    expect(find.text('— vs. período anterior'), findsNWidgets(4));
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('KPI comparisons use actual previous-period data', (
+    tester,
+  ) async {
+    await mount(tester);
+    final now = PelinesTime.now();
+    final previous = AnalyticsOrder.fromJson(
+      orderJson(locationId: 'a')
+        ..['createdAt'] = DateTime.utc(
+          now.year,
+          now.month,
+          now.day - 1,
+          20,
+        ).toIso8601String()
+        ..['totalCents'] = 550
+        ..['items'] = [
+          {
+            'id': 'line',
+            'productId': 'p',
+            'productName': 'Backend Taco',
+            'unitPriceCents': 500,
+            'quantity': 1,
+            'lineTotalCents': 500,
+            'modifiers': [],
+          },
+        ],
+    );
+    repository.requests.single.complete(
+      AnalyticsDataset(locationId: 'a', orders: [...sample().orders, previous]),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('analytics-today')));
+    await tester.pumpAndSettle();
+    expect(find.text('+100.0% vs previous period'), findsNWidgets(3));
+    expect(find.text('0.0% vs previous period'), findsOneWidget);
+    expect(repository.requests.length, 1);
   });
 
   for (final width in [320.0, 390.0, 1100.0]) {

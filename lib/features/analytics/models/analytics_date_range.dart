@@ -5,6 +5,9 @@ enum AnalyticsDatePreset { today, last7Days, last30Days, last90Days }
 /// UTC values here encode calendar dates, not instants or 24-hour Pacific days.
 class AnalyticsDateRange {
   AnalyticsDateRange.custom(DateTime from, DateTime through)
+    : this._(from, through, null);
+
+  AnalyticsDateRange._(DateTime from, DateTime through, this.preset)
     : startDate = DateTime.utc(from.year, from.month, from.day),
       endDate = DateTime.utc(through.year, through.month, through.day) {
     if (endDate.isBefore(startDate)) {
@@ -23,14 +26,16 @@ class AnalyticsDateRange {
       AnalyticsDatePreset.last30Days => 30,
       AnalyticsDatePreset.last90Days => 90,
     };
-    return AnalyticsDateRange.custom(
+    return AnalyticsDateRange._(
       DateTime.utc(today.year, today.month, today.day - days + 1),
       today,
+      preset,
     );
   }
 
   final DateTime startDate;
   final DateTime endDate;
+  final AnalyticsDatePreset? preset;
   int get dayCount => endDate.difference(startDate).inDays + 1;
   AnalyticsDateRange get previous => AnalyticsDateRange.custom(
     DateTime.utc(startDate.year, startDate.month, startDate.day - dayCount),

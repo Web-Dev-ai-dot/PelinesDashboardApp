@@ -9,7 +9,10 @@ import '../../../core/time/pelines_time.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../locations/providers/locations_providers.dart';
 import '../providers/analytics_providers.dart';
+import '../application/analytics_visualization_data.dart';
+import '../models/analytics_result.dart';
 import 'analytics_filters.dart';
+import 'analytics_visualizations.dart';
 
 class AnalyticsScreen extends ConsumerWidget {
   const AnalyticsScreen({super.key});
@@ -40,6 +43,11 @@ class AnalyticsScreen extends ConsumerWidget {
 
     final period = result.value?.current;
     final loaded = dataset.value;
+    final analytics = result.value;
+    final comparisonCovered =
+        loaded != null &&
+        analytics != null &&
+        analyticsComparisonIsCovered(loaded.dataset, analytics);
     return Scaffold(
       appBar: AdminAppBar(title: Text(tr(context, 'Analytics'))),
       body: SafeArea(
@@ -169,11 +177,37 @@ class AnalyticsScreen extends ConsumerWidget {
                                   child: _KpiCard(
                                     label: entry.key,
                                     value: entry.value,
+                                    comparison: switch (entry.key) {
+                                      'Sales' => analytics!.sales,
+                                      'Orders' => analytics!.orders,
+                                      'Average Order' =>
+                                        analytics!.averageOrder,
+                                      _ => analytics!.itemsSold,
+                                    },
+                                    comparisonCovered: comparisonCovered,
                                   ),
                                 ),
                             ],
                           );
                         },
+                      ),
+                      if (!comparisonCovered)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 12),
+                          child: Text(
+                            tr(
+                              context,
+                              'Comparison unavailable: the loaded history may be incomplete.',
+                            ),
+                            key: const Key('analytics-comparison-unavailable'),
+                          ),
+                        ),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: Text(
+                          '${tr(context, 'Previous period')}: ${DateFormat.yMMMd(locale).format(range.previous.startDate)} – ${DateFormat.yMMMd(locale).format(range.previous.endDate)}',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
                       ),
                       if (period.orders == 0)
                         Padding(
@@ -183,6 +217,10 @@ class AnalyticsScreen extends ConsumerWidget {
                             textAlign: TextAlign.center,
                           ),
                         ),
+                      AnalyticsVisualizations(
+                        dataset: loaded.dataset,
+                        result: analytics!,
+                      ),
                     ],
                   ],
                 ),
@@ -196,8 +234,15 @@ class AnalyticsScreen extends ConsumerWidget {
 }
 
 class _KpiCard extends StatelessWidget {
-  const _KpiCard({required this.label, required this.value});
+  const _KpiCard({
+    required this.label,
+    required this.value,
+    required this.comparison,
+    required this.comparisonCovered,
+  });
   final String label, value;
+  final MetricComparison comparison;
+  final bool comparisonCovered;
   @override
   Widget build(BuildContext context) => Container(
     key: Key('analytics-kpi-$label'),
@@ -213,6 +258,7 @@ class _KpiCard extends StatelessWidget {
         Text(tr(context, label), style: Theme.of(context).textTheme.labelLarge),
         const SizedBox(height: 12),
         Text(value, style: Theme.of(context).textTheme.headlineSmall),
+        AnalyticsComparison(metric: comparison, covered: comparisonCovered),
       ],
     ),
   );

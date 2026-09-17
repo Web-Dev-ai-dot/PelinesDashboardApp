@@ -44,16 +44,17 @@ class AnalyticsFilters extends ConsumerWidget {
               ChoiceChip(
                 key: Key('analytics-${entry.key.name}'),
                 label: Text(tr(context, entry.value)),
-                selected: _same(range, AnalyticsDateRange.preset(entry.key)),
+                selected: range.preset == entry.key,
                 onSelected: (_) => ref
                     .read(analyticsRangeProvider.notifier)
                     .selectPreset(entry.key),
               ),
-            ActionChip(
+            ChoiceChip(
               key: const Key('analytics-custom'),
               avatar: const Icon(Icons.date_range, size: 18),
               label: Text(tr(context, 'Custom')),
-              onPressed: () async {
+              selected: range.preset == null,
+              onSelected: (_) async {
                 final now = PelinesTime.now();
                 final first = range.startDate.isBefore(DateTime.utc(2000))
                     ? range.startDate
@@ -85,9 +86,6 @@ class AnalyticsFilters extends ConsumerWidget {
       ],
     );
   }
-
-  bool _same(AnalyticsDateRange a, AnalyticsDateRange b) =>
-      a.startDate == b.startDate && a.endDate == b.endDate;
 }
 
 class _LocationPicker extends ConsumerWidget {
