@@ -20,6 +20,9 @@ abstract final class PelinesColors {
   static const Color blueSoft = Color(0x331D74BA);
   static const Color preparing = Color(0xFF7C3AED);
   static const Color statusReady = Color(0xFFF21D1D);
+  // Accessible text on the web's pale yellow surface.
+  static const Color amberForeground = Color(0xFF805000);
+  static const Color tableHeader = Color(0xFFFAFBFB);
 }
 
 abstract final class PelinesSpacing {
@@ -33,6 +36,7 @@ abstract final class PelinesSpacing {
 }
 
 abstract final class PelinesRadius {
+  static const double pageCard = 18;
   static const double control = 8;
   static const double card = 12;
   static const double prominentCard = 16;
@@ -41,6 +45,14 @@ abstract final class PelinesRadius {
 }
 
 abstract final class PelinesLayout {
+  static const double dashboardMaxWidth = 1400;
+  static const double webSmall = 640;
+  static const double webLarge = 1024;
+  static double pagePadding(double width) => width >= webLarge
+      ? 32
+      : width >= webSmall
+      ? 24
+      : 16;
   static const double compactWidth = 600;
   static const double contentMaxWidth = 760;
   static const double labelPairMinWidth = 400;
@@ -61,10 +73,33 @@ abstract final class PelinesTypography {
   static const String bodyFamily = 'Work Sans';
   static const String headingFamily = 'Bree Serif';
 
-  static TextStyle? pageTitle(TextTheme theme) => theme.titleLarge?.copyWith(
-    fontSize: 28,
+  static TextStyle? pageTitle(TextTheme theme, {double width = 0}) =>
+      theme.titleLarge?.copyWith(
+        fontSize: width >= 1024
+            ? 36
+            : width >= 640
+            ? 30
+            : 24,
+        fontFamily: headingFamily,
+        fontWeight: FontWeight.w400,
+        height: 1.25,
+      );
+
+  static TextStyle? sectionTitle(TextTheme theme, {double width = 0}) =>
+      pageTitle(theme, width: width)?.copyWith(
+        fontSize: width >= 1024
+            ? 24
+            : width >= 640
+            ? 20
+            : 18,
+      );
+
+  static const TextStyle smallLabel = TextStyle(
     fontFamily: bodyFamily,
-    fontWeight: FontWeight.w700,
+    fontSize: 12,
+    fontWeight: FontWeight.w600,
+    color: PelinesColors.textSecondary,
+    letterSpacing: 0.5,
   );
 
   static TextTheme textTheme(TextTheme base) {

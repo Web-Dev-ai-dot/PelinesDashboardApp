@@ -100,10 +100,10 @@ void main() {
             tester.getCenter(find.byKey(const Key('orders-date-selector'))).dy,
           );
         }
-        expect(AppTheme.light.appBarTheme.titleTextStyle?.fontSize, 28);
+        expect(AppTheme.light.appBarTheme.titleTextStyle?.fontSize, 24);
         expect(
           AppTheme.light.appBarTheme.titleTextStyle?.fontFamily,
-          'Work Sans',
+          'Bree Serif',
         );
         expect(tester.getSize(selector).height, greaterThanOrEqualTo(48));
         expect(tester.takeException(), isNull);

@@ -192,11 +192,11 @@ void main() {
       final context = tester.element(find.byWidget(title));
       expect(
         Theme.of(context).appBarTheme.titleTextStyle?.fontFamily,
-        'Work Sans',
+        'Bree Serif',
       );
       expect(
         Theme.of(context).appBarTheme.titleTextStyle?.fontWeight,
-        FontWeight.w700,
+        FontWeight.w400,
       );
       expect(
         Theme.of(context).textTheme.headlineSmall?.fontFamily,

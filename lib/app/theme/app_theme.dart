@@ -2,6 +2,109 @@ import 'package:flutter/material.dart';
 
 import 'pelines_tokens.dart';
 
+enum PelinesInputVariant { form, search, login, select }
+
+enum PelinesButtonVariant {
+  primary,
+  accept,
+  cancel,
+  secondary,
+  preparing,
+  ready,
+  complete,
+}
+
+/// Opt-in web variants. Existing screens retain their current Material theme
+/// until their presentation is migrated; no screen-specific defaults change.
+abstract final class PelinesControlStyles {
+  static InputDecoration input({
+    PelinesInputVariant variant = PelinesInputVariant.form,
+    String? label,
+    String? hint,
+    String? error,
+  }) {
+    final pill =
+        variant == PelinesInputVariant.search ||
+        variant == PelinesInputVariant.login;
+    final border = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(
+        pill ? PelinesRadius.pill : PelinesRadius.control,
+      ),
+      borderSide: pill
+          ? BorderSide.none
+          : const BorderSide(color: PelinesColors.border),
+    );
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      errorText: error,
+      filled: true,
+      fillColor: pill ? PelinesColors.mutedSurface : PelinesColors.card,
+      contentPadding: EdgeInsets.symmetric(
+        horizontal: pill ? 20 : 12,
+        vertical: 16,
+      ),
+      constraints: const BoxConstraints(minHeight: PelinesLayout.touchTarget),
+      border: border,
+      enabledBorder: border,
+      disabledBorder: border,
+      focusedBorder: border.copyWith(
+        borderSide: const BorderSide(
+          color: PelinesColors.brandPrimary,
+          width: 2,
+        ),
+      ),
+      errorBorder: border.copyWith(
+        borderSide: const BorderSide(color: PelinesColors.destructive),
+      ),
+      focusedErrorBorder: border.copyWith(
+        borderSide: const BorderSide(
+          color: PelinesColors.destructive,
+          width: 2,
+        ),
+      ),
+      prefixIcon: variant == PelinesInputVariant.search
+          ? const Icon(Icons.search, size: 20)
+          : null,
+    );
+  }
+
+  static ButtonStyle button(PelinesButtonVariant variant) {
+    final outlined =
+        variant == PelinesButtonVariant.cancel ||
+        variant == PelinesButtonVariant.secondary;
+    final color = switch (variant) {
+      PelinesButtonVariant.accept => PelinesColors.successForeground,
+      PelinesButtonVariant.preparing => PelinesColors.preparing,
+      PelinesButtonVariant.complete => PelinesColors.blue,
+      PelinesButtonVariant.secondary => PelinesColors.textPrimary,
+      _ => PelinesColors.brandPrimary,
+    };
+    return FilledButton.styleFrom(
+      minimumSize: const Size(48, 48),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      backgroundColor: outlined ? PelinesColors.card : color,
+      foregroundColor: outlined ? color : PelinesColors.card,
+      disabledBackgroundColor: PelinesColors.mutedSurface,
+      disabledForegroundColor: PelinesColors.textSecondary,
+      side: BorderSide(
+        color: outlined
+            ? (variant == PelinesButtonVariant.cancel
+                  ? color
+                  : PelinesColors.border)
+            : Colors.transparent,
+      ),
+      shape: const StadiumBorder(),
+      elevation: 0,
+      textStyle: const TextStyle(
+        fontFamily: PelinesTypography.bodyFamily,
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+      ),
+    );
+  }
+}
+
 abstract final class AppTheme {
   static ThemeData get light {
     const ColorScheme colorScheme = ColorScheme.light(
