@@ -1,7 +1,7 @@
 import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
+
 import 'package:intl/intl.dart';
 
 import '../../../app/theme/pelines_tokens.dart';
@@ -11,10 +11,10 @@ import '../../locations/models/location.dart';
 import '../models/order_models.dart';
 import '../models/order_status_action.dart';
 import '../models/orders_date_filter.dart';
-import '../providers/order_alerts_controller.dart';
+
 import '../providers/orders_providers.dart';
-import 'order_ui_helpers.dart';
-import 'order_preview_action.dart';
+import 'upcoming_orders_view.dart';
+import 'order_preview_card.dart';
 
 class TodayOrdersView extends ConsumerStatefulWidget {
   const TodayOrdersView({
@@ -22,12 +22,14 @@ class TodayOrdersView extends ConsumerStatefulWidget {
     required this.onChangeLocation,
     this.showLocationSelector = true,
     this.initialDateFilter = OrdersDateFilter.today,
+    this.webOrders = false,
     super.key,
   });
   final Location location;
   final VoidCallback onChangeLocation;
   final bool showLocationSelector;
   final OrdersDateFilter initialDateFilter;
+  final bool webOrders;
 
   @override
   ConsumerState<TodayOrdersView> createState() => TodayOrdersViewState();
@@ -35,7 +37,9 @@ class TodayOrdersView extends ConsumerStatefulWidget {
 
 class TodayOrdersViewState extends ConsumerState<TodayOrdersView> {
   OrderStatus? _filter = OrderStatus.confirmed;
-  late OrdersDateFilter _date = widget.initialDateFilter;
+  late OrdersDateFilter _date = widget.webOrders
+      ? widget.initialDateFilter
+      : OrdersDateFilter.today;
   DateTime? _chosenDate;
   final _scroll = ScrollController();
 
@@ -44,8 +48,11 @@ class TodayOrdersViewState extends ConsumerState<TodayOrdersView> {
     super.didUpdateWidget(oldWidget);
     // Shell shortcuts reuse the existing filter; polling and local choices do
     // not reset it. No fetching or filtering logic is duplicated here.
-    if (oldWidget.initialDateFilter != widget.initialDateFilter) {
-      _date = widget.initialDateFilter;
+    if (oldWidget.initialDateFilter != widget.initialDateFilter ||
+        oldWidget.webOrders != widget.webOrders) {
+      _date = widget.webOrders
+          ? widget.initialDateFilter
+          : OrdersDateFilter.today;
     }
   }
 
@@ -83,6 +90,45 @@ class TodayOrdersViewState extends ConsumerState<TodayOrdersView> {
     }
   }
 
+  Widget _dateControl(BuildContext context, {bool compact = false}) {
+    return PopupMenuButton<OrdersDateFilter>(
+      key: const Key('orders-date-selector'),
+      tooltip: tr(context, 'Choose order date'),
+      initialValue: _date,
+      onSelected: _selectDate,
+      itemBuilder: (_) => [
+        for (final value in OrdersDateFilter.values)
+          PopupMenuItem(value: value, child: Text(tr(context, value.label))),
+      ],
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 48),
+        padding: const EdgeInsets.all(PelinesSpacing.xs),
+        decoration: BoxDecoration(
+          border: Border.all(color: PelinesColors.border),
+          borderRadius: BorderRadius.circular(PelinesRadius.control),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.calendar_today_outlined),
+            const SizedBox(width: PelinesSpacing.xs),
+            Flexible(
+              child: Text(
+                _date == OrdersDateFilter.chooseDate
+                    ? DateFormat.yMMMd().format(_chosenDate!)
+                    : tr(context, _date.label),
+                style: compact
+                    ? Theme.of(context).textTheme.bodyMedium
+                    : Theme.of(context).textTheme.titleLarge,
+              ),
+            ),
+            const Icon(Icons.expand_more),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final today = ref.watch(todayOrdersProvider);
@@ -117,98 +163,49 @@ class TodayOrdersViewState extends ConsumerState<TodayOrdersView> {
         }
       });
     }
+    if (widget.webOrders) {
+      return UpcomingOrdersView(
+        orders: asyncOrders,
+        status: _filter,
+        dateControl: _dateControl(context, compact: true),
+        dateContext: _date == OrdersDateFilter.today
+            ? null
+            : tr(
+                context,
+                _date == OrdersDateFilter.upcoming
+                    ? 'From tomorrow · Pacific time · Available orders only'
+                    : 'Pacific time · Available orders only; not a complete history',
+              ),
+        statusFilters: _Filters(
+          selected: _filter,
+          waitingCount:
+              asyncOrders.value?.orders
+                  .where(
+                    (order) =>
+                        order.status == OrderStatus.pending &&
+                        order.locationId == widget.location.id &&
+                        order.paymentStatus.isOperationallyPaid,
+                  )
+                  .length ??
+              0,
+          onSelected: (value) => setState(() => _filter = value),
+        ),
+        onRefresh: refresh,
+        onRetry: _retry,
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: PelinesSpacing.md,
-            vertical: PelinesSpacing.sm,
-          ),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final dateSelector = PopupMenuButton<OrdersDateFilter>(
-                key: const Key('orders-date-selector'),
-                tooltip: tr(context, 'Choose order date'),
-                initialValue: _date,
-                onSelected: _selectDate,
-                itemBuilder: (_) => [
-                  for (final value in OrdersDateFilter.values)
-                    PopupMenuItem(value: value, child: Text(value.label)),
-                ],
-                child: Container(
-                  constraints: const BoxConstraints(minHeight: 48),
-                  padding: const EdgeInsets.all(PelinesSpacing.xs),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: PelinesColors.border),
-                    borderRadius: BorderRadius.circular(PelinesRadius.control),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.calendar_today_outlined),
-                      const SizedBox(width: PelinesSpacing.xs),
-                      Flexible(
-                        child: Text(
-                          _date == OrdersDateFilter.chooseDate
-                              ? DateFormat.yMMMd().format(_chosenDate!)
-                              : _date.label,
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                      ),
-                      const Icon(Icons.expand_more),
-                    ],
-                  ),
-                ),
-              );
-              if (!widget.showLocationSelector) {
-                return Align(
-                  alignment: AlignmentDirectional.centerStart,
-                  child: dateSelector,
-                );
-              }
-              final locationSelector = PelinesLocationSelector(
-                locationName: widget.location.name,
-                onPressed: widget.onChangeLocation,
-              );
-              final narrow =
-                  constraints.maxWidth < 330 ||
-                  (constraints.maxWidth < 600 &&
-                      MediaQuery.textScalerOf(context).scale(1) > 1.5);
-              return narrow
-                  ? Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        dateSelector,
-                        const SizedBox(height: PelinesSpacing.xs),
-                        locationSelector,
-                      ],
-                    )
-                  : Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Expanded(child: dateSelector),
-                        const SizedBox(width: PelinesSpacing.sm),
-                        Expanded(child: locationSelector),
-                      ],
-                    );
-            },
-          ),
-        ),
-        if (_date != OrdersDateFilter.today)
+        if (widget.showLocationSelector)
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: PelinesSpacing.lg),
-            child: Text(
-              _date == OrdersDateFilter.upcoming
-                  ? tr(
-                      context,
-                      'From tomorrow · Pacific time · Available orders only',
-                    )
-                  : tr(
-                      context,
-                      'Pacific time · Available orders only; not a complete history',
-                    ),
-              style: Theme.of(context).textTheme.bodySmall,
+            padding: const EdgeInsets.symmetric(
+              horizontal: PelinesSpacing.md,
+              vertical: PelinesSpacing.sm,
+            ),
+            child: PelinesLocationSelector(
+              locationName: widget.location.name,
+              onPressed: widget.onChangeLocation,
             ),
           ),
         _Filters(
@@ -276,7 +273,10 @@ class TodayOrdersViewState extends ConsumerState<TodayOrdersView> {
                         sliver: SliverList.builder(
                           itemCount: visible.length,
                           itemBuilder: (BuildContext context, int index) =>
-                              _OrderCard(order: visible[index]),
+                              OrderPreviewCard(
+                                key: ValueKey(visible[index].id),
+                                order: visible[index],
+                              ),
                         ),
                       ),
                   ],
@@ -305,142 +305,61 @@ class _Filters extends StatelessWidget {
       horizontal: PelinesSpacing.md,
       vertical: PelinesSpacing.xs,
     ),
-    child: Row(
-      children: <Widget>[
-        ChoiceChip(
-          label: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(tr(context, 'Waiting')),
-              if (waitingCount > 0) ...[
-                const SizedBox(width: PelinesSpacing.xs),
-                Semantics(
-                  label: '$waitingCount pending orders',
-                  child: Badge(
-                    key: const Key('waiting-count'),
-                    label: Text('$waitingCount'),
-                  ),
-                ),
-              ],
-            ],
-          ),
-          selected: selected == OrderStatus.pending,
-          onSelected: (_) => onSelected(OrderStatus.pending),
-        ),
-        Expanded(
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: <Widget>[
-                for (final (OrderStatus status, String label)
-                    in <(OrderStatus, String)>[
-                      (OrderStatus.confirmed, tr(context, 'Confirmed')),
-                      (OrderStatus.preparing, tr(context, 'Preparing')),
-                      (OrderStatus.ready, tr(context, 'Ready')),
-                    ]) ...<Widget>[
-                  const SizedBox(width: PelinesSpacing.xs),
-                  ChoiceChip(
-                    label: Text(label),
-                    selected: selected == status,
-                    onSelected: (_) => onSelected(status),
-                  ),
+    child: LayoutBuilder(
+      builder: (context, constraints) => Row(
+        children: <Widget>[
+          ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: constraints.maxWidth * .65),
+            child: ChoiceChip(
+              label: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(child: Text(tr(context, 'Waiting'))),
+                  if (waitingCount > 0) ...[
+                    const SizedBox(width: PelinesSpacing.xs),
+                    Semantics(
+                      label: '$waitingCount pending orders',
+                      child: Badge(
+                        key: const Key('waiting-count'),
+                        label: Text('$waitingCount'),
+                      ),
+                    ),
+                  ],
                 ],
-                const SizedBox(width: PelinesSpacing.xs),
-                ChoiceChip(
-                  label: Text(tr(context, 'All')),
-                  selected: selected == null,
-                  onSelected: (_) => onSelected(null),
-                ),
-              ],
+              ),
+              selected: selected == OrderStatus.pending,
+              onSelected: (_) => onSelected(OrderStatus.pending),
             ),
           ),
-        ),
-      ],
-    ),
-  );
-}
-
-class _OrderCard extends ConsumerWidget {
-  const _OrderCard({required this.order});
-  final OrderSummary order;
-  @override
-  Widget build(BuildContext context, WidgetRef ref) => Container(
-    margin: const EdgeInsets.only(bottom: PelinesSpacing.sm),
-    decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(PelinesRadius.prominentCard),
-      boxShadow: PelinesShadows.subtle,
-    ),
-    child: Card(
-      margin: EdgeInsets.zero,
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(PelinesRadius.prominentCard),
-        side: const BorderSide(color: PelinesColors.border),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () {
-          ref.read(orderAlertsProvider.notifier).acknowledge(order.id);
-          context.push('/app/orders/${order.id}');
-        },
-        child: Padding(
-          padding: const EdgeInsets.all(PelinesSpacing.md),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Row(
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
                 children: <Widget>[
-                  Expanded(
-                    child: Text(
-                      requestedTime(order.scheduledFor),
-                      style: Theme.of(context).textTheme.titleLarge
-                          ?.copyWith(fontWeight: FontWeight.w700),
+                  for (final (OrderStatus status, String label)
+                      in <(OrderStatus, String)>[
+                        (OrderStatus.confirmed, tr(context, 'Confirmed')),
+                        (OrderStatus.preparing, tr(context, 'Preparing')),
+                        (OrderStatus.ready, tr(context, 'Ready')),
+                      ]) ...<Widget>[
+                    const SizedBox(width: PelinesSpacing.xs),
+                    ChoiceChip(
+                      label: Text(label),
+                      selected: selected == status,
+                      onSelected: (_) => onSelected(status),
                     ),
-                  ),
-                  StatusChip(
-                    status: order.status,
-                    fulfillment: order.fulfillmentType,
-                    rawStatus: order.rawStatus,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                order.orderNumber,
-                style: Theme.of(context).textTheme.labelLarge,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                order.eventName?.isNotEmpty == true
-                    ? order.eventName!
-                    : order.contactName,
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '${orderTypeLabel(order.orderType)} · ${fulfillmentLabel(order.fulfillmentType)}',
-                style: Theme.of(context).textTheme.bodyMedium
-                    ?.copyWith(color: PelinesColors.textSecondary),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: <Widget>[
-                  Text(
-                    '${order.itemCount} ${order.itemCount == 1 ? 'item' : 'items'}',
-                  ),
-                  Text(
-                    money(order.totalCents),
-                    style: Theme.of(context).textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ],
+                  const SizedBox(width: PelinesSpacing.xs),
+                  ChoiceChip(
+                    label: Text(tr(context, 'All')),
+                    selected: selected == null,
+                    onSelected: (_) => onSelected(null),
                   ),
                 ],
               ),
-              const SizedBox(height: PelinesSpacing.sm),
-              OrderPreviewAction(key: ValueKey(order.id), order: order),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     ),
   );

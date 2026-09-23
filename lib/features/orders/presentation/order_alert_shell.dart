@@ -38,6 +38,41 @@ class _OrderAlertShellState extends ConsumerState<OrderAlertShell>
         WidgetsBinding.instance.lifecycleState == null ||
         WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
     if (_isResumed) _startPolling();
+    // Seed from an already-loaded snapshot as well as subsequent polling.
+    ref.listenManual<AsyncValue<TodayOrdersState>>(
+      todayOrdersProvider,
+      (_, next) => _processSnapshot(next),
+      fireImmediately: true,
+    );
+    ref.listenManual<AsyncValue<Location?>>(
+      currentLocationProvider,
+      (_, _) => _processSnapshot(ref.read(todayOrdersProvider)),
+      fireImmediately: true,
+    );
+  }
+
+  void _processSnapshot(AsyncValue<TodayOrdersState> next) {
+    final Location? selected = ref.read(currentLocationProvider).value;
+    final TodayOrdersState? snapshot = next.value;
+    if (selected == null ||
+        snapshot == null ||
+        next.isLoading ||
+        next.hasError ||
+        snapshot.snapshotLocationId != selected.id ||
+        snapshot.fullLocationSnapshot == null ||
+        snapshot.isRefreshing ||
+        snapshot.refreshError != null) {
+      return;
+    }
+    unawaited(
+      ref
+          .read(orderAlertsProvider.notifier)
+          .processSnapshot(
+            locationId: selected.id,
+            orders: snapshot.fullLocationSnapshot!,
+            mayPlaySound: _isResumed,
+          ),
+    );
   }
 
   @override
@@ -82,25 +117,6 @@ class _OrderAlertShellState extends ConsumerState<OrderAlertShell>
     ref.watch(todayOrdersProvider);
     ref.watch(orderAlertsProvider);
 
-    ref.listen<AsyncValue<TodayOrdersState>>(todayOrdersProvider, (_, next) {
-      final Location? selected = ref.read(currentLocationProvider).value;
-      final TodayOrdersState? snapshot = next.value;
-      if (selected == null ||
-          snapshot == null ||
-          snapshot.isRefreshing ||
-          snapshot.refreshError != null) {
-        return;
-      }
-      unawaited(
-        ref
-            .read(orderAlertsProvider.notifier)
-            .processSnapshot(
-              locationId: selected.id,
-              orders: snapshot.orders,
-              mayPlaySound: _isResumed,
-            ),
-      );
-    });
     ref.listen<AsyncValue<AdminSession?>>(authControllerProvider, (
       previous,
       next,

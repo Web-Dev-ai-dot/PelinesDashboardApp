@@ -37,11 +37,13 @@ class OrderAlertsState {
     this.locationId,
     this.knownIds = const <String>[],
     this.unseenIds = const <String>[],
+    this.version = 0,
   });
 
   final String? locationId;
   final List<String> knownIds;
   final List<String> unseenIds;
+  final int version;
 
   int get unseenCount => unseenIds.length;
 }
@@ -85,16 +87,21 @@ class OrderAlertsController extends AsyncNotifier<OrderAlertsState> {
         ? List<String>.of(state.value!.unseenIds)
         : List<String>.of(stored?.unseenIds ?? const <String>[]);
 
-    final Set<String> operationalIds = orders
+    final locationOrders = orders.where(
+      (order) => order.locationId == locationId,
+    );
+    final Set<String> operationalIds = locationOrders
         .where(_isOperational)
         .map((OrderSummary order) => order.id)
         .toSet();
-    final List<String> eligibleIds = orders
+    final List<String> eligibleIds = locationOrders
         .where(_isAlertEligible)
         .map((OrderSummary order) => order.id)
         .toList(growable: false);
 
-    if (stored == null && !sameLocation) {
+    final version = sameLocation ? state.value!.version : stored?.version ?? 0;
+    if (version < StoredOrderAlerts.fullSnapshotVersion) {
+      // Baseline the expanded universe once, retaining the persisted queue.
       known.addAll(eligibleIds);
     } else {
       final Set<String> knownSet = known.toSet();
@@ -111,14 +118,24 @@ class OrderAlertsController extends AsyncNotifier<OrderAlertsState> {
     unseen.removeWhere((String id) => !operationalIds.contains(id));
     final OrderAlertsState next = OrderAlertsState(
       locationId: locationId,
-      knownIds: _bounded(known),
-      unseenIds: _bounded(unseen),
+      version: StoredOrderAlerts.fullSnapshotVersion,
+      // Keep all currently operational IDs; cap only historical IDs. Otherwise
+      // a large active snapshot re-alerts evicted IDs on every poll.
+      knownIds: [
+        ..._bounded(known.where((id) => !operationalIds.contains(id)).toList()),
+        ...{...known, ...unseen}.where(operationalIds.contains),
+      ],
+      unseenIds: unseen.toSet().toList(),
     );
     state = AsyncData<OrderAlertsState>(next);
     try {
       await store.write(
         locationId,
-        StoredOrderAlerts(knownIds: next.knownIds, unseenIds: next.unseenIds),
+        StoredOrderAlerts(
+          knownIds: next.knownIds,
+          unseenIds: next.unseenIds,
+          version: next.version,
+        ),
       );
     } on Object {
       // Persistence failure must not break foreground detection or UI.
@@ -136,6 +153,7 @@ class OrderAlertsController extends AsyncNotifier<OrderAlertsState> {
     final OrderAlertsState next = OrderAlertsState(
       locationId: locationId,
       knownIds: current.knownIds,
+      version: current.version,
       unseenIds: current.unseenIds.where((String id) => id != orderId).toList(),
     );
     state = AsyncData<OrderAlertsState>(next);
@@ -147,6 +165,7 @@ class OrderAlertsController extends AsyncNotifier<OrderAlertsState> {
             StoredOrderAlerts(
               knownIds: next.knownIds,
               unseenIds: next.unseenIds,
+              version: next.version,
             ),
           );
     } on Object {

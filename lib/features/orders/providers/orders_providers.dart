@@ -653,8 +653,13 @@ class TodayOrdersState {
     required this.orders,
     this.isRefreshing = false,
     this.refreshError,
+    this.fullLocationSnapshot,
+    this.snapshotLocationId,
   });
   final List<OrderSummary> orders;
+  // Present only for a successful, complete location fetch; never a UI projection.
+  final List<OrderSummary>? fullLocationSnapshot;
+  final String? snapshotLocationId;
   final bool isRefreshing;
   final String? refreshError;
 
@@ -666,6 +671,8 @@ class TodayOrdersState {
   }) {
     return TodayOrdersState(
       orders: orders ?? this.orders,
+      fullLocationSnapshot: fullLocationSnapshot,
+      snapshotLocationId: snapshotLocationId,
       isRefreshing: isRefreshing ?? this.isRefreshing,
       refreshError: clearError ? null : refreshError ?? this.refreshError,
     );
@@ -681,7 +688,7 @@ class TodayOrdersController extends AsyncNotifier<TodayOrdersState> {
     if (location == null) {
       return const TodayOrdersState(orders: <OrderSummary>[]);
     }
-    return TodayOrdersState(orders: await _load(location.id));
+    return _load(location.id);
   }
 
   Future<void> refresh() async {
@@ -696,11 +703,12 @@ class TodayOrdersController extends AsyncNotifier<TodayOrdersState> {
       );
     }
     try {
-      final List<OrderSummary> orders = await _load(location.id);
+      final snapshot = await _load(location.id);
       if (ref.read(currentLocationProvider).value?.id == location.id) {
-        state = AsyncData(TodayOrdersState(orders: orders));
+        state = AsyncData(snapshot);
       }
     } on Object catch (error, stackTrace) {
+      if (ref.read(currentLocationProvider).value?.id != location.id) return;
       if (previous == null) {
         state = AsyncError<TodayOrdersState>(error, stackTrace);
       } else {
@@ -713,12 +721,19 @@ class TodayOrdersController extends AsyncNotifier<TodayOrdersState> {
     }
   }
 
-  Future<List<OrderSummary>> _load(String locationId) async {
+  Future<TodayOrdersState> _load(String locationId) async {
     try {
       final List<OrderSummary> all = await ref
           .read(ordersRepositoryProvider)
           .getOrders(locationId: locationId);
-      return filterTodayActiveOrders(all);
+      final snapshot = List<OrderSummary>.unmodifiable(
+        all.where((order) => order.locationId == locationId),
+      );
+      return TodayOrdersState(
+        orders: filterTodayActiveOrders(snapshot),
+        fullLocationSnapshot: snapshot,
+        snapshotLocationId: locationId,
+      );
     } on ApiException catch (error) {
       if (error.statusCode == 401) {
         await ref.read(authControllerProvider.notifier).signOut();

@@ -103,6 +103,18 @@ void main() {
         _order('accepted', now, status: OrderStatus.confirmed),
         _order('failed', now, payment: PaymentStatus.failed),
         _order('other-location', now, locationId: 'B'),
+        for (final status in [
+          OrderStatus.pending,
+          OrderStatus.confirmed,
+          OrderStatus.preparing,
+          OrderStatus.ready,
+        ])
+          _order(
+            'future-${status.name}',
+            now,
+            scheduled: now.add(const Duration(days: 7)),
+            status: status,
+          ),
       ]);
       final container = ProviderContainer(
         overrides: [
@@ -120,6 +132,8 @@ void main() {
               body: TodayOrdersView(
                 location: _location,
                 onChangeLocation: () {},
+                // To Do must ignore dates even if a caller supplies one.
+                initialDateFilter: OrdersDateFilter.upcoming,
               ),
             ),
           ),
@@ -127,6 +141,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       final badge = find.byKey(const Key('waiting-count'));
+      expect(find.byKey(const Key('orders-date-selector')), findsNothing);
       expect(
         find.descendant(of: badge, matching: find.text('2')),
         findsOneWidget,
@@ -145,6 +160,19 @@ void main() {
         findsOneWidget,
       );
       final calls = repository.calls;
+      for (final label in [
+        'Confirmed',
+        'Preparing',
+        'Ready',
+        'All',
+        'Waiting',
+      ]) {
+        final chip = find.widgetWithText(ChoiceChip, label);
+        await tester.ensureVisible(chip);
+        await tester.tap(chip);
+        await tester.pumpAndSettle();
+        expect(find.textContaining('future-'), findsNothing);
+      }
       await tester.pump(const Duration(seconds: 45));
       expect(repository.calls, calls);
       expect(tester.takeException(), isNull);
@@ -169,7 +197,11 @@ void main() {
             child: child!,
           ),
           home: Scaffold(
-            body: TodayOrdersView(location: _location, onChangeLocation: () {}),
+            body: TodayOrdersView(
+              location: _location,
+              onChangeLocation: () {},
+              webOrders: true,
+            ),
           ),
         ),
       ),
@@ -282,6 +314,7 @@ void main() {
             path: '/',
             builder: (_, _) => Scaffold(
               body: TodayOrdersView(
+                webOrders: true,
                 location: _location,
                 onChangeLocation: () {},
               ),
@@ -324,9 +357,16 @@ void main() {
       await tester.drag(find.byType(CustomScrollView), const Offset(0, -450));
       await tester.pumpAndSettle();
       final scroll = tester
-          .widget<CustomScrollView>(find.byType(CustomScrollView))
-          .controller!;
-      final offset = scroll.offset;
+          .state<ScrollableState>(
+            find
+                .descendant(
+                  of: find.byType(CustomScrollView),
+                  matching: find.byType(Scrollable),
+                )
+                .first,
+          )
+          .position;
+      final offset = scroll.pixels;
       final card = find
           .textContaining(RegExp(r'^confirmed-'))
           .hitTestable()
@@ -336,7 +376,7 @@ void main() {
       expect(find.textContaining('detail confirmed-'), findsOneWidget);
       router.pop();
       await tester.pumpAndSettle();
-      expect(scroll.offset, offset);
+      expect(scroll.pixels, offset);
       expect(
         tester
             .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Confirmed'))
@@ -345,7 +385,7 @@ void main() {
       );
       await container.read(todayOrdersProvider.notifier).refresh();
       await tester.pumpAndSettle();
-      expect(scroll.offset, offset);
+      expect(scroll.pixels, offset);
       expect(
         tester
             .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Confirmed'))

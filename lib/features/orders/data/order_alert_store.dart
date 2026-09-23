@@ -3,7 +3,14 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class StoredOrderAlerts {
-  const StoredOrderAlerts({required this.knownIds, required this.unseenIds});
+  const StoredOrderAlerts({
+    required this.knownIds,
+    required this.unseenIds,
+    this.version = 0,
+  });
+
+  static const fullSnapshotVersion = 1;
+  final int version;
 
   final List<String> knownIds;
   final List<String> unseenIds;
@@ -36,6 +43,7 @@ class SharedPreferencesOrderAlertStore implements OrderAlertStore {
       return StoredOrderAlerts(
         knownIds: known.cast<String>(),
         unseenIds: unseen.cast<String>(),
+        version: decoded['version'] is int ? decoded['version'] as int : 0,
       );
     } on Object {
       return null;
@@ -50,6 +58,7 @@ class SharedPreferencesOrderAlertStore implements OrderAlertStore {
       jsonEncode(<String, Object>{
         'known': alerts.knownIds,
         'unseen': alerts.unseenIds,
+        'version': alerts.version,
       }),
     );
   }

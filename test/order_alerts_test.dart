@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -17,6 +18,98 @@ import 'package:pelines_admin_app/features/orders/providers/orders_providers.dar
 import 'order_test_data.dart';
 
 void main() {
+  test('persisted legacy JSON loads as version zero and writes full snapshot version', () async {
+    SharedPreferences.setMockInitialValues({
+      'pelines.order_alerts.a': '{"known":["A"],"unseen":["A"]}',
+    });
+    final store = SharedPreferencesOrderAlertStore();
+    final legacy = (await store.read('a'))!;
+    expect(legacy.version, 0);
+    await store.write(
+      'a',
+      StoredOrderAlerts(
+        knownIds: legacy.knownIds,
+        unseenIds: legacy.unseenIds,
+        version: StoredOrderAlerts.fullSnapshotVersion,
+      ),
+    );
+    final updated = (await store.read('a'))!;
+    expect(updated.version, 1);
+    expect(updated.unseenIds, ['A']);
+  });
+  test(
+    'legacy baseline preserves unseen and does not flood expanded snapshot',
+    () async {
+      final store = _MemoryStore()
+        ..values['a'] = const StoredOrderAlerts(
+          knownIds: ['old'],
+          unseenIds: ['old'],
+        );
+      final sound = _FakeSound();
+      final container = _container(store, sound);
+      addTearDown(container.dispose);
+      await container.read(orderAlertsProvider.future);
+      final controller = container.read(orderAlertsProvider.notifier);
+      await controller.processSnapshot(
+        locationId: 'a',
+        orders: [_order('old'), _order('future')],
+        mayPlaySound: true,
+      );
+      expect(container.read(orderAlertsProvider).requireValue.unseenIds, [
+        'old',
+      ]);
+      expect(store.values['a']!.version, StoredOrderAlerts.fullSnapshotVersion);
+      expect(sound.playCalls, 0);
+      await controller.processSnapshot(
+        locationId: 'a',
+        orders: [_order('old'), _order('future'), _order('new')],
+        mayPlaySound: true,
+      );
+      expect(container.read(orderAlertsProvider).requireValue.unseenIds, [
+        'old',
+        'new',
+      ]);
+      expect(sound.playCalls, 1);
+    },
+  );
+
+  test(
+    'more than 200 active IDs do not re-alert after acknowledge and restart',
+    () async {
+      final store = _MemoryStore();
+      final sound = _FakeSound();
+      final container = _container(store, sound);
+      await container.read(orderAlertsProvider.future);
+      final controller = container.read(orderAlertsProvider.notifier);
+      await controller.processSnapshot(
+        locationId: 'a',
+        orders: [],
+        mayPlaySound: true,
+      );
+      final orders = List.generate(205, (i) => _order('$i'));
+      await controller.processSnapshot(
+        locationId: 'a',
+        orders: orders,
+        mayPlaySound: true,
+      );
+      expect(container.read(orderAlertsProvider).requireValue.unseenCount, 205);
+      await controller.acknowledge('0');
+      container.dispose();
+      final restarted = _container(store, sound);
+      addTearDown(restarted.dispose);
+      await restarted.read(orderAlertsProvider.future);
+      await restarted
+          .read(orderAlertsProvider.notifier)
+          .processSnapshot(locationId: 'a', orders: orders, mayPlaySound: true);
+      expect(restarted.read(orderAlertsProvider).requireValue.unseenCount, 204);
+      expect(
+        restarted.read(orderAlertsProvider).requireValue.unseenIds,
+        isNot(contains('0')),
+      );
+      expect(sound.playCalls, 1);
+    },
+  );
+
   test('first load seeds without sound and later pending/confirmed alert once per batch', () async {
     final _MemoryStore store = _MemoryStore();
     final _FakeSound sound = _FakeSound();
@@ -165,13 +258,20 @@ void main() {
       );
       await controller.processSnapshot(
         locationId: 'b',
-        orders: <OrderSummary>[_order('B1'), _order('B2')],
+        orders: <OrderSummary>[
+          _order('B1', location: 'b'),
+          _order('B2', location: 'b'),
+        ],
         mayPlaySound: true,
       );
       expect(sound.playCalls, 0);
       await controller.processSnapshot(
         locationId: 'b',
-        orders: <OrderSummary>[_order('B1'), _order('B2'), _order('B3')],
+        orders: <OrderSummary>[
+          _order('B1', location: 'b'),
+          _order('B2', location: 'b'),
+          _order('B3', location: 'b'),
+        ],
         mayPlaySound: true,
       );
       expect(sound.playCalls, 1);
@@ -287,10 +387,11 @@ OrderSummary _order(
   String id, {
   OrderStatus status = OrderStatus.pending,
   PaymentStatus payment = PaymentStatus.paid,
+  String location = 'a',
 }) => OrderSummary(
   id: id,
   orderNumber: id,
-  locationId: 'location-id',
+  locationId: location,
   orderType: OrderType.online,
   status: status,
   rawStatus: status.name,
@@ -347,6 +448,8 @@ class _FakeToday extends TodayOrdersController {
   @override
   Future<TodayOrdersState> build() async => TodayOrdersState(
     orders: <OrderSummary>[_order('A'), _order('B'), _order('C')],
+    snapshotLocationId: 'a',
+    fullLocationSnapshot: [_order('A'), _order('B'), _order('C')],
   );
 
   @override

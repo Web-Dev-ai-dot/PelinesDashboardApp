@@ -217,7 +217,22 @@ void main() {
             findsWidgets,
           );
           expect(find.byType(BottomSheet), findsNothing);
-          expect(find.byKey(const Key('orders-date-selector')), findsOneWidget);
+          // To Do is Today-only; date selection belongs to Orders / Upcoming.
+          expect(find.byKey(const Key('orders-date-selector')), findsNothing);
+          final labels = language == 'es'
+              ? ['En espera', 'Confirmado', 'En preparación', 'Listo', 'Todos']
+              : ['Waiting', 'Confirmed', 'Preparing', 'Ready', 'All'];
+          for (final label in labels) {
+            expect(find.widgetWithText(ChoiceChip, label), findsOneWidget);
+          }
+          expect(
+            tester
+                .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, labels[1]))
+                .selected,
+            isTrue,
+          );
+          // This location has no orders, so there is no pending-count badge.
+          expect(find.byKey(const Key('waiting-count')), findsNothing);
           await tester.tap(find.byKey(const Key('orders-header-refresh')));
           expect(
             (container.read(

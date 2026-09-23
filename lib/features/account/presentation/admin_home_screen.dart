@@ -31,17 +31,30 @@ class _AdminHomeScreenState extends ConsumerState<AdminHomeScreen> {
     return Scaffold(
       appBar: AdminAppBar(
         actions: [
-          IconButton(
-            key: const Key('orders-header-refresh'),
-            tooltip: tr(context, 'Refresh orders'),
-            onPressed: currentLocation.value == null
-                ? null
-                : () => _ordersKey.currentState?.refresh(),
-            icon: const Icon(Icons.refresh),
-          ),
+          if (widget.upcoming)
+            Padding(
+              padding: const EdgeInsets.only(right: 16),
+              child: OutlinedButton.icon(
+                key: const Key('orders-header-refresh'),
+                onPressed: currentLocation.value == null
+                    ? null
+                    : () => _ordersKey.currentState?.refresh(),
+                icon: const Icon(Icons.refresh, size: 18),
+                label: Text(tr(context, 'Refresh')),
+              ),
+            )
+          else
+            IconButton(
+              key: const Key('orders-header-refresh'),
+              tooltip: tr(context, 'Refresh orders'),
+              onPressed: currentLocation.value == null
+                  ? null
+                  : () => _ordersKey.currentState?.refresh(),
+              icon: const Icon(Icons.refresh),
+            ),
         ],
         title: Text(
-          tr(context, 'Orders'),
+          tr(context, widget.upcoming ? 'Orders' : 'To Do'),
           style: PelinesTypography.pageTitle(Theme.of(context).textTheme),
         ),
       ),
@@ -102,6 +115,7 @@ class _HomeContent extends ConsumerWidget {
             SizedBox(
               height: constraints.maxHeight,
               child: TodayOrdersView(
+                webOrders: upcoming,
                 key: ordersKey,
                 location: location,
                 initialDateFilter: upcoming

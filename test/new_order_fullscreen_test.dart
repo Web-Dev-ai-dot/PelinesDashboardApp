@@ -4,8 +4,12 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'package:pelines_admin_app/app/theme/app_theme.dart';
 import 'package:pelines_admin_app/core/api/api_exception.dart';
+import 'package:pelines_admin_app/core/time/pelines_time.dart';
+import 'package:pelines_admin_app/features/orders/models/orders_date_filter.dart';
 import 'package:pelines_admin_app/features/auth/models/admin_session.dart';
 import 'package:pelines_admin_app/features/auth/providers/auth_controller.dart';
 import 'package:pelines_admin_app/features/auth/providers/auth_providers.dart';
@@ -29,14 +33,22 @@ OrderDetail _detail(
   OrderStatus status = OrderStatus.pending,
   PaymentStatus payment = PaymentStatus.paid,
   bool longAddress = false,
+  DateTime? scheduled,
+  String type = 'online',
+  String fulfillment = 'delivery',
+  String locationId = 'location-id',
 }) => OrderDetail.fromJson({
   ...orderJson(
     id: id,
     status: status.name,
     payment: payment.name,
-    fulfillment: 'delivery',
+    fulfillment: fulfillment,
+    locationId: locationId,
   ),
   'orderNumber': id,
+  'createdAt': DateTime.now().toUtc().toIso8601String(),
+  'scheduledFor': scheduled?.toIso8601String(),
+  'orderType': type,
   'deliveryAddress': {
     'line1': longAddress
         ? List.filled(90, 'Long delivery address').join(' ')
@@ -92,6 +104,8 @@ class _Repo implements OrdersRepository {
   bool applyPatch = true;
   bool failFinalGet = false;
   Completer<void>? holdPatch;
+  bool failList = false;
+  int listCalls = 0;
   @override
   Future<OrderDetail> getOrderById(String id) async {
     gets++;
@@ -107,7 +121,18 @@ class _Repo implements OrdersRepository {
   }) async {
     patches++;
     await holdPatch?.future;
-    if (applyPatch) orders[orderId] = _detail(orderId, status: status);
+    if (applyPatch) {
+      final previous = orders[orderId]!;
+      orders[orderId] = _detail(
+        orderId,
+        status: status,
+        scheduled: previous.scheduledFor,
+        type: previous.orderType.name,
+        fulfillment: previous.fulfillmentType.name,
+        locationId: previous.locationId,
+        payment: previous.paymentStatus,
+      );
+    }
     if (failFinalGet) {
       getError = const ApiException(
         message: 'Final GET unavailable',
@@ -130,7 +155,12 @@ class _Repo implements OrdersRepository {
   Future<List<OrderSummary>> getOrders({
     required String locationId,
     OrderStatus? status,
-  }) async => summaries;
+  }) async {
+    listCalls++;
+    if (failList) throw const ApiException(message: 'Unavailable');
+    return summaries;
+  }
+
   List<OrderSummary> get summaries => orders.values
       .map(
         (o) => OrderSummary(
@@ -144,6 +174,7 @@ class _Repo implements OrdersRepository {
           fulfillmentType: o.fulfillmentType,
           contactName: o.contactName,
           createdAt: o.createdAt,
+          scheduledFor: o.scheduledFor,
           itemCount: 1,
           totalCents: o.totalCents,
         ),
@@ -158,12 +189,21 @@ class _Today extends TodayOrdersController {
   final _Repo repo;
   int refreshCalls = 0;
   @override
-  Future<TodayOrdersState> build() async =>
-      TodayOrdersState(orders: repo.summaries);
+  Future<TodayOrdersState> build() async => TodayOrdersState(
+    orders: repo.summaries,
+    fullLocationSnapshot: repo.summaries,
+    snapshotLocationId: _location.id,
+  );
   @override
   Future<void> refresh() async {
     refreshCalls++;
-    state = AsyncData(TodayOrdersState(orders: repo.summaries));
+    state = AsyncData(
+      TodayOrdersState(
+        orders: repo.summaries,
+        fullLocationSnapshot: repo.summaries,
+        snapshotLocationId: _location.id,
+      ),
+    );
   }
 }
 
@@ -184,6 +224,9 @@ Future<_Harness> _pump(
   bool cancel = false,
   Widget? child,
   double scale = 1,
+  String language = 'en',
+  bool realToday = false,
+  bool preloaded = false,
 }) async {
   final repo = _Repo();
   final container = ProviderContainer(
@@ -194,13 +237,22 @@ Future<_Harness> _pump(
       authControllerProvider.overrideWith(_Auth.new),
       orderAlertStoreProvider.overrideWithValue(_Store()),
       orderAlertSoundProvider.overrideWithValue(_Sound()),
-      todayOrdersProvider.overrideWith(() => _Today(repo)),
+      if (!realToday) todayOrdersProvider.overrideWith(() => _Today(repo)),
     ],
   );
+  if (preloaded) {
+    await container.read(todayOrdersProvider.future);
+  }
   await tester.pumpWidget(
     UncontrolledProviderScope(
       container: container,
       child: MaterialApp(
+        locale: Locale(language),
+        supportedLocales: AdminLocalizations.supportedLocales,
+        localizationsDelegates: const [
+          AdminLocalizations.delegate,
+          ...GlobalMaterialLocalizations.delegates,
+        ],
         theme: AppTheme.light,
         builder: (context, child) => MediaQuery(
           data: MediaQuery.of(context)
@@ -225,6 +277,302 @@ Future<_Harness> _pump(
 }
 
 void main() {
+  setUpAll(PelinesTime.initialize);
+  testWidgets(
+    'preloaded full snapshot baselines before first polling arrival',
+    (tester) async {
+      final h = await _pump(
+        tester,
+        realToday: true,
+        preloaded: true,
+        child: Scaffold(
+          body: TodayOrdersView(
+            location: _location,
+            onChangeLocation: () {},
+            webOrders: true,
+            initialDateFilter: OrdersDateFilter.upcoming,
+          ),
+        ),
+      );
+      expect(
+        h.container.read(orderAlertsProvider).requireValue.version,
+        StoredOrderAlerts.fullSnapshotVersion,
+      );
+      final initialCalls = h.repo.listCalls;
+      expect(
+        (await h.container.read(orderAlertStoreProvider).read(_location.id))!
+            .version,
+        StoredOrderAlerts.fullSnapshotVersion,
+      );
+      await tester.pump(const Duration(seconds: 15));
+      await tester.pumpAndSettle();
+      h.repo.orders['future'] = _detail(
+        'future',
+        type: 'catering',
+        scheduled: DateTime.now().add(const Duration(days: 7)),
+      );
+      await tester.pump(const Duration(seconds: 15));
+      await tester.pumpAndSettle();
+      expect(h.repo.listCalls, initialCalls + 2);
+      expect(h.unseen, ['future']);
+      expect(find.byKey(const Key('new-order-fullscreen')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('alert-defer')));
+      await tester.pumpAndSettle();
+      expect(h.repo.patches, 0);
+      expect(h.repo.orders['future']!.status, OrderStatus.pending);
+      expect(
+        h.container.read(todayOrdersProvider).requireValue.orders,
+        isEmpty,
+      );
+      await h.container.read(calendarOrdersProvider.notifier).refresh();
+      await tester.pumpAndSettle();
+      final upcoming = h.container.read(calendarOrdersProvider).requireValue;
+      expect(upcoming.orders.single.id, 'future');
+      expect(upcoming.orders.single.status, OrderStatus.pending);
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Waiting'));
+      await tester.pumpAndSettle();
+      expect(find.text('future'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('waiting-count')),
+          matching: find.text('1'),
+        ),
+        findsOneWidget,
+      );
+      await tester.pump(const Duration(seconds: 15));
+      await tester.pumpAndSettle();
+      expect(h.unseen, isEmpty);
+      expect(find.byKey(const Key('new-order-fullscreen')), findsNothing);
+    },
+  );
+  testWidgets(
+    'failed full fetch preserves known/unseen and each refresh uses one request',
+    (tester) async {
+      final h = await _pump(tester, realToday: true);
+      final initial = h.repo.listCalls;
+      h.repo.orders['A'] = _detail(
+        'A',
+        scheduled: DateTime.now().add(const Duration(days: 7)),
+      );
+      await h.emit(tester);
+      expect(h.repo.listCalls, initial + 1);
+      final before = h.container.read(orderAlertsProvider).requireValue;
+      h.repo.failList = true;
+      await h.emit(tester);
+      expect(h.repo.listCalls, initial + 2);
+      expect(
+        h.container.read(orderAlertsProvider).requireValue.knownIds,
+        before.knownIds,
+      );
+      expect(h.unseen, ['A']);
+      expect(
+        h.container.read(todayOrdersProvider).requireValue.refreshError,
+        isNotNull,
+      );
+    },
+  );
+  for (final type in ['online', 'catering']) {
+    for (final future in [false, true]) {
+      for (final fulfillment in ['pickup', 'delivery']) {
+        testWidgets('real polling alerts $type future=$future $fulfillment', (
+          tester,
+        ) async {
+          final h = await _pump(tester, realToday: true);
+          h.repo.orders['A'] = _detail(
+            'A',
+            type: type,
+            fulfillment: fulfillment,
+            scheduled: DateTime.now().add(Duration(days: future ? 7 : 0)),
+          );
+          await h.emit(tester);
+          expect(h.unseen, ['A']);
+          expect(find.byKey(const Key('new-order-fullscreen')), findsOneWidget);
+          expect(
+            h.container.read(todayOrdersProvider).requireValue.orders.length,
+            future ? 0 : 1,
+          );
+          await tester.tap(find.byKey(const Key('alert-defer')));
+          await tester.pumpAndSettle();
+          await h.emit(tester);
+          expect(h.unseen, isEmpty);
+          expect(h.repo.patches, 0);
+          expect(h.repo.orders['A']!.status, OrderStatus.pending);
+          expect(find.byKey(const Key('new-order-fullscreen')), findsNothing);
+        });
+      }
+    }
+  }
+
+  testWidgets('future defer remains in Upcoming Waiting but never Today', (
+    tester,
+  ) async {
+    final h = await _pump(
+      tester,
+      realToday: true,
+      child: Scaffold(
+        body: TodayOrdersView(
+          location: _location,
+          onChangeLocation: () {},
+          initialDateFilter: OrdersDateFilter.upcoming,
+          webOrders: true,
+        ),
+      ),
+    );
+    h.repo.orders['A'] = _detail(
+      'A',
+      type: 'catering',
+      scheduled: DateTime.now().add(const Duration(days: 7)),
+    );
+    await h.emit(tester);
+    await tester.tap(find.byKey(const Key('alert-defer')));
+    await tester.pumpAndSettle();
+    await h.container.read(calendarOrdersProvider.notifier).refresh();
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Waiting'));
+    await tester.pumpAndSettle();
+    expect(find.text('A'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('waiting-count')),
+        matching: find.text('1'),
+      ),
+      findsOneWidget,
+    );
+    expect(h.container.read(todayOrdersProvider).requireValue.orders, isEmpty);
+    expect(h.repo.patches, 0);
+  });
+
+  testWidgets(
+    'future unpaid failed and foreign orders do not alert; payment becoming paid does',
+    (tester) async {
+      final h = await _pump(tester, realToday: true);
+      final date = DateTime.now().add(const Duration(days: 7));
+      h.repo.orders['unpaid'] = _detail(
+        'unpaid',
+        scheduled: date,
+        payment: PaymentStatus.unpaid,
+      );
+      h.repo.orders['failed'] = _detail(
+        'failed',
+        scheduled: date,
+        payment: PaymentStatus.failed,
+      );
+      h.repo.orders['foreign'] = _detail(
+        'foreign',
+        scheduled: date,
+        locationId: 'other',
+      );
+      await h.emit(tester);
+      expect(h.unseen, isEmpty);
+      h.repo.orders['unpaid'] = _detail('unpaid', scheduled: date);
+      await h.emit(tester);
+      expect(h.unseen, ['unpaid']);
+    },
+  );
+
+  for (final cancel in [false, true]) {
+    testWidgets(
+      'future ${cancel ? "Cancel" : "Accept"} reconciles and advances mixed queue',
+      (tester) async {
+        final h = await _pump(tester, realToday: true, cancel: cancel);
+        h.repo.orders['A'] = _detail(
+          'A',
+          scheduled: DateTime.now().add(const Duration(days: 7)),
+        );
+        h.repo.orders['B'] = _detail('B');
+        await h.emit(tester);
+        if (cancel) {
+          await tester.tap(find.byKey(const Key('cancel-order-action')));
+          await tester.pumpAndSettle();
+          await tester.tap(find.byKey(const Key('cancel-order-confirm')));
+        } else {
+          await tester.tap(find.byKey(const Key('alert-accept')));
+        }
+        await tester.pumpAndSettle();
+        expect(h.repo.patches, 1);
+        expect(h.repo.gets, greaterThanOrEqualTo(3));
+        expect(
+          h.repo.orders['A']!.status,
+          cancel ? OrderStatus.cancelled : OrderStatus.confirmed,
+        );
+        expect(h.unseen, ['B']);
+        expect(find.text('B'), findsOneWidget);
+      },
+    );
+  }
+
+  for (final language in ['en', 'es']) {
+    testWidgets(
+      'Defer preserves Waiting and stays dismissed after polling ($language)',
+      (tester) async {
+        final h = await _pump(
+          tester,
+          language: language,
+          child: Scaffold(
+            body: TodayOrdersView(location: _location, onChangeLocation: () {}),
+          ),
+        );
+        h.repo.orders['A'] = _detail('A');
+        await h.emit(tester);
+        final close = find.byKey(const Key('alert-defer'));
+        expect(
+          find.byTooltip(language == 'en' ? 'Decide later' : 'Decidir después'),
+          findsOneWidget,
+        );
+        expect(tester.getSize(close).shortestSide, greaterThanOrEqualTo(48));
+        await tester.tap(close);
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('new-order-fullscreen')), findsNothing);
+        expect(h.unseen, isEmpty);
+        expect(h.repo.patches, 0);
+        expect(h.repo.orders['A']!.status, OrderStatus.pending);
+        expect(h.repo.orders['A']!.paymentStatus, PaymentStatus.paid);
+        await tester.tap(
+          find.widgetWithText(
+            ChoiceChip,
+            language == 'en' ? 'Waiting' : 'En espera',
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('A'), findsOneWidget);
+        expect(
+          find.descendant(
+            of: find.byKey(const Key('waiting-count')),
+            matching: find.text('1'),
+          ),
+          findsOneWidget,
+        );
+        await tester.pump(const Duration(seconds: 15));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('new-order-fullscreen')), findsNothing);
+        expect(h.repo.patches, 0);
+        expect(find.text('A'), findsOneWidget);
+      },
+    );
+  }
+
+  testWidgets('Defer acknowledges only the current queued alert', (
+    tester,
+  ) async {
+    final h = await _pump(tester);
+    h.repo.orders['A'] = _detail('A');
+    h.repo.orders['B'] = _detail('B');
+    await h.emit(tester);
+    await tester.tap(find.byKey(const Key('alert-defer')));
+    await tester.pumpAndSettle();
+    expect(h.unseen, ['B']);
+    expect(find.text('B'), findsOneWidget);
+    expect(find.byKey(const Key('new-order-fullscreen')), findsOneWidget);
+    expect(
+      h.repo.orders.values.every(
+        (order) =>
+            order.status == OrderStatus.pending &&
+            order.paymentStatus == PaymentStatus.paid,
+      ),
+      isTrue,
+    );
+    expect(h.repo.patches, 0);
+  });
   testWidgets(
     'Accept moves pending out of Waiting into default Confirmed and preview advances it',
     (tester) async {
@@ -279,6 +627,12 @@ void main() {
       await tester.pumpAndSettle();
       expect(h.repo.patches, 1);
       expect(h.unseen, ['A']);
+      expect(
+        tester
+            .widget<IconButton>(find.byKey(const Key('alert-defer')))
+            .onPressed,
+        isNull,
+      );
       expect(find.byKey(const Key('alert-acknowledge')), findsNothing);
       expect(find.byKey(const Key('alert-accept')), findsNothing);
       h.repo.getError = null;
@@ -450,6 +804,13 @@ void main() {
       await tester.pump();
       expect(h.repo.patches, 1);
       expect(tester.widget<FilledButton>(accept).onPressed, isNull);
+      expect(
+        tester
+            .widget<IconButton>(find.byKey(const Key('alert-defer')))
+            .onPressed,
+        isNull,
+      );
+      await tester.tap(find.byKey(const Key('alert-defer')));
       expect(h.unseen, ['A']);
       h.repo.holdPatch!.complete();
       await tester.pumpAndSettle();

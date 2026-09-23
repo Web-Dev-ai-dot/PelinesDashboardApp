@@ -37,6 +37,9 @@ class ApiOrdersRepository implements OrdersRepository {
           if (status != null) 'status': status.name,
         },
       );
+      if (response.statusCode == 206) {
+        throw const ApiException(message: 'Incomplete orders response.');
+      }
       final Object? data = response.data;
       if (data is! List<dynamic>) {
         throw const FormatException('Invalid /orders response.');

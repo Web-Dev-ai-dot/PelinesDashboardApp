@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pelines_admin_app/core/time/pelines_time.dart';
@@ -9,6 +11,42 @@ import 'package:pelines_admin_app/features/orders/providers/orders_providers.dar
 
 void main() {
   setUpAll(PelinesTime.initialize);
+  for (final fail in [false, true]) {
+    test(
+      'late location response cannot replace full snapshot, failure=$fail',
+      () async {
+        final repository = _RecordingRepository();
+        final container = ProviderContainer(
+          overrides: [
+            currentLocationProvider.overrideWith(_FakeCurrentLocation.new),
+            ordersRepositoryProvider.overrideWithValue(repository),
+          ],
+        );
+        addTearDown(container.dispose);
+        final subscription = container.listen(todayOrdersProvider, (_, _) {});
+        addTearDown(subscription.close);
+        await container.read(todayOrdersProvider.future);
+        final pending = Completer<List<OrderSummary>>();
+        repository.pending = pending;
+        final refresh = container.read(todayOrdersProvider.notifier).refresh();
+        await Future<void>.delayed(Duration.zero);
+        (container.read(
+          currentLocationProvider.notifier,
+        ) as _FakeCurrentLocation).change(_location('second'));
+        await Future<void>.delayed(Duration.zero);
+        await container.read(todayOrdersProvider.future);
+        if (fail) {
+          pending.completeError(Exception('old request failed'));
+        } else {
+          pending.complete([]);
+        }
+        await refresh;
+        final snapshot = container.read(todayOrdersProvider).requireValue;
+        expect(snapshot.snapshotLocationId, 'second');
+        expect(snapshot.refreshError, isNull);
+      },
+    );
+  }
 
   test('Today uses Pacific commercial date across UTC boundary and DST', () {
     final DateTime now = DateTime.parse(
@@ -190,6 +228,7 @@ class _FakeCurrentLocation extends CurrentLocationController {
 }
 
 class _RecordingRepository implements OrdersRepository {
+  Completer<List<OrderSummary>>? pending;
   final List<String> locationIds = <String>[];
   @override
   Future<List<OrderSummary>> getOrders({
@@ -197,6 +236,9 @@ class _RecordingRepository implements OrdersRepository {
     OrderStatus? status,
   }) async {
     locationIds.add(locationId);
+    final held = pending;
+    pending = null;
+    if (held != null) return held.future;
     return <OrderSummary>[];
   }
 

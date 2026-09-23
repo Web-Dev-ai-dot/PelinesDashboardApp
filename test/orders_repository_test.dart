@@ -11,6 +11,15 @@ import 'package:pelines_admin_app/features/orders/models/order_models.dart';
 import 'order_test_data.dart';
 
 void main() {
+  test('partial HTTP response is not a complete orders snapshot', () async {
+    final dio = Dio(BaseOptions(baseUrl: 'https://example.test/v1/'))
+      ..httpClientAdapter = _Adapter(statusCode: 206, body: '[]');
+    final repository = ApiOrdersRepository(ApiClient(dio: dio));
+    await expectLater(
+      repository.getOrders(locationId: 'location-id'),
+      throwsA(isA<ApiException>()),
+    );
+  });
   test(
     'sends the backend location UUID as locationId and parses empty list',
     () async {

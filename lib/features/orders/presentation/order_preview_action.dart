@@ -3,14 +3,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/theme/pelines_components.dart';
+import '../../../app/theme/app_theme.dart';
 import '../../locations/providers/locations_providers.dart';
 import '../models/order_models.dart';
 import '../models/order_status_action.dart';
 import '../providers/orders_providers.dart';
 
 class OrderPreviewAction extends ConsumerStatefulWidget {
-  const OrderPreviewAction({required this.order, super.key});
+  const OrderPreviewAction({
+    required this.order,
+    this.webStyle = false,
+    super.key,
+  });
   final OrderSummary order;
+  final bool webStyle;
   @override
   ConsumerState<OrderPreviewAction> createState() => _OrderPreviewActionState();
 }
@@ -57,7 +63,7 @@ class _OrderPreviewActionState extends ConsumerState<OrderPreviewAction> {
       return TextButton.icon(
         onPressed: () => ref.invalidate(orderDetailProvider(summary.id)),
         icon: const Icon(Icons.refresh),
-        label:  Text(tr(context, 'Refresh order status')),
+        label: Text(tr(context, 'Refresh order status')),
       );
     }
     if (order == null) {
@@ -78,6 +84,7 @@ class _OrderPreviewActionState extends ConsumerState<OrderPreviewAction> {
       return const SizedBox.shrink();
     }
     return _OrderActions(
+      webStyle: widget.webStyle,
       action: action,
       mutation: mutation,
       fulfillment: order.fulfillmentType,
@@ -147,6 +154,7 @@ class _OrderActions extends StatelessWidget {
     required this.otherMutationBusy,
     required this.onPressed,
     this.confirming = false,
+    this.webStyle = false,
   });
 
   final OrderStatusAction action;
@@ -155,6 +163,7 @@ class _OrderActions extends StatelessWidget {
   final bool otherMutationBusy;
   final VoidCallback onPressed;
   final bool confirming;
+  final bool webStyle;
 
   @override
   Widget build(BuildContext context) {
@@ -178,12 +187,34 @@ class _OrderActions extends StatelessWidget {
         if (showButton)
           FilledButton(
             key: const Key('order-primary-action'),
+            style: webStyle
+                ? PelinesControlStyles.button(switch (action) {
+                    OrderStatusAction.acceptOrder ||
+                    OrderStatusAction.startPreparing =>
+                      PelinesButtonVariant.accept,
+                    OrderStatusAction.markReady =>
+                      PelinesButtonVariant.preparing,
+                    OrderStatusAction.completeOrder =>
+                      PelinesButtonVariant.complete,
+                    OrderStatusAction.cancelOrder =>
+                      PelinesButtonVariant.cancel,
+                  })
+                : null,
             onPressed: busy || confirming ? null : onPressed,
             child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12),
+              padding: EdgeInsets.symmetric(vertical: webStyle ? 0 : 12),
               child: PelinesButtonLabel(
                 busy: busy,
-                label: busy
+                label: webStyle
+                    ? tr(
+                        context,
+                        busy
+                            ? (mutation.action ?? action).progressLabelFor(
+                                fulfillment,
+                              )
+                            : action.labelFor(fulfillment),
+                      )
+                    : busy
                     ? (mutation.action ?? action).progressLabelFor(fulfillment)
                     : action.labelFor(fulfillment),
               ),
@@ -202,19 +233,31 @@ class _CompletionDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool pickup = order.fulfillmentType == FulfillmentType.pickup;
-    final String action = pickup ? tr(context, 'Mark picked up') : tr(context, 'Mark delivered');
+    final String action = pickup
+        ? tr(context, 'Mark picked up')
+        : tr(context, 'Mark delivered');
     return AlertDialog(
-      title: Text(pickup ? tr(context, 'Confirm pickup?') : tr(context, 'Confirm delivery?')),
+      title: Text(
+        pickup
+            ? tr(context, 'Confirm pickup?')
+            : tr(context, 'Confirm delivery?'),
+      ),
       content: Text(
         pickup
-            ? tr(context, 'Confirm that the customer has picked up this order? It will be marked complete and removed from active orders.')
-            : tr(context, 'Confirm that this order has been delivered to the customer? It will be marked delivered and removed from active orders.'),
+            ? tr(
+                context,
+                'Confirm that the customer has picked up this order? It will be marked complete and removed from active orders.',
+              )
+            : tr(
+                context,
+                'Confirm that this order has been delivered to the customer? It will be marked delivered and removed from active orders.',
+              ),
       ),
       actions: <Widget>[
         TextButton(
           key: const Key('completion-cancel'),
           onPressed: () => Navigator.of(context).pop(false),
-          child:  Text(tr(context, 'Keep active')),
+          child: Text(tr(context, 'Keep active')),
         ),
         FilledButton(
           key: const Key('completion-confirm'),

@@ -517,10 +517,7 @@ void main() {
     addTearDown(router.dispose);
     await _pump(tester, router);
     final date = find.byKey(const Key('orders-date-selector'));
-    expect(
-      tester.widget<PopupMenuButton<OrdersDateFilter>>(date).initialValue,
-      OrdersDateFilter.today,
-    );
+    expect(date, findsNothing);
     await tester.tap(find.byKey(const Key('admin-open-drawer')));
     await tester.pumpAndSettle();
     await _tapDestination(tester, 'upcoming');
@@ -537,10 +534,7 @@ void main() {
     await tester.pumpAndSettle();
     await _tapDestination(tester, 'orders');
     expect(router.routeInformationProvider.value.uri.toString(), '/app');
-    expect(
-      tester.widget<PopupMenuButton<OrdersDateFilter>>(date).initialValue,
-      OrdersDateFilter.today,
-    );
+    expect(date, findsNothing);
     expect(tester.takeException(), isNull);
   });
 

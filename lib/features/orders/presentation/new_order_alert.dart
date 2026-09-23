@@ -1,4 +1,5 @@
 import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -174,7 +175,7 @@ class _NewOrderDecisionState extends ConsumerState<_NewOrderDecision> {
   }
 
   Future<void> _accept(OrderDetail order) async {
-    if (_acting || _loading) return;
+    if (_completed || _acting || _loading) return;
     setState(() => _acting = true);
     try {
       await ref
@@ -236,6 +237,7 @@ class _NewOrderDecisionState extends ConsumerState<_NewOrderDecision> {
         ref.watch(orderCancellationEnabledProvider) &&
         OrderStatusAction.canCancel(order);
     final canAcknowledge = !busy && (missing || (safe && !needsDecision));
+    final canDefer = !busy && !_requiresRefresh && (safe || missing);
     return Scaffold(
       key: const Key('new-order-fullscreen'),
       backgroundColor: PelinesColors.card,
@@ -259,6 +261,36 @@ class _NewOrderDecisionState extends ConsumerState<_NewOrderDecision> {
                     ),
                   ),
                   Text('1 of ${widget.count}'),
+                  IconButton(
+                    key: const Key('alert-defer'),
+                    tooltip: tr(context, 'Decide later'),
+                    constraints: const BoxConstraints(
+                      minWidth: 48,
+                      minHeight: 48,
+                    ),
+                    icon: const Icon(Icons.close, size: 20),
+                    onPressed: canDefer
+                        ? () {
+                            // Acknowledge this local alert only. Never resolve
+                            // an order or hide an in-flight/uncertain mutation.
+                            final current = ref.read(
+                              orderMutationProvider(widget.orderId),
+                            );
+                            if (_completed ||
+                                _acting ||
+                                _loading ||
+                                _requiresRefresh ||
+                                current.isBusy ||
+                                current.phase == OrderMutationPhase.error ||
+                                ref
+                                    .read(orderNotesProvider(widget.orderId))
+                                    .isBusy) {
+                              return;
+                            }
+                            unawaited(_finish());
+                          }
+                        : null,
+                  ),
                 ],
               ),
             ),
@@ -272,7 +304,7 @@ class _NewOrderDecisionState extends ConsumerState<_NewOrderDecision> {
                       if (_loading || mutation.isBusy)
                         const LinearProgressIndicator(),
                       if (mutation.isBusy)
-                         Text(tr(context, 'Verifying order update…')),
+                        Text(tr(context, 'Verifying order update…')),
                       if (order != null) ...[
                         Text(
                           order.orderNumber,
@@ -304,20 +336,36 @@ class _NewOrderDecisionState extends ConsumerState<_NewOrderDecision> {
                             ].join(', ')}',
                           ),
                         if (!order.paymentStatus.isOperationallyPaid)
-                           Text(
-                            tr(context, 'Payment is not operationally paid. This order cannot be processed.'),
+                          Text(
+                            tr(
+                              context,
+                              'Payment is not operationally paid. This order cannot be processed.',
+                            ),
                           ),
                         if (order.locationId != widget.location.id)
-                           Text(
-                            tr(context, 'Location context changed. Refresh to verify this order.'),
+                          Text(
+                            tr(
+                              context,
+                              'Location context changed. Refresh to verify this order.',
+                            ),
                           ),
                       ],
                       if (_error != null)
                         Text(
-                          missing ? tr(context, 'Order no longer available') : tr(context, 'Unable to verify the current order. Refresh to try again.'),
+                          missing
+                              ? tr(context, 'Order no longer available')
+                              : tr(
+                                  context,
+                                  'Unable to verify the current order. Refresh to try again.',
+                                ),
                         ),
                       if (_requiresRefresh)
-                         Text(tr(context, 'Refresh to verify the final order state.')),
+                        Text(
+                          tr(
+                            context,
+                            'Refresh to verify the final order state.',
+                          ),
+                        ),
                       if (mutation.message != null)
                         Text(
                           mutation.message!,
@@ -343,7 +391,9 @@ class _NewOrderDecisionState extends ConsumerState<_NewOrderDecision> {
                         onPressed: busy ? null : () => _accept(order),
                         child: PelinesButtonLabel(
                           busy: busy,
-                          label: busy ? tr(context, 'Accepting?') : tr(context, 'Accept'),
+                          label: busy
+                              ? tr(context, 'Accepting?')
+                              : tr(context, 'Accept'),
                         ),
                       ),
                     if (canAcknowledge)
@@ -353,7 +403,7 @@ class _NewOrderDecisionState extends ConsumerState<_NewOrderDecision> {
                           minimumSize: const Size.fromHeight(56),
                         ),
                         onPressed: _finish,
-                        child:  Text(tr(context, 'Acknowledge')),
+                        child: Text(tr(context, 'Acknowledge')),
                       ),
                     if (canCancel)
                       CancelOrderAction(
@@ -367,7 +417,7 @@ class _NewOrderDecisionState extends ConsumerState<_NewOrderDecision> {
                         minimumSize: const Size.fromHeight(56),
                       ),
                       onPressed: busy ? null : _refresh,
-                      child:  Text(tr(context, 'Refresh')),
+                      child: Text(tr(context, 'Refresh')),
                     ),
                   ];
                   final wide =
