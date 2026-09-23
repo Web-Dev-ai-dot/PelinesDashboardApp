@@ -5,11 +5,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/navigation/admin_navigation.dart';
 import '../../../app/theme/pelines_tokens.dart';
 import '../../locations/models/location.dart';
+import '../../locations/presentation/pelines_location_selector.dart';
+import '../../locations/presentation/pelines_location_context.dart';
 import '../../locations/providers/locations_providers.dart';
 import '../../orders/presentation/today_orders_view.dart';
+import '../../orders/models/orders_date_filter.dart';
 
 class AdminHomeScreen extends ConsumerStatefulWidget {
-  const AdminHomeScreen({super.key});
+  const AdminHomeScreen({this.upcoming = false, super.key});
+  final bool upcoming;
 
   @override
   ConsumerState<AdminHomeScreen> createState() => _AdminHomeScreenState();
@@ -37,7 +41,7 @@ class _AdminHomeScreenState extends ConsumerState<AdminHomeScreen> {
           ),
         ],
         title: Text(
-          'Pelines Admin',
+          tr(context, 'Orders'),
           style: PelinesTypography.pageTitle(Theme.of(context).textTheme),
         ),
       ),
@@ -60,7 +64,11 @@ class _AdminHomeScreenState extends ConsumerState<AdminHomeScreen> {
             ),
             data: (Location? selected) => selected == null
                 ? _LocationPicker(locations: available)
-                : _HomeContent(location: selected, ordersKey: _ordersKey),
+                : _HomeContent(
+                    location: selected,
+                    ordersKey: _ordersKey,
+                    upcoming: widget.upcoming,
+                  ),
           );
         },
       ),
@@ -69,33 +77,41 @@ class _AdminHomeScreenState extends ConsumerState<AdminHomeScreen> {
 }
 
 class _HomeContent extends ConsumerWidget {
-  const _HomeContent({required this.location, required this.ordersKey});
+  const _HomeContent({
+    required this.location,
+    required this.ordersKey,
+    required this.upcoming,
+  });
+  final bool upcoming;
   final GlobalKey<TodayOrdersViewState> ordersKey;
   final Location location;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return TodayOrdersView(
-      key: ordersKey,
-      location: location,
-      onChangeLocation: () => _showLocationPicker(context, ref),
-    );
-  }
-
-  Future<void> _showLocationPicker(BuildContext context, WidgetRef ref) async {
-    final List<Location>? locations = ref.read(locationsProvider).value;
-    if (locations == null) return;
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (BuildContext context) => SafeArea(
-        child: _LocationList(
-          locations: locations,
-          selectedId: location.id,
-          onSelected: (Location next) async {
-            await ref.read(currentLocationProvider.notifier).select(next);
-            if (context.mounted) Navigator.pop(context);
-          },
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: PelinesLocationContext(location: location),
+            ),
+            // Keep Orders' existing bounded viewport; long context scrolls above it
+            // instead of squeezing its filters and list at large text scales.
+            SizedBox(
+              height: constraints.maxHeight,
+              child: TodayOrdersView(
+                key: ordersKey,
+                location: location,
+                initialDateFilter: upcoming
+                    ? OrdersDateFilter.upcoming
+                    : OrdersDateFilter.today,
+                onChangeLocation: () => showPelinesLocationPicker(context, ref),
+                showLocationSelector: false,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -120,12 +136,15 @@ class _LocationPicker extends ConsumerWidget {
           ),
           const SizedBox(height: PelinesSpacing.xs),
           Text(
-            tr(context, 'Your selection will be used throughout the admin app.'),
+            tr(
+              context,
+              'Your selection will be used throughout the admin app.',
+            ),
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: PelinesSpacing.md),
           Expanded(
-            child: _LocationList(
+            child: PelinesLocationList(
               locations: locations,
               onSelected: (Location location) =>
                   ref.read(currentLocationProvider.notifier).select(location),
@@ -137,62 +156,11 @@ class _LocationPicker extends ConsumerWidget {
   }
 }
 
-class _LocationList extends StatelessWidget {
-  const _LocationList({
-    required this.locations,
-    required this.onSelected,
-    this.selectedId,
-  });
-
-  final List<Location> locations;
-  final String? selectedId;
-  final Future<void> Function(Location) onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView.builder(
-      shrinkWrap: true,
-      padding: const EdgeInsets.symmetric(vertical: PelinesSpacing.xs),
-      itemCount: locations.length,
-      itemBuilder: (BuildContext context, int index) {
-        final Location location = locations[index];
-        return ListTile(
-          enabled: location.isActive,
-          selected: selectedId == location.id,
-          selectedTileColor: PelinesColors.brandPrimarySoft,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(PelinesRadius.control),
-          ),
-          leading: Icon(
-            location.isActive
-                ? Icons.storefront_outlined
-                : Icons.store_outlined,
-          ),
-          title: Text(location.name),
-          subtitle: Text(
-            <String>[
-              if (location.address != null) location.address!,
-              if (!location.isActive) tr(context, 'Inactive'),
-            ].join('\n'),
-          ),
-          trailing: selectedId == location.id
-              ? const Icon(
-                  Icons.check_circle,
-                  color: PelinesColors.brandPrimary,
-                )
-              : null,
-          onTap: location.isActive ? () => onSelected(location) : null,
-        );
-      },
-    );
-  }
-}
-
 class _EmptyLocations extends StatelessWidget {
   const _EmptyLocations();
 
   @override
-  Widget build(BuildContext context) =>  Center(
+  Widget build(BuildContext context) => Center(
     child: Padding(
       padding: EdgeInsets.all(24),
       child: Text(tr(context, 'No locations are available.')),
@@ -218,7 +186,10 @@ class _LocationsError extends StatelessWidget {
             const SizedBox(height: 16),
             Text(message, textAlign: TextAlign.center),
             const SizedBox(height: 16),
-            FilledButton(onPressed: onRetry, child:  Text(tr(context, 'Try again'))),
+            FilledButton(
+              onPressed: onRetry,
+              child: Text(tr(context, 'Try again')),
+            ),
           ],
         ),
       ),

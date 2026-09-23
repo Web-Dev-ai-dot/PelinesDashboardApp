@@ -87,6 +87,7 @@ final routerProvider = Provider<GoRouter>((Ref ref) {
                 child: AdminNavigationShell(
                   controller: navigation,
                   path: state.uri.path,
+                  upcoming: state.uri.queryParameters['view'] == 'upcoming',
                   child: child,
                 ),
               ),
@@ -95,7 +96,9 @@ final routerProvider = Provider<GoRouter>((Ref ref) {
           GoRoute(
             path: '/app',
             builder: (BuildContext context, GoRouterState state) =>
-                const AdminHomeScreen(),
+                AdminHomeScreen(
+                  upcoming: state.uri.queryParameters['view'] == 'upcoming',
+                ),
             routes: <RouteBase>[
               GoRoute(
                 path: 'analytics',

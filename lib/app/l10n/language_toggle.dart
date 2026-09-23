@@ -6,22 +6,28 @@ import 'admin_localizations.dart';
 import 'locale_controller.dart';
 
 class LanguageToggle extends ConsumerWidget {
-  const LanguageToggle({this.horizontalPadding = PelinesSpacing.lg, super.key});
+  const LanguageToggle({
+    this.horizontalPadding = PelinesSpacing.lg,
+    this.inline = false,
+    super.key,
+  });
   final double horizontalPadding;
+  final bool inline;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final language = ref.watch(localeProvider).languageCode;
     return Padding(
       padding: EdgeInsets.symmetric(
         horizontal: horizontalPadding,
-        vertical: PelinesSpacing.sm,
+        vertical: inline ? 0 : PelinesSpacing.sm,
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final compact = constraints.maxWidth < 160;
           final stacked =
+              !inline &&
               constraints.maxWidth <
-              112 * MediaQuery.textScalerOf(context).scale(1);
+                  112 * MediaQuery.textScalerOf(context).scale(1);
           final label = tr(context, 'Language');
           final buttons = [
             for (final code in ['en', 'es'])
@@ -31,6 +37,11 @@ class LanguageToggle extends ConsumerWidget {
                 child: TextButton(
                   key: Key('language-$code'),
                   style: TextButton.styleFrom(
+                    textStyle: const TextStyle(
+                      fontFamily: PelinesTypography.bodyFamily,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
                     minimumSize: const Size(
                       PelinesLayout.touchTarget,
                       PelinesLayout.touchTarget,
@@ -69,9 +80,9 @@ class LanguageToggle extends ConsumerWidget {
           ];
           final pill = Container(
             key: const Key('language-pill'),
-            padding: const EdgeInsets.all(PelinesSpacing.xxs),
+            padding: EdgeInsets.all(inline ? 2 : PelinesSpacing.xxs),
             decoration: BoxDecoration(
-              color: PelinesColors.mutedSurface,
+              color: inline ? PelinesColors.card : PelinesColors.mutedSurface,
               border: Border.all(color: PelinesColors.border),
               borderRadius: BorderRadius.circular(PelinesRadius.pill),
             ),
@@ -79,6 +90,7 @@ class LanguageToggle extends ConsumerWidget {
                 ? Column(mainAxisSize: MainAxisSize.min, children: buttons)
                 : Row(mainAxisSize: MainAxisSize.min, children: buttons),
           );
+          if (inline) return Tooltip(message: label, child: pill);
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,

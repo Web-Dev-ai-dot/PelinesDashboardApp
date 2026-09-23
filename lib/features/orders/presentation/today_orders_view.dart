@@ -20,10 +20,14 @@ class TodayOrdersView extends ConsumerStatefulWidget {
   const TodayOrdersView({
     required this.location,
     required this.onChangeLocation,
+    this.showLocationSelector = true,
+    this.initialDateFilter = OrdersDateFilter.today,
     super.key,
   });
   final Location location;
   final VoidCallback onChangeLocation;
+  final bool showLocationSelector;
+  final OrdersDateFilter initialDateFilter;
 
   @override
   ConsumerState<TodayOrdersView> createState() => TodayOrdersViewState();
@@ -31,9 +35,19 @@ class TodayOrdersView extends ConsumerStatefulWidget {
 
 class TodayOrdersViewState extends ConsumerState<TodayOrdersView> {
   OrderStatus? _filter = OrderStatus.confirmed;
-  OrdersDateFilter _date = OrdersDateFilter.today;
+  late OrdersDateFilter _date = widget.initialDateFilter;
   DateTime? _chosenDate;
   final _scroll = ScrollController();
+
+  @override
+  void didUpdateWidget(covariant TodayOrdersView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Shell shortcuts reuse the existing filter; polling and local choices do
+    // not reset it. No fetching or filtering logic is duplicated here.
+    if (oldWidget.initialDateFilter != widget.initialDateFilter) {
+      _date = widget.initialDateFilter;
+    }
+  }
 
   @override
   void dispose() {
@@ -147,6 +161,12 @@ class TodayOrdersViewState extends ConsumerState<TodayOrdersView> {
                   ),
                 ),
               );
+              if (!widget.showLocationSelector) {
+                return Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: dateSelector,
+                );
+              }
               final locationSelector = PelinesLocationSelector(
                 locationName: widget.location.name,
                 onPressed: widget.onChangeLocation,
@@ -180,8 +200,14 @@ class TodayOrdersViewState extends ConsumerState<TodayOrdersView> {
             padding: const EdgeInsets.symmetric(horizontal: PelinesSpacing.lg),
             child: Text(
               _date == OrdersDateFilter.upcoming
-                  ? tr(context, 'From tomorrow · Pacific time · Available orders only')
-                  : tr(context, 'Pacific time · Available orders only; not a complete history'),
+                  ? tr(
+                      context,
+                      'From tomorrow · Pacific time · Available orders only',
+                    )
+                  : tr(
+                      context,
+                      'Pacific time · Available orders only; not a complete history',
+                    ),
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ),
@@ -229,7 +255,7 @@ class TodayOrdersViewState extends ConsumerState<TodayOrdersView> {
                           actions: <Widget>[
                             TextButton(
                               onPressed: refresh,
-                              child:  Text(tr(context, 'Retry')),
+                              child: Text(tr(context, 'Retry')),
                             ),
                           ],
                         ),
@@ -285,7 +311,7 @@ class _Filters extends StatelessWidget {
           label: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-               Text(tr(context, 'Waiting')),
+              Text(tr(context, 'Waiting')),
               if (waitingCount > 0) ...[
                 const SizedBox(width: PelinesSpacing.xs),
                 Semantics(
@@ -321,7 +347,7 @@ class _Filters extends StatelessWidget {
                 ],
                 const SizedBox(width: PelinesSpacing.xs),
                 ChoiceChip(
-                  label:  Text(tr(context, 'All')),
+                  label: Text(tr(context, 'All')),
                   selected: selected == null,
                   onSelected: (_) => onSelected(null),
                 ),
@@ -468,7 +494,10 @@ class _ErrorState extends StatelessWidget {
           const SizedBox(height: 12),
           Text(message, textAlign: TextAlign.center),
           const SizedBox(height: 12),
-          FilledButton(onPressed: onRetry, child:  Text(tr(context, 'Try again'))),
+          FilledButton(
+            onPressed: onRetry,
+            child: Text(tr(context, 'Try again')),
+          ),
         ],
       ),
     ),

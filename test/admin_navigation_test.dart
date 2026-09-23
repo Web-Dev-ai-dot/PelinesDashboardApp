@@ -8,16 +8,97 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pelines_admin_app/app/navigation/admin_navigation.dart';
 import 'package:pelines_admin_app/app/theme/app_theme.dart';
+import 'package:pelines_admin_app/features/auth/providers/auth_providers.dart';
+import 'package:pelines_admin_app/features/auth/providers/auth_controller.dart';
+import 'package:pelines_admin_app/features/auth/models/admin_session.dart';
+import 'package:pelines_admin_app/features/account/models/profile.dart';
+import 'package:pelines_admin_app/features/account/presentation/admin_home_screen.dart';
+import 'package:pelines_admin_app/features/orders/providers/orders_providers.dart';
+import 'package:pelines_admin_app/features/orders/models/orders_date_filter.dart';
+import 'package:pelines_admin_app/features/locations/presentation/pelines_location_selector.dart';
+import 'package:pelines_admin_app/features/locations/models/location.dart';
+import 'package:pelines_admin_app/features/locations/providers/locations_providers.dart';
+import 'package:pelines_admin_app/features/locations/data/location_selection_store.dart';
 
 class _LanguageStore implements LanguageStore {
+  String value = 'en';
   @override
-  Future<String?> read() async => 'en';
+  Future<String?> read() async => value;
   @override
-  Future<void> write(String language) async {}
+  Future<void> write(String language) async {
+    value = language;
+  }
+}
+
+class _Today extends TodayOrdersController {
+  @override
+  Future<TodayOrdersState> build() async => const TodayOrdersState(orders: []);
+}
+
+class _Calendar extends CalendarOrdersController {
+  @override
+  Future<HistoricalOrdersState> build() async =>
+      const HistoricalOrdersState(orders: []);
+}
+
+Location _location(String id, {bool active = true}) => Location(
+  id: id,
+  name: id,
+  slug: id,
+  address: '123 Main St, $id, OR 97060',
+  isActive: active,
+  deliveryFeeCents: 0,
+  deliveryMinimumCents: 0,
+  isAcceptingOrders: true,
+  createdAt: DateTime.utc(2026),
+  updatedAt: DateTime.utc(2026),
+);
+
+class _Locations extends LocationsController {
+  @override
+  Future<List<Location>> build() async => [
+    _location('Troutdale'),
+    _location('Tualatin'),
+    _location('Inactive', active: false),
+  ];
+}
+
+class _SelectionStore implements LocationSelectionStore {
+  String? value = 'Troutdale';
+  @override
+  Future<String?> readLocationId() async => value;
+  @override
+  Future<void> writeLocationId(String id) async {
+    value = id;
+  }
+
+  @override
+  Future<void> clearLocationId() async {
+    value = null;
+  }
+}
+
+class _Auth extends AuthController {
+  int signOutCalls = 0;
+  @override
+  Future<AdminSession?> build() async => AdminSession(
+    email: 'employee@pelines.test',
+    profile: Profile(
+      id: 'admin',
+      role: ProfileRole.admin,
+      createdAt: DateTime.utc(2026),
+      updatedAt: DateTime.utc(2026),
+    ),
+  );
+  @override
+  Future<void> signOut() async {
+    signOutCalls++;
+  }
 }
 
 GoRouter _router({
   String initial = '/app',
+  bool realOrders = false,
   AdminNavigationController? controller,
 }) {
   final navigation = controller ?? AdminNavigationController();
@@ -29,12 +110,17 @@ GoRouter _router({
         builder: (context, state, child) => AdminNavigationShell(
           controller: navigation,
           path: state.uri.path,
+          upcoming: state.uri.queryParameters['view'] == 'upcoming',
           child: child,
         ),
         routes: [
           GoRoute(
             path: '/app',
-            builder: (_, _) => const _Page('Orders'),
+            builder: (_, state) => realOrders
+                ? AdminHomeScreen(
+                    upcoming: state.uri.queryParameters['view'] == 'upcoming',
+                  )
+                : const _Page('Orders'),
             routes: [
               for (final destination in AdminDestination.values.where(
                 (d) => d != AdminDestination.orders,
@@ -120,10 +206,24 @@ Future<void> _pump(
   WidgetTester tester,
   GoRouter router, {
   double scale = 1,
+  _SelectionStore? selectionStore,
+  _LanguageStore? languageStore,
+  _Auth? auth,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [languageStoreProvider.overrideWithValue(_LanguageStore())],
+      overrides: [
+        languageStoreProvider.overrideWithValue(
+          languageStore ?? _LanguageStore(),
+        ),
+        locationsProvider.overrideWith(_Locations.new),
+        todayOrdersProvider.overrideWith(_Today.new),
+        calendarOrdersProvider.overrideWith(_Calendar.new),
+        locationSelectionStoreProvider.overrideWithValue(
+          selectionStore ?? _SelectionStore(),
+        ),
+        authControllerProvider.overrideWith(() => auth ?? _Auth()),
+      ],
       child: Consumer(
         builder: (context, ref, _) => MaterialApp.router(
           locale: ref.watch(localeProvider),
@@ -148,18 +248,463 @@ Future<void> _pump(
   await tester.pumpAndSettle();
 }
 
-Future<void> _tapDestination(WidgetTester tester, String name) async {
+Future<void> _showDestination(WidgetTester tester, String name) async {
+  final scroll = find
+      .descendant(
+        of: find.byKey(const Key('admin-navigation-list')),
+        matching: find.byType(Scrollable),
+      )
+      .first;
+  tester.state<ScrollableState>(scroll).position.jumpTo(0);
+  await tester.pumpAndSettle();
   final button = find.byKey(Key('nav-$name'));
-  await tester.scrollUntilVisible(
-    button,
-    180,
-    scrollable: find.byType(Scrollable).first,
-  );
-  await tester.tap(button);
+  if (find.byKey(const Key('admin-rail')).evaluate().isEmpty &&
+      button.evaluate().isEmpty) {
+    final group =
+        [
+          'orders',
+          'upcoming',
+          'calendar',
+          'completed',
+          'cancelled',
+        ].contains(name)
+        ? 'orders'
+        : ['analytics', 'account'].contains(name)
+        ? name
+        : 'store';
+    final header = find.byKey(Key('nav-group-$group'));
+    await tester.scrollUntilVisible(header, 150, scrollable: scroll);
+    await tester.tap(header);
+    await tester.pumpAndSettle();
+  }
+  await tester.scrollUntilVisible(button, 150, scrollable: scroll);
+  await Scrollable.ensureVisible(tester.element(button), alignment: .5);
+  await tester.pumpAndSettle();
+}
+
+Future<void> _tapDestination(WidgetTester tester, String name) async {
+  await _showDestination(tester, name);
+  await tester.tap(find.byKey(Key('nav-$name')));
   await tester.pumpAndSettle();
 }
 
 void main() {
+  for (final width in [390.0, 1180.0]) {
+    for (final language in ['en', 'es']) {
+      testWidgets(
+        'Analytics and Account groups toggle without navigating at $width/$language',
+        (tester) async {
+          await tester.binding.setSurfaceSize(Size(width, 1000));
+          addTearDown(() => tester.binding.setSurfaceSize(null));
+          final router = _router();
+          addTearDown(router.dispose);
+          await _pump(
+            tester,
+            router,
+            scale: 2,
+            languageStore: _LanguageStore()..value = language,
+          );
+          if (width < 600) {
+            await tester.tap(find.byKey(const Key('admin-open-drawer')));
+            await tester.pumpAndSettle();
+          }
+          for (final name in ['analytics', 'account']) {
+            final header = find.byKey(Key('nav-group-$name'));
+            final child = find.byKey(Key('nav-$name'));
+            final scroll = find
+                .descendant(
+                  of: find.byKey(const Key('admin-navigation-list')),
+                  matching: find.byType(Scrollable),
+                )
+                .first;
+            await tester.scrollUntilVisible(header, 150, scrollable: scroll);
+            await Scrollable.ensureVisible(
+              tester.element(header),
+              alignment: .2,
+            );
+            await tester.pumpAndSettle();
+            final previous = router.routeInformationProvider.value.uri;
+            expect(child, findsNothing);
+            expect(
+              find.descendant(
+                of: header,
+                matching: find.byIcon(Icons.expand_more),
+              ),
+              findsOneWidget,
+            );
+            await tester.tap(header);
+            await tester.pumpAndSettle();
+            expect(router.routeInformationProvider.value.uri, previous);
+            expect(
+              find.descendant(
+                of: header,
+                matching: find.byIcon(Icons.expand_less),
+              ),
+              findsOneWidget,
+            );
+            expect(child, findsOneWidget);
+            final label = name == 'analytics'
+                ? (language == 'es' ? 'Analíticas' : 'Analytics')
+                : (language == 'es' ? 'Mi perfil' : 'My Profile');
+            expect(
+              find.descendant(of: child, matching: find.text(label)),
+              findsOneWidget,
+            );
+            await tester.tap(header);
+            await tester.pumpAndSettle();
+            expect(child, findsNothing);
+            expect(router.routeInformationProvider.value.uri, previous);
+            await _tapDestination(tester, name);
+            expect(
+              router.routeInformationProvider.value.uri.path,
+              '/app/$name',
+            );
+            if (width < 600) {
+              expect(find.byType(Drawer).hitTestable(), findsNothing);
+              await tester.tap(find.byKey(const Key('admin-open-drawer')));
+              await tester.pumpAndSettle();
+            }
+            await _showDestination(tester, name);
+            final selected = find.byWidgetPredicate(
+              (w) => w is Semantics && w.properties.selected == true,
+            );
+            expect(
+              find.descendant(of: selected, matching: child),
+              findsOneWidget,
+            );
+            expect(
+              find.descendant(
+                of: header,
+                matching: find.byIcon(Icons.expand_less),
+              ),
+              findsOneWidget,
+            );
+            expect(tester.takeException(), isNull);
+          }
+        },
+      );
+    }
+  }
+  test('location locality never displays a street or invents a state', () {
+    expect(
+      locationCityState('123 Main St, Troutdale, OR 97060'),
+      'Troutdale, OR',
+    );
+    expect(
+      locationCityState('456 Main St\nTualatin, OR 97062, USA'),
+      'Tualatin, OR',
+    );
+    expect(locationCityState('123 Main St'), isNull);
+    expect(locationCityState(null), isNull);
+  });
+
+  for (final (width, scale) in [
+    (320.0, 1.0),
+    (390.0, 1.0),
+    (390.0, 2.0),
+    (599.0, 2.0),
+  ]) {
+    testWidgets(
+      'compact phone drawer geometry hierarchy and dismiss at $width/$scale',
+      (tester) async {
+        await tester.binding.setSurfaceSize(Size(width, 850));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        final router = _router();
+        addTearDown(router.dispose);
+        final auth = _Auth();
+        final language = _LanguageStore()..value = 'es';
+        await _pump(
+          tester,
+          router,
+          scale: scale,
+          languageStore: language,
+          auth: auth,
+        );
+        await tester.tap(find.byKey(const Key('admin-open-drawer')));
+        await tester.pumpAndSettle();
+        expect(tester.getSize(find.byType(Drawer)).width, 280);
+        expect(tester.getSize(find.byKey(const Key('admin-logo'))).height, 40);
+        expect(find.text('Pelines Troutdale'), findsOneWidget);
+        expect(find.text('Troutdale, OR'), findsOneWidget);
+        expect(find.text('123 Main St, Troutdale, OR 97060'), findsNothing);
+        final keys = [
+          'nav-orders',
+          'nav-group-orders',
+          'nav-group-analytics',
+          'nav-group-store',
+          'nav-group-account',
+        ];
+        for (var i = 1; i < keys.length; i++) {
+          expect(
+            tester.getTopLeft(find.byKey(Key(keys[i]))).dy,
+            greaterThan(tester.getTopLeft(find.byKey(Key(keys[i - 1]))).dy),
+          );
+        }
+        for (final label in [
+          'Por hacer',
+          'Órdenes',
+          'Analíticas',
+          'Tienda',
+          'Cuenta',
+          'Cerrar sesión',
+        ]) {
+          expect(find.text(label), findsOneWidget);
+        }
+        for (final key in [
+          'nav-orders',
+          'nav-group-orders',
+          'admin-close-drawer',
+          'admin-sign-out',
+        ]) {
+          expect(
+            tester.getSize(find.byKey(Key(key))).height,
+            greaterThanOrEqualTo(48),
+          );
+        }
+        if (scale == 1) {
+          expect(
+            tester.getSize(find.byKey(const Key('nav-surface-orders'))).height,
+            36,
+          );
+          expect(
+            tester
+                .getSize(find.byKey(const Key('nav-surface-sign-out')))
+                .height,
+            36,
+          );
+        }
+        final surface = tester.widget<Ink>(
+          find.byKey(const Key('nav-surface-orders')),
+        );
+        expect(
+          (surface.decoration! as BoxDecoration).color,
+          AppTheme.light.colorScheme.primaryContainer,
+        );
+        await tester.tap(find.byKey(const Key('nav-group-orders')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('nav-submenu-orders')), findsOneWidget);
+        for (final label in [
+          'Próximas',
+          'Calendario',
+          'Completadas',
+          'Canceladas',
+        ]) {
+          expect(find.text(label), findsOneWidget);
+        }
+        await tester.tap(find.byKey(const Key('admin-close-drawer')));
+        await tester.pumpAndSettle();
+        expect(find.byType(Drawer).hitTestable(), findsNothing);
+        expect(router.routeInformationProvider.value.uri.path, '/app');
+        await tester.tap(find.byKey(const Key('admin-open-drawer')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('admin-sign-out')));
+        await tester.pumpAndSettle();
+        expect(auth.signOutCalls, 0);
+        await tester.tap(find.byKey(const Key('logout-confirm')));
+        await tester.pumpAndSettle();
+        expect(auth.signOutCalls, 1);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  testWidgets('Upcoming and To Do reuse Orders with its existing date filter', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final router = _router(realOrders: true);
+    addTearDown(router.dispose);
+    await _pump(tester, router);
+    final date = find.byKey(const Key('orders-date-selector'));
+    expect(
+      tester.widget<PopupMenuButton<OrdersDateFilter>>(date).initialValue,
+      OrdersDateFilter.today,
+    );
+    await tester.tap(find.byKey(const Key('admin-open-drawer')));
+    await tester.pumpAndSettle();
+    await _tapDestination(tester, 'upcoming');
+    expect(
+      router.routeInformationProvider.value.uri.toString(),
+      '/app?view=upcoming',
+    );
+    expect(find.byType(AdminHomeScreen), findsOneWidget);
+    expect(
+      tester.widget<PopupMenuButton<OrdersDateFilter>>(date).initialValue,
+      OrdersDateFilter.upcoming,
+    );
+    await tester.tap(find.byKey(const Key('admin-open-drawer')));
+    await tester.pumpAndSettle();
+    await _tapDestination(tester, 'orders');
+    expect(router.routeInformationProvider.value.uri.toString(), '/app');
+    expect(
+      tester.widget<PopupMenuButton<OrdersDateFilter>>(date).initialValue,
+      OrdersDateFilter.today,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Upcoming shortcut honors an existing draft guard', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final router = _router(initial: '/app/menu/edit');
+    addTearDown(router.dispose);
+    await _pump(tester, router);
+    await tester.enterText(find.byType(TextField), 'Keep draft');
+    await tester.tap(find.byKey(const Key('admin-open-drawer')));
+    await tester.pumpAndSettle();
+    await _tapDestination(tester, 'upcoming');
+    expect(find.text('Discard changes?'), findsOneWidget);
+    await tester.tap(find.text('Keep editing'));
+    await tester.pumpAndSettle();
+    expect(router.routeInformationProvider.value.uri.path, '/app/menu/edit');
+    expect(find.text('Keep draft'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+  for (final (width, scale) in [
+    (320.0, 2.0),
+    (768.0, 2.0),
+    (1180.0, 1.0),
+    (1440.0, 2.0),
+  ]) {
+    testWidgets(
+      'web shell logo context dimensions and topbar at $width/$scale',
+      (tester) async {
+        await tester.binding.setSurfaceSize(Size(width, 900));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        final router = _router();
+        addTearDown(router.dispose);
+        await _pump(tester, router, scale: scale);
+        expect(
+          tester.getSize(find.byKey(const Key('admin-topbar'))).height,
+          greaterThanOrEqualTo(56),
+        );
+        expect(find.byType(LanguageToggle), findsOneWidget);
+        expect(
+          find.descendant(
+            of: find.byKey(const Key('admin-topbar')),
+            matching: find.byKey(const Key('location-selector')),
+          ),
+          findsNothing,
+        );
+        if (width < 600) {
+          await tester.tap(find.byKey(const Key('admin-open-drawer')));
+          await tester.pumpAndSettle();
+          expect(tester.getSize(find.byType(Drawer)).width, 280);
+        } else {
+          final key = width < 900 ? 'admin-rail' : 'admin-sidebar';
+          expect(
+            tester.getSize(find.byKey(Key(key))).width,
+            width < 900 ? 76 : 260,
+          );
+        }
+        expect(find.byKey(const Key('admin-logo')), findsOneWidget);
+        if (width >= 900) {
+          expect(find.text('employee@pelines.test'), findsOneWidget);
+          expect(find.byKey(const Key('nav-group-orders')), findsOneWidget);
+          expect(find.byKey(const Key('nav-printing')), findsNothing);
+          await _showDestination(tester, 'printing');
+          expect(find.byKey(const Key('nav-group-store')), findsOneWidget);
+          expect(
+            find.byKey(const Key('nav-printing')).hitTestable(),
+            findsOneWidget,
+          );
+          await tester.tap(find.byKey(const Key('admin-toggle-navigation')));
+          await tester.pumpAndSettle();
+          expect(tester.getSize(find.byKey(const Key('admin-rail'))).width, 76);
+        }
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  testWidgets(
+    'shell location selection reuses persistence and excludes inactive locations',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1180, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final router = _router();
+      addTearDown(router.dispose);
+      final store = _SelectionStore();
+      await _pump(tester, router, selectionStore: store);
+      await tester.tap(find.byKey(const Key('location-selector')));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<ListTile>(
+              find.byWidgetPredicate(
+                (widget) =>
+                    widget is ListTile &&
+                    widget.title is Text &&
+                    (widget.title! as Text).data == 'Inactive',
+              ),
+            )
+            .onTap,
+        isNull,
+      );
+      await tester.tap(find.widgetWithText(ListTile, 'Tualatin'));
+      await tester.pumpAndSettle();
+      expect(store.value, 'Tualatin');
+      expect(find.text('Tualatin'), findsOneWidget);
+      expect(find.byType(BottomSheet), findsNothing);
+      expect(router.routeInformationProvider.value.uri.path, '/app');
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'location and logout honor the draft guard before changing context',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1180, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final router = _router(initial: '/app/menu/edit');
+      addTearDown(router.dispose);
+      final store = _SelectionStore();
+      final auth = _Auth();
+      await _pump(tester, router, selectionStore: store, auth: auth);
+      await tester.enterText(find.byType(TextField), 'Keep context');
+      await tester.tap(find.byKey(const Key('location-selector')));
+      await tester.pumpAndSettle();
+      expect(find.text('Discard changes?'), findsOneWidget);
+      await tester.tap(find.text('Keep editing'));
+      await tester.pumpAndSettle();
+      expect(store.value, 'Troutdale');
+      expect(find.byType(BottomSheet), findsNothing);
+      await tester.tap(find.byKey(const Key('admin-sign-out')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('logout-confirm')));
+      await tester.pumpAndSettle();
+      expect(find.text('Discard changes?'), findsOneWidget);
+      await tester.tap(find.text('Keep editing'));
+      await tester.pumpAndSettle();
+      expect(auth.signOutCalls, 0);
+      expect(find.text('Keep context'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('admin-sign-out')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('logout-confirm')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Discard'));
+      await tester.pumpAndSettle();
+      expect(auth.signOutCalls, 1);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('topbar language choice persists across remount', (tester) async {
+    final store = _LanguageStore();
+    final router = _router();
+    addTearDown(router.dispose);
+    await _pump(tester, router, languageStore: store);
+    await tester.tap(find.byKey(const Key('language-es')));
+    await tester.pumpAndSettle();
+    expect(store.value, 'es');
+    await tester.pumpWidget(const SizedBox.shrink());
+    await _pump(tester, router, languageStore: store);
+    expect(find.byTooltip('Idioma'), findsOneWidget);
+    expect(find.byTooltip('Calendario'), findsOneWidget);
+  });
   test(
     'Analytics is between Orders and Calendar and resolves its selected state',
     () {
@@ -225,113 +770,59 @@ void main() {
     });
   }
   for (final width in [390.0, 768.0, 1366.0]) {
-    testWidgets(
-      'navigation EN ES updates immediately with Language after Account at $width',
-      (tester) async {
-        await tester.binding.setSurfaceSize(Size(width, 1100));
-        addTearDown(() => tester.binding.setSurfaceSize(null));
-        final router = _router();
-        addTearDown(router.dispose);
-        await _pump(tester, router, scale: width == 768 ? 2 : 1);
+    testWidgets('topbar language changes immediately at $width', (
+      tester,
+    ) async {
+      await tester.binding.setSurfaceSize(Size(width, 1100));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final router = _router();
+      addTearDown(router.dispose);
+      await _pump(tester, router, scale: width == 768 ? 2 : 1);
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('admin-topbar')),
+          matching: find.byType(LanguageToggle),
+        ),
+        findsOneWidget,
+      );
+      for (final language in ['en', 'es', 'en']) {
+        await tester.tap(find.byKey(Key('language-$language')));
+        await tester.pumpAndSettle();
+        expect(router.routeInformationProvider.value.uri.path, '/app');
+        expect(
+          find.byTooltip(language == 'es' ? 'Idioma' : 'Language'),
+          findsOneWidget,
+        );
         if (width < 600) {
           await tester.tap(find.byKey(const Key('admin-open-drawer')));
           await tester.pumpAndSettle();
         }
-        const esLabels = [
-          'Pedidos',
-          'Analítica',
-          'Calendario',
-          'Completados',
-          'Cancelados',
-          'Menú',
-          'Operaciones de tienda',
-          'Promociones',
-          'Configuración de impresora',
-          'Cuenta',
-        ];
-        for (final language in ['en', 'es', 'en']) {
-          final toggle = find.byKey(Key('language-$language'));
-          final navigationScroll = tester.state<ScrollableState>(
-            find
-                .descendant(
-                  of: find.byType(ListView),
-                  matching: find.byType(Scrollable),
-                )
-                .first,
-          );
-          navigationScroll.position.jumpTo(
-            navigationScroll.position.maxScrollExtent,
-          );
-          await tester.pumpAndSettle();
-          await Scrollable.ensureVisible(
-            tester.element(toggle),
-            alignment: 0.5,
-          );
-          await tester.pumpAndSettle();
-          await tester.tap(toggle);
-          await tester.pumpAndSettle();
-          // Spanish labels can increase the list extent with enlarged text.
-          navigationScroll.position.jumpTo(
-            navigationScroll.position.maxScrollExtent,
-          );
-          await tester.pumpAndSettle();
-          expect(router.routeInformationProvider.value.uri.path, '/app');
-          expect(
-            find.byTooltip(language == 'es' ? 'Idioma' : 'Language'),
-            findsOneWidget,
-          );
-          final account = find.byKey(const Key('nav-account'));
-          final section = find.byType(LanguageToggle);
-          expect(
-            tester.getRect(account).bottom,
-            lessThanOrEqualTo(tester.getRect(section).top),
-          );
-          final divider = find.byKey(const Key('admin-sign-out-divider'));
-          expect(
-            tester.getRect(section).bottom,
-            lessThanOrEqualTo(tester.getRect(divider).top + 1),
-          );
-          final signOut = find.byKey(const Key('admin-sign-out'));
-          expect(
-            find.descendant(
-              of: signOut,
-              matching: find.text(
-                language == 'es' ? 'Cerrar sesión' : 'Sign Out',
-              ),
-            ),
-            findsOneWidget,
-          );
-          expect(
-            tester.getRect(divider).bottom,
-            lessThanOrEqualTo(tester.getRect(signOut).top),
-          );
-          for (var i = AdminDestination.values.length - 1; i >= 0; i--) {
-            final destination = AdminDestination.values[i];
-            final item = find.byKey(Key('nav-${destination.name}'));
-            await tester.scrollUntilVisible(
-              item,
-              -160,
-              scrollable: find
-                  .descendant(
-                    of: find.byType(ListView),
-                    matching: find.byType(Scrollable),
-                  )
-                  .first,
-            );
+        for (final destination in AdminDestination.values) {
+          await _showDestination(tester, destination.name);
+          final item = find.byKey(Key('nav-${destination.name}'));
+          final label = width < 600 && destination == AdminDestination.orders
+              ? tr(tester.element(item), 'To Do')
+              : destination == AdminDestination.account &&
+                    find.byKey(const Key('admin-rail')).evaluate().isEmpty
+              ? tr(tester.element(item), 'My Profile')
+              : destination.localizedLabel(tester.element(item));
+          if (find.byKey(const Key('admin-rail')).evaluate().isNotEmpty) {
+            expect(find.byTooltip(label), findsOneWidget);
+          } else {
             expect(
-              find.descendant(
-                of: item,
-                matching: find.text(
-                  language == 'es' ? esLabels[i] : destination.label,
-                ),
-              ),
+              find.descendant(of: item, matching: find.text(label)),
               findsOneWidget,
             );
           }
-          expect(tester.takeException(), isNull);
         }
-      },
-    );
+        expect(tester.takeException(), isNull);
+        if (width < 600) {
+          Navigator.of(tester.element(find.byKey(const Key('admin-drawer'))))
+              .pop();
+          await tester.pumpAndSettle();
+        }
+      }
+    });
   }
   testWidgets('phone drawer control stays left and preserves Back', (
     tester,
@@ -342,15 +833,14 @@ void main() {
     addTearDown(router.dispose);
     await _pump(tester, router);
     final drawer = find.byKey(const Key('admin-open-drawer'));
-    expect(find.byIcon(Icons.view_sidebar_outlined), findsOneWidget);
-    expect(find.byIcon(Icons.menu_rounded), findsNothing);
+    expect(find.byIcon(Icons.menu_rounded), findsOneWidget);
     expect(find.byTooltip('Open navigation'), findsOneWidget);
     expect(tester.getCenter(drawer).dx, lessThan(56));
     expect(find.byType(BackButton), findsOneWidget);
     await tester.tap(drawer);
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('admin-drawer')).hitTestable(), findsOneWidget);
-    Navigator.of(tester.element(find.byKey(const Key('nav-orders')))).pop();
+    Navigator.of(tester.element(find.byType(Drawer))).pop();
     await tester.pumpAndSettle();
     await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
@@ -373,7 +863,7 @@ void main() {
       await tester.enterText(find.byType(TextField), 'Keep this draft');
       await tester.pump();
       final toggle = find.byKey(const Key('admin-toggle-navigation'));
-      final initiallyRail = width < 840;
+      final initiallyRail = width < 900;
       expect(
         find.byIcon(
           initiallyRail ? Icons.view_sidebar_outlined : Icons.view_sidebar,
@@ -381,7 +871,7 @@ void main() {
         findsOneWidget,
       );
       expect(find.byIcon(Icons.menu_rounded), findsNothing);
-      expect(tester.getCenter(toggle).dx, lessThan(initiallyRail ? 120 : 232));
+      expect(tester.getCenter(toggle).dx, lessThan(initiallyRail ? 76 : 260));
       expect(
         find.byTooltip(
           initiallyRail ? 'Expand navigation' : 'Collapse navigation',
@@ -489,11 +979,7 @@ void main() {
         expect(find.byKey(Key('admin-$variant')), findsOneWidget);
         for (final destination in AdminDestination.values) {
           final item = find.byKey(Key('nav-${destination.name}'));
-          await tester.scrollUntilVisible(
-            item,
-            150,
-            scrollable: find.byType(Scrollable).first,
-          );
+          await _showDestination(tester, destination.name);
           await Scrollable.ensureVisible(tester.element(item), alignment: 0.5);
           await tester.pumpAndSettle();
           expect(item.hitTestable(), findsOneWidget);

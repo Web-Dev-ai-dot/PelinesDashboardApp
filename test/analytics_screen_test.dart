@@ -174,9 +174,9 @@ void main() {
     repository.requests.single.complete(sample(count: 2000));
     await tester.pumpAndSettle();
     for (final text in [
-      'Analítica',
+      'Analíticas',
       'Ventas',
-      'Pedidos',
+      'Órdenes',
       'Pedido promedio',
       'Artículos vendidos',
       'Actualizar',

@@ -306,7 +306,10 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.textContaining('calendar-order'));
+    final orderCard = find.textContaining('calendar-order');
+    await tester.ensureVisible(orderCard);
+    await tester.pumpAndSettle();
+    await tester.tap(orderCard);
     await tester.pumpAndSettle();
     expect(find.text('detail calendar-uuid'), findsOneWidget);
     router.pop();
