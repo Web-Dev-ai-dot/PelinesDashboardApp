@@ -217,7 +217,9 @@ void main() {
     expect(find.text('Cancelled'), findsOneWidget);
     expect(find.text('Paid'), findsOneWidget);
     expect(find.textContaining('Cancelled at'), findsNothing);
-    expect(find.byType(FilledButton), findsNothing);
+    expect(find.byKey(const Key('order-primary-action')), findsNothing);
+    expect(find.byKey(const Key('cancel-order-action')), findsNothing);
+    expect(find.text('View'), findsOneWidget);
   });
 }
 

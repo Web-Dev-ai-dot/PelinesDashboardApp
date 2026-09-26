@@ -14,7 +14,8 @@ import '../models/order_status_action.dart';
 import '../providers/order_alerts_controller.dart';
 import '../providers/orders_providers.dart';
 import 'cancel_order_action.dart';
-import 'order_ui_helpers.dart';
+import 'order_parity_content.dart';
+import '../../../app/theme/app_theme.dart';
 
 // Prevents an already-open Detail beneath the modal from acknowledging a new
 // alert merely because the canonical provider refreshes that hidden screen.
@@ -240,7 +241,7 @@ class _NewOrderDecisionState extends ConsumerState<_NewOrderDecision> {
     final canDefer = !busy && !_requiresRefresh && (safe || missing);
     return Scaffold(
       key: const Key('new-order-fullscreen'),
-      backgroundColor: PelinesColors.card,
+      backgroundColor: PelinesColors.page,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -255,12 +256,19 @@ class _NewOrderDecisionState extends ConsumerState<_NewOrderDecision> {
                   ),
                   const SizedBox(width: PelinesSpacing.sm),
                   Expanded(
-                    child: Text(
-                      tr(context, 'New order'),
-                      style: Theme.of(context).textTheme.headlineSmall,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          tr(context, 'New Order'),
+                          style: PelinesTypography.sectionTitle(
+                            Theme.of(context).textTheme,
+                          ),
+                        ),
+                        Text('1 ${tr(context, 'of')} ${widget.count}'),
+                      ],
                     ),
                   ),
-                  Text('1 of ${widget.count}'),
                   IconButton(
                     key: const Key('alert-defer'),
                     tooltip: tr(context, 'Decide later'),
@@ -306,35 +314,10 @@ class _NewOrderDecisionState extends ConsumerState<_NewOrderDecision> {
                       if (mutation.isBusy)
                         Text(tr(context, 'Verifying order update…')),
                       if (order != null) ...[
-                        Text(
-                          order.orderNumber,
-                          style: Theme.of(context).textTheme.headlineMedium,
+                        NewOrderParityContent(
+                          order: order,
+                          locationName: widget.location.name,
                         ),
-                        const SizedBox(height: PelinesSpacing.md),
-                        StatusChip(
-                          status: order.status,
-                          fulfillment: order.fulfillmentType,
-                          rawStatus: order.rawStatus,
-                        ),
-                        const SizedBox(height: PelinesSpacing.md),
-                        Text(
-                          fulfillmentLabel(order.fulfillmentType),
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                        Text('Requested: ${requestedTime(order.scheduledFor)}'),
-                        Text(
-                          'Total: ${money(order.totalCents)}',
-                          style: Theme.of(context).textTheme.headlineSmall,
-                        ),
-                        Text('Location: ${widget.location.name}'),
-                        if (order.fulfillmentType == FulfillmentType.delivery &&
-                            order.deliveryAddress != null)
-                          Text(
-                            'Delivery address: ${[
-                              for (final key in ['line1', 'line2', 'city', 'state', 'zip'])
-                                if (order.deliveryAddress![key] is String) order.deliveryAddress![key],
-                            ].join(', ')}',
-                          ),
                         if (!order.paymentStatus.isOperationallyPaid)
                           Text(
                             tr(
@@ -385,9 +368,14 @@ class _NewOrderDecisionState extends ConsumerState<_NewOrderDecision> {
                     if (needsDecision)
                       FilledButton(
                         key: const Key('alert-accept'),
-                        style: FilledButton.styleFrom(
-                          minimumSize: const Size.fromHeight(56),
-                        ),
+                        style:
+                            PelinesControlStyles.button(
+                              PelinesButtonVariant.accept,
+                            ).copyWith(
+                              minimumSize: const WidgetStatePropertyAll(
+                                Size(48, 56),
+                              ),
+                            ),
                         onPressed: busy ? null : () => _accept(order),
                         child: PelinesButtonLabel(
                           busy: busy,

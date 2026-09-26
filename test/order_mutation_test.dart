@@ -513,7 +513,8 @@ void main() {
       ],
     );
     await _pumpDetail(tester, repository);
-    expect(find.byKey(const Key('order-primary-action')), findsNothing);
+    expect(find.byKey(const Key('order-primary-action')), findsOneWidget);
+    expect(find.text('Start preparing'), findsOneWidget);
 
     final ProviderContainer container = ProviderScope.containerOf(
       tester.element(find.byType(OrderDetailScreen)),
@@ -521,7 +522,8 @@ void main() {
     container.read(appResumeTickProvider.notifier).resumed();
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('order-primary-action')), findsNothing);
+    expect(find.byKey(const Key('order-primary-action')), findsOneWidget);
+    expect(find.text('Mark ready'), findsOneWidget);
     expect(find.text('Start preparing'), findsNothing);
     expect(repository.getCalls, 2);
   });

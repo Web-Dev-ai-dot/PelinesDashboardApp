@@ -33,6 +33,7 @@ OrderDetail _detail(
   OrderStatus status = OrderStatus.pending,
   PaymentStatus payment = PaymentStatus.paid,
   bool longAddress = false,
+  bool rich = false,
   DateTime? scheduled,
   String type = 'online',
   String fulfillment = 'delivery',
@@ -49,6 +50,39 @@ OrderDetail _detail(
   'createdAt': DateTime.now().toUtc().toIso8601String(),
   'scheduledFor': scheduled?.toIso8601String(),
   'orderType': type,
+  if (rich) ...{
+    'contactName': 'María Customer',
+    'eventDetails': {'eventName': 'Celebración familiar', 'attendees': 25},
+    'notes': 'Customer note: no onions',
+    'internalNotes': 'Kitchen note: call on arrival',
+    'location': {'name': 'Troutdale'},
+    'subtotalCents': 2400,
+    'discountCents': 100,
+    'discountCode': 'FAMILY',
+    'serviceFeeCents': 60,
+    'deliveryFeeCents': 200,
+    'taxCents': 140,
+    'tipCents': 300,
+    'totalCents': 3000,
+    'items': [
+      {
+        'id': 'item-1',
+        'productName': 'Tacos de camarón',
+        'quantity': 2,
+        'unitPriceCents': 1200,
+        'lineTotalCents': 2400,
+        'notes': 'Salsa aparte',
+        'modifiers': [
+          {
+            'id': 'm-1',
+            'groupName': 'Salsa',
+            'optionName': 'Verde',
+            'priceDeltaCents': 50,
+          },
+        ],
+      },
+    ],
+  },
   'deliveryAddress': {
     'line1': longAddress
         ? List.filled(90, 'Long delivery address').join(' ')
@@ -278,6 +312,142 @@ Future<_Harness> _pump(
 
 void main() {
   setUpAll(PelinesTime.initialize);
+  for (final (width, height, scale) in [
+    (320.0, 740.0, 2.0),
+    (768.0, 1024.0, 1.0),
+    (1366.0, 768.0, 1.0),
+    (1024.0, 600.0, 2.0),
+  ]) {
+    for (final language in ['en', 'es']) {
+      testWidgets('Block 4 detail hierarchy at $width/$scale/$language', (
+        tester,
+      ) async {
+        tester.view.physicalSize = Size(width, height);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final h = await _pump(
+          tester,
+          language: language,
+          scale: scale,
+          child: const OrderDetailScreen(orderId: 'A'),
+        );
+        h.repo.orders['A'] = _detail(
+          'A',
+          status: OrderStatus.confirmed,
+          rich: true,
+          type: 'catering',
+          scheduled: DateTime.now().add(const Duration(days: 7)),
+        );
+        h.container.invalidate(orderDetailProvider('A'));
+        await tester.pumpAndSettle();
+        final keys = [
+          'detail-order-number',
+          'detail-progress',
+          'detail-customer',
+          'detail-fulfillment',
+          'detail-items-totals',
+          'detail-customer-notes',
+        ];
+        for (var i = 0; i < keys.length - 1; i++) {
+          expect(
+            tester.getTopLeft(find.byKey(Key(keys[i]))).dy,
+            lessThan(tester.getTopLeft(find.byKey(Key(keys[i + 1]))).dy),
+          );
+        }
+        expect(find.text('María Customer'), findsOneWidget);
+        expect(find.text('2× Tacos de camarón'), findsOneWidget);
+        expect(find.textContaining('Salsa: Verde'), findsOneWidget);
+        expect(find.textContaining('Salsa aparte'), findsOneWidget);
+        expect(find.text('Customer note: no onions'), findsOneWidget);
+        expect(find.text('Celebración familiar'), findsWidgets);
+        expect(find.text(r'$30.00'), findsOneWidget);
+        expect(find.text(r'-$1.00'), findsOneWidget);
+        expect(
+          find.text(
+            language == 'es' ? 'Actualizar progreso' : 'Update Progress',
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.text(
+            language == 'es' ? 'Artículos y totales' : 'Items & Totals',
+          ),
+          findsOneWidget,
+        );
+        expect(find.byIcon(Icons.print), findsNothing);
+        final action = find.byKey(const Key('order-primary-action'));
+        await tester.ensureVisible(action);
+        expect(tester.getSize(action).height, greaterThanOrEqualTo(48));
+        await tester.ensureVisible(
+          find.byKey(const Key('internal-notes-field')),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          tester
+              .widget<TextField>(find.byKey(const Key('internal-notes-field')))
+              .controller!
+              .text,
+          'Kitchen note: call on arrival',
+        );
+        expect(
+          tester.getSize(find.byKey(const Key('detail-customer'))).width,
+          lessThanOrEqualTo(768),
+        );
+        expect(tester.takeException(), isNull);
+      });
+      testWidgets('Block 4 future alert hierarchy at $width/$scale/$language', (
+        tester,
+      ) async {
+        tester.view.physicalSize = Size(width, height);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final h = await _pump(
+          tester,
+          language: language,
+          scale: scale,
+          cancel: true,
+          realToday: true,
+        );
+        h.repo.orders['A'] = _detail(
+          'A',
+          rich: true,
+          type: 'catering',
+          scheduled: DateTime.now().add(const Duration(days: 7)),
+        );
+        await h.emit(tester);
+        expect(
+          find.text(language == 'es' ? 'Nueva orden' : 'New Order'),
+          findsOneWidget,
+        );
+        expect(find.text('María Customer'), findsOneWidget);
+        expect(find.text('2× Tacos de camarón'), findsOneWidget);
+        expect(find.text(r'$30.00'), findsOneWidget);
+        expect(
+          find.textContaining(
+            language == 'es' ? 'Hora del Pacífico' : 'Pacific time',
+          ),
+          findsOneWidget,
+        );
+        final accept = find.byKey(const Key('alert-accept'));
+        final cancel = find.byKey(const Key('cancel-order-action'));
+        expect(accept.hitTestable(), findsOneWidget);
+        expect(cancel.hitTestable(), findsOneWidget);
+        expect(tester.getSize(accept).height, greaterThanOrEqualTo(48));
+        await tester.ensureVisible(find.byKey(const Key('alert-total')));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+        await tester.tap(find.byKey(const Key('alert-defer')));
+        await tester.pumpAndSettle();
+        await h.emit(tester);
+        expect(h.repo.patches, 0);
+        expect(h.repo.orders['A']!.status, OrderStatus.pending);
+        expect(h.unseen, isEmpty);
+        expect(find.byKey(const Key('new-order-fullscreen')), findsNothing);
+      });
+    }
+  }
   testWidgets(
     'preloaded full snapshot baselines before first polling arrival',
     (tester) async {
@@ -726,7 +896,7 @@ void main() {
     (OrderStatus.preparing, 'Mark ready'),
     (OrderStatus.ready, 'Mark delivered'),
   ]) {
-    testWidgets('Detail does not duplicate the $label preview action', (
+    testWidgets('Detail progress exposes only the valid $label action', (
       tester,
     ) async {
       final h = await _pump(
@@ -737,9 +907,24 @@ void main() {
       h.container.invalidate(orderDetailProvider('A'));
       await tester.pumpAndSettle();
       final action = find.byKey(const Key('order-primary-action'));
-      expect(action, findsNothing);
-      expect(find.text(label), findsNothing);
+      expect(action, findsOneWidget);
+      expect(find.text(label), findsOneWidget);
       expect(find.text('Accept order'), findsNothing);
+      expect(find.byType(DropdownButton<OrderStatus>), findsNothing);
+      await tester.ensureVisible(action);
+      await tester.tap(action);
+      await tester.pumpAndSettle();
+      if (status == OrderStatus.ready) {
+        expect(h.repo.patches, 0);
+        await tester.tap(find.byKey(const Key('completion-confirm')));
+        await tester.pumpAndSettle();
+      }
+      expect(h.repo.patches, 1);
+      expect(h.repo.orders['A']!.status, switch (status) {
+        OrderStatus.confirmed => OrderStatus.preparing,
+        OrderStatus.preparing => OrderStatus.ready,
+        _ => OrderStatus.delivered,
+      });
     });
   }
 

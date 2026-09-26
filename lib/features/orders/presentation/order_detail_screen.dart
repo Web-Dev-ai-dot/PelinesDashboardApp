@@ -1,4 +1,5 @@
 import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -8,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/navigation/admin_navigation.dart';
 import '../../../app/theme/pelines_components.dart';
 import '../../../app/theme/pelines_tokens.dart';
+import '../../../app/theme/pelines_order_badges.dart';
 import '../../../core/api/api_exception.dart';
 import '../../../core/time/pelines_time.dart';
 import '../../locations/models/location.dart';
@@ -17,6 +19,9 @@ import '../models/order_status_action.dart';
 import '../providers/order_alerts_controller.dart';
 import '../providers/orders_providers.dart';
 import 'order_ui_helpers.dart';
+import 'order_parity_content.dart';
+import 'order_preview_action.dart';
+import '../../../app/theme/app_theme.dart';
 import 'cancel_order_action.dart';
 import 'new_order_alert.dart';
 
@@ -88,19 +93,24 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                   if (detail.hasError)
                     MaterialBanner(
                       key: const Key('detail-refresh-warning'),
-                      content:  Text(
-                        tr(context, 'The latest order status could not be loaded. Showing saved details.'),
+                      content: Text(
+                        tr(
+                          context,
+                          'The latest order status could not be loaded. Showing saved details.',
+                        ),
                       ),
                       actions: <Widget>[
                         TextButton(
                           onPressed: () => ref.invalidate(
                             orderDetailProvider(widget.orderId),
                           ),
-                          child:  Text(tr(context, 'Retry')),
+                          child: Text(tr(context, 'Retry')),
                         ),
                       ],
                     ),
-                  Expanded(child: _DetailBody(initialOrder: displayed)),
+                  Expanded(
+                    child: _DetailBody(initialOrder: displayed, onBack: leave),
+                  ),
                 ],
               )
             : detail.when(
@@ -119,7 +129,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                           ),
                   );
                 },
-                data: (OrderDetail order) => _DetailBody(initialOrder: order),
+                data: (OrderDetail order) =>
+                    _DetailBody(initialOrder: order, onBack: leave),
               ),
       ),
     );
@@ -129,18 +140,18 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
     return await showDialog<bool>(
           context: context,
           builder: (BuildContext context) => AlertDialog(
-            title:  Text(tr(context, 'Discard unsaved notes?')),
-            content:  Text(tr(context, 'You have unsaved internal notes.')),
+            title: Text(tr(context, 'Discard unsaved notes?')),
+            content: Text(tr(context, 'You have unsaved internal notes.')),
             actions: <Widget>[
               TextButton(
                 key: const Key('unsaved-stay'),
                 onPressed: () => Navigator.of(context).pop(false),
-                child:  Text(tr(context, 'Stay')),
+                child: Text(tr(context, 'Stay')),
               ),
               FilledButton(
                 key: const Key('unsaved-discard'),
                 onPressed: () => Navigator.of(context).pop(true),
-                child:  Text(tr(context, 'Discard changes')),
+                child: Text(tr(context, 'Discard changes')),
               ),
             ],
           ),
@@ -150,8 +161,9 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
 }
 
 class _DetailBody extends ConsumerWidget {
-  const _DetailBody({required this.initialOrder});
+  const _DetailBody({required this.initialOrder, required this.onBack});
   final OrderDetail initialOrder;
+  final VoidCallback onBack;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -188,154 +200,295 @@ class _DetailBody extends ConsumerWidget {
     final bool canCancel =
         cancellationEnabled && OrderStatusAction.canCancel(order);
     return ListView(
-      padding: const EdgeInsets.fromLTRB(
-        PelinesSpacing.md,
-        PelinesSpacing.xs,
-        PelinesSpacing.md,
-        PelinesSpacing.xxl,
-      ),
-      children: <Widget>[
-        Row(
-          children: <Widget>[
-            Expanded(
-              child: Text(
-                order.orderNumber,
-                style: Theme.of(context).textTheme.headlineMedium
-                    ?.copyWith(fontSize: 28),
-              ),
-            ),
-            StatusChip(
-              status: order.status,
-              fulfillment: order.fulfillmentType,
-              rawStatus: order.rawStatus,
-            ),
-          ],
-        ),
-        const SizedBox(height: PelinesSpacing.xxs),
-        Text(
-          'Placed ${PelinesTime.formatDateTime(order.createdAt)}',
-          style: Theme.of(context).textTheme.bodyMedium
-              ?.copyWith(color: PelinesColors.textSecondary),
-        ),
-        if (!order.paymentStatus.isOperationallyPaid &&
-            !(cancellationEnabled &&
-                order.status == OrderStatus.cancelled)) ...<Widget>[
-          const SizedBox(height: PelinesSpacing.md),
-           _WarningCard(
-            icon: Icons.warning_amber_rounded,
-            title: tr(context, 'Payment not completed'),
-            message: tr(context, 'This order cannot be processed because its payment is not marked as paid.'),
-          ),
-        ],
-        if (locationContextChanged) ...<Widget>[
-          const SizedBox(height: PelinesSpacing.md),
-           _WarningCard(
-            key: Key('location-context-warning'),
-            icon: Icons.location_off_outlined,
-            title: tr(context, 'Location context changed'),
-            message:
-                tr(context, 'This order is read-only until you return to its location.'),
-          ),
-        ],
-        const SizedBox(height: PelinesSpacing.xxs),
-        _Section(
-          title: tr(context, 'Fulfillment'),
-          children: <Widget>[
-            _Row(tr(context, 'Requested time'), requestedTime(order.scheduledFor)),
-            _Row(tr(context, 'Method'), fulfillmentLabel(order.fulfillmentType)),
-            _Row(tr(context, 'Location'), _locationName(order)),
-            if (order.fulfillmentType == FulfillmentType.delivery)
-              _Row(tr(context, 'Delivery address'), _address(order.deliveryAddress)),
-          ],
-        ),
-        _Section(
-          title: tr(context, 'Customer'),
-          children: <Widget>[
-            _Row(tr(context, 'Name'), order.contactName),
-            _Row(tr(context, 'Phone'), order.contactPhone),
-            _Row(tr(context, 'Email'), order.contactEmail),
-          ],
-        ),
-        if (order.orderType == OrderType.catering)
-          _Section(
-            title: tr(context, 'Event'),
-            children: <Widget>[
-              _Row(tr(context, 'Event name'), _mapString(order.eventDetails, 'eventName')),
-              _Row(tr(context, 'Attendees'), _mapValue(order.eventDetails, 'attendees')),
-            ],
-          ),
-        if (order.notes?.trim().isNotEmpty == true)
-          _Section(
-            title: tr(context, 'Customer Notes'),
-            children: <Widget>[Text(order.notes!)],
-          ),
-        if (cancellationEnabled && order.status == OrderStatus.cancelled)
-          _Section(
-            title: tr(context, 'Internal notes'),
-            children: <Widget>[
-              Text(order.internalNotes ?? 'No internal notes'),
-            ],
-          )
-        else
-          _InternalNotesEditor(order: order),
-        _Section(
-          title: tr(context, 'Items'),
-          children: order.items.isEmpty
-              ?  <Widget>[Text(tr(context, 'No items recorded'))]
-              : order.items
-                    .map((OrderItem item) => _Item(order: item))
-                    .toList(growable: false),
-        ),
-        _Section(
-          title: tr(context, 'Totals'),
-          children: <Widget>[
-            _MoneyRow(tr(context, 'Subtotal'), order.subtotalCents),
-            if (order.discountCents != 0)
-              _MoneyRow(
-                order.discountCode == null
-                    ? tr(context, 'Discount')
-                    : 'Discount (${order.discountCode})',
-                -order.discountCents,
-              ),
-            _MoneyRow(tr(context, 'Service fee'), order.serviceFeeCents),
-            _MoneyRow(tr(context, 'Delivery fee'), order.deliveryFeeCents),
-            _MoneyRow(tr(context, 'Tax'), order.taxCents),
-            _MoneyRow(tr(context, 'Tip'), order.tipCents),
-            const Divider(),
-            _MoneyRow(tr(context, 'Total'), order.totalCents, emphasized: true),
-          ],
-        ),
-        _Section(
-          title: tr(context, 'Payment'),
-          children: <Widget>[
-            _Row(
-              tr(context, 'Status'),
-              cancellationEnabled
-                  ? order.rawPaymentStatus ?? order.paymentStatus.name
-                  : order.paymentStatus.name,
-            ),
-            if (order.cardBrand != null && order.cardLast4 != null)
-              _Row(tr(context, 'Card'), '${order.cardBrand} ending in ${order.cardLast4}'),
-          ],
-        ),
-        if (order.printedAt != null || order.deliveredAt != null)
-          _Section(
-            title: tr(context, 'Operational'),
-            children: <Widget>[
-              if (order.printedAt != null)
-                _Row(tr(context, 'Printed'), PelinesTime.formatDateTime(order.printedAt!)),
-              if (order.deliveredAt != null)
-                _Row(
-                  tr(context, 'Completed'),
-                  PelinesTime.formatDateTime(order.deliveredAt!),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+      children: [
+        Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 768),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: TextButton.icon(
+                    key: const Key('detail-back'),
+                    onPressed: onBack,
+                    icon: const Icon(Icons.arrow_back, size: 18),
+                    label: Text(tr(context, 'Back to orders')),
+                  ),
                 ),
-            ],
+                Text(
+                  tr(context, 'Order').toUpperCase(),
+                  style: PelinesTypography.smallLabel,
+                ),
+                Text(
+                  order.orderNumber,
+                  key: const Key('detail-order-number'),
+                  style: PelinesTypography.pageTitle(
+                    Theme.of(context).textTheme,
+                  )?.copyWith(fontSize: 44),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  '${tr(context, 'Placed')}: ${PelinesTime.formatDateTime(order.createdAt)} · ${tr(context, 'Pacific time')}',
+                ),
+                const SizedBox(height: 16),
+                OrderParityBadges(order: order),
+                if (!order.paymentStatus.isOperationallyPaid &&
+                    !(cancellationEnabled &&
+                        order.status == OrderStatus.cancelled)) ...[
+                  const SizedBox(height: 16),
+                  _WarningCard(
+                    icon: Icons.warning_amber_rounded,
+                    title: tr(context, 'Payment not completed'),
+                    message: tr(
+                      context,
+                      'This order cannot be processed because its payment is not marked as paid.',
+                    ),
+                  ),
+                ],
+                if (locationContextChanged) ...[
+                  const SizedBox(height: 16),
+                  _WarningCard(
+                    key: const Key('location-context-warning'),
+                    icon: Icons.location_off_outlined,
+                    title: tr(context, 'Location context changed'),
+                    message: tr(
+                      context,
+                      'This order is read-only until you return to its location.',
+                    ),
+                  ),
+                ],
+                _Section(
+                  sectionKey: const Key('detail-progress'),
+                  title: tr(context, 'Update Progress'),
+                  children: [
+                    Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: PelinesOrderBadges.status(
+                        status: order.status,
+                        label: tr(
+                          context,
+                          statusLabel(
+                            order.status,
+                            order.fulfillmentType,
+                            order.rawStatus,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    if (mutation.isBusy) ...[
+                      const LinearProgressIndicator(),
+                      Text(tr(context, 'Verifying order update…')),
+                    ],
+                    OrderPreviewAction(
+                      order: _summary(initialOrder),
+                      webStyle: true,
+                      refreshOnSummaryChange: false,
+                    ),
+                    if (canCancel && !locationContextChanged) ...[
+                      const SizedBox(height: 12),
+                      CancelOrderAction(
+                        order: order,
+                        busy: mutation.isBusy || notes.isBusy,
+                        expanded: true,
+                      ),
+                    ],
+                    if (OrderStatusAction.forOrder(
+                          order.status,
+                          order.fulfillmentType,
+                        ) ==
+                        null)
+                      Text(
+                        tr(
+                          context,
+                          statusLabel(
+                            order.status,
+                            order.fulfillmentType,
+                            order.rawStatus,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                _Section(
+                  sectionKey: const Key('detail-customer'),
+                  title: tr(context, 'Customer'),
+                  children: [
+                    Text(
+                      order.contactName,
+                      style: const TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    if (_mapString(order.eventDetails, 'eventName') != '—')
+                      Text(
+                        _mapString(order.eventDetails, 'eventName'),
+                        style: const TextStyle(fontStyle: FontStyle.italic),
+                      ),
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final fields = [
+                          OrderInfoField(
+                            label: tr(context, 'Email'),
+                            value: order.contactEmail,
+                          ),
+                          OrderInfoField(
+                            label: tr(context, 'Phone'),
+                            value: order.contactPhone,
+                          ),
+                        ];
+                        return constraints.maxWidth >=
+                                560 * MediaQuery.textScalerOf(context).scale(1)
+                            ? Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(child: fields[0]),
+                                  const SizedBox(width: 24),
+                                  Expanded(child: fields[1]),
+                                ],
+                              )
+                            : Column(children: fields);
+                      },
+                    ),
+                  ],
+                ),
+                _Section(
+                  sectionKey: const Key('detail-fulfillment'),
+                  title: tr(
+                    context,
+                    order.fulfillmentType == FulfillmentType.delivery
+                        ? 'Delivery Details'
+                        : 'Pickup Details',
+                  ),
+                  children: [
+                    OrderInfoField(
+                      label: tr(context, 'Requested time'),
+                      value: orderScheduledLabel(context, order),
+                      icon: Icons.schedule,
+                    ),
+                    OrderInfoField(
+                      label: tr(context, 'Location'),
+                      value: _locationName(order),
+                      icon: Icons.location_on_outlined,
+                    ),
+                    if (order.fulfillmentType == FulfillmentType.delivery)
+                      OrderInfoField(
+                        label: tr(context, 'Delivery address'),
+                        value: _address(order.deliveryAddress),
+                        icon: Icons.local_shipping_outlined,
+                      ),
+                    if (order.orderType == OrderType.catering) ...[
+                      OrderInfoField(
+                        label: tr(context, 'Event name'),
+                        value: _mapString(order.eventDetails, 'eventName'),
+                      ),
+                      OrderInfoField(
+                        label: tr(context, 'Attendees'),
+                        value: _mapValue(order.eventDetails, 'attendees'),
+                      ),
+                    ],
+                  ],
+                ),
+                _Section(
+                  sectionKey: const Key('detail-items-totals'),
+                  title: tr(context, 'Items & Totals'),
+                  children: [
+                    if (order.items.isEmpty)
+                      Text(tr(context, 'No items recorded')),
+                    for (final item in order.items) OrderParityItem(item: item),
+                    const Divider(height: 32),
+                    _MoneyRow(tr(context, 'Subtotal'), order.subtotalCents),
+                    if (order.discountCents != 0)
+                      _MoneyRow(
+                        order.discountCode == null
+                            ? tr(context, 'Discount')
+                            : '${tr(context, 'Discount')} (${order.discountCode})',
+                        -order.discountCents,
+                      ),
+                    _MoneyRow(
+                      tr(context, 'Service fee'),
+                      order.serviceFeeCents,
+                    ),
+                    _MoneyRow(
+                      tr(context, 'Delivery fee'),
+                      order.deliveryFeeCents,
+                    ),
+                    _MoneyRow(tr(context, 'Tax'), order.taxCents),
+                    _MoneyRow(tr(context, 'Tip'), order.tipCents),
+                    const Divider(
+                      height: 32,
+                      color: PelinesColors.brandPrimary,
+                    ),
+                    _MoneyRow(
+                      tr(context, 'Total'),
+                      order.totalCents,
+                      emphasized: true,
+                    ),
+                  ],
+                ),
+                if (order.notes?.trim().isNotEmpty == true)
+                  _Section(
+                    title: tr(context, 'Customer Notes'),
+                    accent: true,
+                    sectionKey: const Key('detail-customer-notes'),
+                    children: [
+                      Text(
+                        order.notes!,
+                        style: const TextStyle(fontStyle: FontStyle.italic),
+                      ),
+                    ],
+                  ),
+                if (cancellationEnabled &&
+                    order.status == OrderStatus.cancelled)
+                  _Section(
+                    title: tr(context, 'Internal notes'),
+                    children: [
+                      Text(
+                        order.internalNotes ?? tr(context, 'No internal notes'),
+                      ),
+                    ],
+                  )
+                else
+                  _InternalNotesEditor(order: order),
+                _Section(
+                  title: tr(context, 'Payment'),
+                  children: [
+                    _Row(
+                      tr(context, 'Status'),
+                      cancellationEnabled
+                          ? order.rawPaymentStatus ?? order.paymentStatus.name
+                          : order.paymentStatus.name,
+                    ),
+                    if (order.cardBrand != null && order.cardLast4 != null)
+                      _Row(
+                        tr(context, 'Card'),
+                        '${order.cardBrand} ${tr(context, 'ending in')} ${order.cardLast4}',
+                      ),
+                  ],
+                ),
+                if (order.printedAt != null || order.deliveredAt != null)
+                  _Section(
+                    title: tr(context, 'Operational'),
+                    children: [
+                      if (order.printedAt != null)
+                        _Row(
+                          tr(context, 'Printed'),
+                          PelinesTime.formatDateTime(order.printedAt!),
+                        ),
+                      if (order.deliveredAt != null)
+                        _Row(
+                          tr(context, 'Completed'),
+                          PelinesTime.formatDateTime(order.deliveredAt!),
+                        ),
+                    ],
+                  ),
+              ],
+            ),
           ),
-        if (canCancel && !locationContextChanged)
-          CancelOrderAction(
-            order: order,
-            busy: mutation.isBusy || notes.isBusy,
-          ),
+        ),
       ],
     );
   }
@@ -432,17 +585,19 @@ class _InternalNotesEditorState extends ConsumerState<_InternalNotesEditor> {
           onChanged: ref
               .read(orderNotesProvider(widget.order.id).notifier)
               .edit,
-          decoration: InputDecoration(
-            hintText: tr(context, 'Add a private note about this order'),
-            errorText: notes.isValid
+          decoration: PelinesControlStyles.input(
+            hint: tr(context, 'Add a private note about this order'),
+            error: notes.isValid
                 ? null
                 : tr(context, 'Internal notes cannot exceed 5000 characters.'),
-            border: const OutlineInputBorder(),
           ),
         ),
         if (notes.hasRemoteConflict) ...<Widget>[
           Text(
-            tr(context, 'This note was updated elsewhere. Your draft has been preserved.'),
+            tr(
+              context,
+              'This note was updated elsewhere. Your draft has been preserved.',
+            ),
             key: const Key('notes-conflict-warning'),
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: PelinesColors.destructive,
@@ -462,14 +617,16 @@ class _InternalNotesEditorState extends ConsumerState<_InternalNotesEditor> {
         PelinesActionBar(
           children: <Widget>[
             if (notes.phase == OrderNotesPhase.saved) ...<Widget>[
-               Text(tr(context, 'Saved'), key: Key('notes-saved')),
+              Text(tr(context, 'Saved'), key: Key('notes-saved')),
             ],
             FilledButton(
               key: const Key('save-internal-notes'),
               onPressed: canSave ? _save : null,
               child: PelinesButtonLabel(
                 busy: notes.isBusy,
-                label: notes.isBusy ? tr(context, 'Saving...') : tr(context, 'Save notes'),
+                label: notes.isBusy
+                    ? tr(context, 'Saving...')
+                    : tr(context, 'Save notes'),
               ),
             ),
           ],
@@ -488,20 +645,23 @@ class _InternalNotesEditorState extends ConsumerState<_InternalNotesEditor> {
           await showDialog<bool>(
             context: context,
             builder: (BuildContext context) => AlertDialog(
-              title:  Text(tr(context, 'Replace newer note?')),
-              content:  Text(
-                tr(context, 'This note was changed by another user. Saving will replace the newer server note with your current draft.'),
+              title: Text(tr(context, 'Replace newer note?')),
+              content: Text(
+                tr(
+                  context,
+                  'This note was changed by another user. Saving will replace the newer server note with your current draft.',
+                ),
               ),
               actions: <Widget>[
                 TextButton(
                   key: const Key('notes-conflict-cancel'),
                   onPressed: () => Navigator.of(context).pop(false),
-                  child:  Text(tr(context, 'Cancel')),
+                  child: Text(tr(context, 'Cancel')),
                 ),
                 FilledButton(
                   key: const Key('notes-conflict-save'),
                   onPressed: () => Navigator.of(context).pop(true),
-                  child:  Text(tr(context, 'Save anyway')),
+                  child: Text(tr(context, 'Save anyway')),
                 ),
               ],
             ),
@@ -562,36 +722,39 @@ class _WarningCard extends StatelessWidget {
 }
 
 class _Section extends StatelessWidget {
-  const _Section({required this.title, required this.children});
+  const _Section({
+    required this.title,
+    required this.children,
+    this.accent = false,
+    this.sectionKey,
+  });
   final String title;
   final List<Widget> children;
+  final bool accent;
+  final Key? sectionKey;
   @override
-  Widget build(BuildContext context) => Container(
-    margin: const EdgeInsets.only(top: PelinesSpacing.sm),
-    decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(PelinesRadius.card),
-      boxShadow: PelinesShadows.subtle,
-    ),
-    child: Card(
-      margin: EdgeInsets.zero,
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(PelinesRadius.card),
-        side: const BorderSide(color: PelinesColors.border),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(PelinesSpacing.md),
+  Widget build(BuildContext context) => Padding(
+    key: sectionKey,
+    padding: const EdgeInsets.only(top: 24),
+    child: PelinesCard(
+      child: Container(
+        padding: accent ? const EdgeInsets.only(left: 16) : EdgeInsets.zero,
+        decoration: accent
+            ? const BoxDecoration(
+                border: Border(
+                  left: BorderSide(color: PelinesColors.brandPrimary, width: 4),
+                ),
+              )
+            : null,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
+          children: [
             Text(
-              title.toUpperCase(),
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: PelinesColors.textSecondary,
-                letterSpacing: 0.6,
-              ),
+              title,
+              style: PelinesTypography.sectionTitle(Theme.of(context).textTheme)
+                  ?.copyWith(fontSize: 26),
             ),
-            const SizedBox(height: PelinesSpacing.sm),
+            const SizedBox(height: 20),
             ...children,
           ],
         ),
@@ -599,6 +762,22 @@ class _Section extends StatelessWidget {
     ),
   );
 }
+
+OrderSummary _summary(OrderDetail order) => OrderSummary(
+  id: order.id,
+  orderNumber: order.orderNumber,
+  locationId: order.locationId,
+  orderType: order.orderType,
+  status: order.status,
+  rawStatus: order.rawStatus,
+  paymentStatus: order.paymentStatus,
+  fulfillmentType: order.fulfillmentType,
+  contactName: order.contactName,
+  createdAt: order.createdAt,
+  scheduledFor: order.scheduledFor,
+  itemCount: order.items.length,
+  totalCents: order.totalCents,
+);
 
 class _Row extends StatelessWidget {
   const _Row(this.label, this.value);
@@ -651,55 +830,6 @@ class _MoneyRow extends StatelessWidget {
   );
 }
 
-class _Item extends StatelessWidget {
-  const _Item({required this.order});
-  final OrderItem order;
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: PelinesSpacing.md),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Row(
-          children: <Widget>[
-            Expanded(
-              child: Text(
-                '${order.quantity}× ${order.productName}',
-                style: Theme.of(context).textTheme.titleMedium
-                    ?.copyWith(fontWeight: FontWeight.w700),
-              ),
-            ),
-            Text(money(order.lineTotalCents)),
-          ],
-        ),
-        for (final OrderModifier modifier in order.modifiers)
-          Padding(
-            padding: const EdgeInsets.only(
-              left: PelinesSpacing.md,
-              top: PelinesSpacing.xxs,
-            ),
-            child: Text(
-              '${modifier.groupName}: ${modifier.optionName}${modifier.priceDeltaCents == 0 ? '' : ' (+${money(modifier.priceDeltaCents)})'}',
-              style: Theme.of(context).textTheme.bodyMedium
-                  ?.copyWith(color: PelinesColors.textSecondary),
-            ),
-          ),
-        if (order.notes?.trim().isNotEmpty == true)
-          Padding(
-            padding: const EdgeInsets.only(
-              left: PelinesSpacing.md,
-              top: PelinesSpacing.xxs,
-            ),
-            child: Text(
-              'Note: ${order.notes}',
-              style: const TextStyle(fontStyle: FontStyle.italic),
-            ),
-          ),
-      ],
-    ),
-  );
-}
-
 class _DetailError extends StatelessWidget {
   const _DetailError({required this.message, this.onRetry});
   final String message;
@@ -714,10 +844,13 @@ class _DetailError extends StatelessWidget {
           Text(message, textAlign: TextAlign.center),
           const SizedBox(height: 12),
           if (onRetry != null)
-            FilledButton(onPressed: onRetry, child:  Text(tr(context, 'Try again'))),
+            FilledButton(
+              onPressed: onRetry,
+              child: Text(tr(context, 'Try again')),
+            ),
           TextButton(
             onPressed: () => Navigator.of(context).maybePop(),
-            child:  Text(tr(context, 'Back to Today Orders')),
+            child: Text(tr(context, 'Back to Today Orders')),
           ),
         ],
       ),

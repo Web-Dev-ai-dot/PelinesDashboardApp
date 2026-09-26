@@ -1,12 +1,13 @@
 import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
+
+import 'historical_orders_content.dart';
 
 import '../../../app/navigation/admin_navigation.dart';
 import '../../../app/theme/pelines_components.dart';
 import '../../../app/theme/pelines_tokens.dart';
-import '../../../core/time/pelines_time.dart';
+
 import '../../locations/models/location.dart';
 import '../../locations/providers/locations_providers.dart';
 import '../models/order_models.dart';
@@ -44,7 +45,10 @@ class _HistoricalOrdersScreenState
 
     return Scaffold(
       appBar: AdminAppBar(
-        title: Text(title),
+        title: Text(
+          title,
+          style: PelinesTypography.pageTitle(Theme.of(context).textTheme),
+        ),
         actions: <Widget>[
           IconButton(
             tooltip: tr(context, 'Refresh'),
@@ -61,7 +65,7 @@ class _HistoricalOrdersScreenState
         ),
         data: (Location? selected) {
           if (selected == null) {
-            return  Center(
+            return Center(
               child: Padding(
                 padding: EdgeInsets.all(24),
                 child: Text(tr(context, 'Choose a location to view orders.')),
@@ -130,6 +134,20 @@ class _HistoricalOrdersScreenState
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: <Widget>[
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+                child: Text(
+                  tr(
+                    context,
+                    widget.kind == HistoricalOrdersKind.completed
+                        ? 'Picked up or delivered orders. Filtered by completion date, with operational date as fallback.'
+                        : 'Cancelled orders. Filtered by scheduled time or placed date; payment status is shown separately.',
+                  ),
+                  style: const TextStyle(color: PelinesColors.textSecondary),
+                ),
+              ),
+            ),
             if (state.isRefreshing)
               const SliverToBoxAdapter(
                 child: LinearProgressIndicator(minHeight: 2),
@@ -137,11 +155,13 @@ class _HistoricalOrdersScreenState
             if (state.refreshError != null)
               SliverToBoxAdapter(
                 child: MaterialBanner(
-                  content: Text('${state.refreshError} Showing previous data.'),
+                  content: Text(
+                    '${state.refreshError} ${tr(context, 'Showing previous data.')}',
+                  ),
                   actions: <Widget>[
                     TextButton(
                       onPressed: () => _refresh(ref),
-                      child: const Text('Retry'),
+                      child: Text(tr(context, 'Retry')),
                     ),
                   ],
                 ),
@@ -163,10 +183,16 @@ class _HistoricalOrdersScreenState
                         const SizedBox(height: PelinesSpacing.sm),
                         Text(
                           state.orders.isNotEmpty
-                              ? 'No orders match these filters.'
+                              ? tr(context, 'No orders match these filters.')
                               : widget.kind == HistoricalOrdersKind.completed
-                              ? 'No completed orders for this location.'
-                              : 'No cancelled orders for this location.',
+                              ? tr(
+                                  context,
+                                  'No completed orders for this location.',
+                                )
+                              : tr(
+                                  context,
+                                  'No cancelled orders for this location.',
+                                ),
                           textAlign: TextAlign.center,
                         ),
                       ],
@@ -182,13 +208,11 @@ class _HistoricalOrdersScreenState
                   PelinesSpacing.md,
                   PelinesSpacing.xl,
                 ),
-                sliver: SliverList.builder(
-                  itemCount: visible.length,
-                  itemBuilder: (BuildContext context, int index) =>
-                      _HistoricalOrderCard(
-                        order: visible[index],
-                        kind: widget.kind,
-                      ),
+                sliver: SliverToBoxAdapter(
+                  child: HistoricalOrdersContent(
+                    orders: visible,
+                    completed: widget.kind == HistoricalOrdersKind.completed,
+                  ),
                 ),
               ),
           ],
@@ -252,14 +276,15 @@ class _HistoryFilterBar extends StatelessWidget {
         _MenuFilter<OrderType?>(
           label: filters.orderType == null
               ? tr(context, 'All types')
-              : orderTypeLabel(filters.orderType!),
+              : tr(context, orderTypeLabel(filters.orderType!)),
           values: const <OrderType?>[
             null,
             OrderType.online,
             OrderType.catering,
           ],
-          valueLabel: (value) =>
-              value == null ? tr(context, 'All types') : orderTypeLabel(value),
+          valueLabel: (value) => value == null
+              ? tr(context, 'All types')
+              : tr(context, orderTypeLabel(value)),
           onSelected: (value) => onChanged(
             filters.copyWith(orderType: value, clearOrderType: value == null),
           ),
@@ -267,14 +292,15 @@ class _HistoryFilterBar extends StatelessWidget {
         _MenuFilter<FulfillmentType?>(
           label: filters.fulfillment == null
               ? tr(context, 'All fulfillment')
-              : fulfillmentLabel(filters.fulfillment!),
+              : tr(context, fulfillmentLabel(filters.fulfillment!)),
           values: const <FulfillmentType?>[
             null,
             FulfillmentType.pickup,
             FulfillmentType.delivery,
           ],
-          valueLabel: (value) =>
-              value == null ? tr(context, 'All fulfillment') : fulfillmentLabel(value),
+          valueLabel: (value) => value == null
+              ? tr(context, 'All fulfillment')
+              : tr(context, fulfillmentLabel(value)),
           onSelected: (value) => onChanged(
             filters.copyWith(
               fulfillment: value,
@@ -286,7 +312,7 @@ class _HistoryFilterBar extends StatelessWidget {
           _MenuFilter<PaymentStatus?>(
             label: filters.payment == null
                 ? tr(context, 'All payments')
-                : paymentStatusLabel(filters.payment!),
+                : tr(context, paymentStatusLabel(filters.payment!)),
             values: const <PaymentStatus?>[
               null,
               PaymentStatus.paid,
@@ -294,14 +320,18 @@ class _HistoryFilterBar extends StatelessWidget {
               PaymentStatus.failed,
               PaymentStatus.unpaid,
             ],
-            valueLabel: (value) =>
-                value == null ? tr(context, 'All payments') : paymentStatusLabel(value),
+            valueLabel: (value) => value == null
+                ? tr(context, 'All payments')
+                : tr(context, paymentStatusLabel(value)),
             onSelected: (value) => onChanged(
               filters.copyWith(payment: value, clearPayment: value == null),
             ),
           ),
         if (!filters.isClear)
-          TextButton(onPressed: onClear, child:  Text(tr(context, 'Clear filters'))),
+          TextButton(
+            onPressed: onClear,
+            child: Text(tr(context, 'Clear filters')),
+          ),
       ],
     ),
   );
@@ -329,104 +359,25 @@ class _MenuFilter<T> extends StatelessWidget {
                 PopupMenuItem<T>(value: value, child: Text(valueLabel(value))),
           )
           .toList(),
-      child: Chip(
-        label: Text(label),
-        avatar: const Icon(Icons.arrow_drop_down),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 48),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: PelinesColors.card,
+          border: Border.all(color: PelinesColors.border),
+          borderRadius: BorderRadius.circular(28),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(label),
+            const SizedBox(width: 8),
+            const Icon(Icons.expand_more, size: 18),
+          ],
+        ),
       ),
     ),
   );
-}
-
-class _HistoricalOrderCard extends StatelessWidget {
-  const _HistoricalOrderCard({required this.order, required this.kind});
-
-  final OrderSummary order;
-  final HistoricalOrdersKind kind;
-
-  @override
-  Widget build(BuildContext context) {
-    final DateTime primaryTime = kind == HistoricalOrdersKind.completed
-        ? order.deliveredAt ?? order.operationalAt
-        : order.operationalAt;
-    final String? terminalLabel = order.deliveredAt == null
-        ? null
-        : order.fulfillmentType == FulfillmentType.pickup
-        ? tr(context, 'Picked up')
-        : tr(context, 'Delivered');
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () => context.push('/app/orders/${order.id}'),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Row(
-                children: <Widget>[
-                  Expanded(
-                    child: Text(
-                      order.orderNumber,
-                      style: Theme.of(context).textTheme.titleMedium
-                          ?.copyWith(fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                  StatusChip(
-                    status: order.status,
-                    fulfillment: order.fulfillmentType,
-                    rawStatus: order.rawStatus,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                terminalLabel == null
-                    ? PelinesTime.formatDateTime(primaryTime)
-                    : '$terminalLabel: ${PelinesTime.formatDateTime(primaryTime)}',
-              ),
-              const SizedBox(height: 10),
-              Text(
-                order.eventName?.isNotEmpty == true
-                    ? order.eventName!
-                    : order.contactName,
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                '${orderTypeLabel(order.orderType)} · ${fulfillmentLabel(order.fulfillmentType)}',
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: <Widget>[
-                  Expanded(
-                    child: Text(
-                      '${order.itemCount} ${order.itemCount == 1 ? 'item' : 'items'}',
-                    ),
-                  ),
-                  Text(
-                    money(order.totalCents),
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              PelinesStateBadge(
-                label: paymentStatusLabel(order.paymentStatus),
-                foreground: order.paymentStatus == PaymentStatus.refunded
-                    ? PelinesColors.destructive
-                    : PelinesColors.textSecondary,
-                background: order.paymentStatus == PaymentStatus.refunded
-                    ? PelinesColors.brandPrimarySoft
-                    : PelinesColors.mutedSurface,
-                icon: Icons.payments_outlined,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 class _HistoryError extends StatelessWidget {
@@ -446,7 +397,10 @@ class _HistoryError extends StatelessWidget {
           const SizedBox(height: 12),
           Text(message, textAlign: TextAlign.center),
           const SizedBox(height: 12),
-          FilledButton(onPressed: onRetry, child:  Text(tr(context, 'Try again'))),
+          FilledButton(
+            onPressed: onRetry,
+            child: Text(tr(context, 'Try again')),
+          ),
         ],
       ),
     ),

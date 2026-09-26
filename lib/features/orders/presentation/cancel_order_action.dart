@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/theme/pelines_tokens.dart';
+import '../../../app/theme/app_theme.dart';
 import '../models/order_models.dart';
 import '../providers/orders_providers.dart';
 import 'order_ui_helpers.dart';
@@ -29,12 +30,11 @@ class CancelOrderActionState extends ConsumerState<CancelOrderAction> {
   Widget build(BuildContext context) => widget.expanded
       ? OutlinedButton(
           key: const Key('cancel-order-action'),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: PelinesColors.destructive,
-            minimumSize: const Size.fromHeight(56),
-          ),
+          style: PelinesControlStyles.button(
+            PelinesButtonVariant.cancel,
+          ).copyWith(minimumSize: const WidgetStatePropertyAll(Size(48, 56))),
           onPressed: widget.busy || _confirming ? null : _confirm,
-          child:  Text(tr(context, 'Cancel'), textAlign: TextAlign.center),
+          child: Text(tr(context, 'Cancel'), textAlign: TextAlign.center),
         )
       : Align(
           alignment: Alignment.centerRight,
@@ -44,7 +44,7 @@ class CancelOrderActionState extends ConsumerState<CancelOrderAction> {
               foregroundColor: PelinesColors.destructive,
             ),
             onPressed: widget.busy || _confirming ? null : _confirm,
-            child:  Text(tr(context, 'Cancel Order')),
+            child: Text(tr(context, 'Cancel Order')),
           ),
         );
 
@@ -56,7 +56,7 @@ class CancelOrderActionState extends ConsumerState<CancelOrderAction> {
       final bool? confirmed = await showDialog<bool>(
         context: context,
         builder: (BuildContext context) => AlertDialog(
-          title:  Text(tr(context, 'Cancel Order?')),
+          title: Text(tr(context, 'Cancel Order?')),
           content: Text(
             'Cancel ${order.orderNumber} (${money(order.totalCents)})?\n'
             'Cancellation may initiate a refund if this order has already been paid.',
@@ -65,7 +65,7 @@ class CancelOrderActionState extends ConsumerState<CancelOrderAction> {
             TextButton(
               key: const Key('cancel-order-keep'),
               onPressed: () => Navigator.of(context).pop(false),
-              child:  Text(tr(context, 'Keep Order')),
+              child: Text(tr(context, 'Keep Order')),
             ),
             FilledButton(
               key: const Key('cancel-order-confirm'),
@@ -73,7 +73,7 @@ class CancelOrderActionState extends ConsumerState<CancelOrderAction> {
                 backgroundColor: PelinesColors.destructive,
               ),
               onPressed: () => Navigator.of(context).pop(true),
-              child:  Text(tr(context, 'Cancel Order')),
+              child: Text(tr(context, 'Cancel Order')),
             ),
           ],
         ),

@@ -15,6 +15,8 @@ import '../models/orders_date_filter.dart';
 import '../providers/orders_providers.dart';
 import 'order_ui_helpers.dart';
 import 'order_preview_action.dart';
+import '../../../app/theme/app_theme.dart';
+import '../../../app/theme/pelines_order_badges.dart';
 
 class OrdersCalendarScreen extends ConsumerStatefulWidget {
   const OrdersCalendarScreen({super.key});
@@ -29,6 +31,22 @@ class _OrdersCalendarScreenState extends ConsumerState<OrdersCalendarScreen> {
   late DateTime _displayedMonth;
   int _pickerRevision = 0;
   String? _locationId;
+  String _search = '';
+  String _type = 'all';
+  String _status = 'all';
+
+  bool _matches(OrderSummary order) {
+    final query = _search.trim().toLowerCase();
+    return (_type == 'all' || order.orderType.name == _type) &&
+        (_status == 'all' || order.status.name == _status) &&
+        (query.isEmpty ||
+            [
+              order.contactName,
+              order.orderNumber,
+              order.eventName ?? '',
+              order.id,
+            ].any((text) => text.toLowerCase().contains(query)));
+  }
 
   @override
   void initState() {
@@ -56,7 +74,10 @@ class _OrdersCalendarScreenState extends ConsumerState<OrdersCalendarScreen> {
     );
     return Scaffold(
       appBar: AdminAppBar(
-        title:  Text(tr(context, 'Orders Calendar')),
+        title: Text(
+          tr(context, 'Orders Calendar'),
+          style: PelinesTypography.pageTitle(Theme.of(context).textTheme),
+        ),
         actions: <Widget>[
           IconButton(
             tooltip: tr(context, 'Refresh'),
@@ -75,7 +96,7 @@ class _OrdersCalendarScreenState extends ConsumerState<OrdersCalendarScreen> {
         ),
         data: (Location? selected) {
           if (selected == null) {
-            return  _CalendarMessage(
+            return _CalendarMessage(
               message: tr(context, 'Choose a location to view the calendar.'),
             );
           }
@@ -100,60 +121,115 @@ class _OrdersCalendarScreenState extends ConsumerState<OrdersCalendarScreen> {
     );
   }
 
+  Widget _filters() => PelinesCard(
+    key: const Key('calendar-filters'),
+    padding: const EdgeInsets.all(16),
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final controls = <Widget>[
+          PelinesInput(
+            key: const Key('calendar-search'),
+            variant: PelinesInputVariant.search,
+            hint: tr(context, 'Search customer, event or order'),
+            onChanged: (value) => setState(() => _search = value),
+          ),
+          PelinesSelect<String>(
+            key: const Key('calendar-type'),
+            value: _type,
+            items: [
+              for (final entry in {
+                'all': 'All Types',
+                'online': 'Regular',
+                'catering': 'Catering',
+              }.entries)
+                DropdownMenuItem(
+                  value: entry.key,
+                  child: Text(tr(context, entry.value)),
+                ),
+            ],
+            onChanged: (value) {
+              if (value != null) {
+                setState(() => _type = value);
+              }
+            },
+          ),
+          PelinesSelect<String>(
+            key: const Key('calendar-status'),
+            value: _status,
+            // calendarRelevantOrders admits only these operational states.
+            items: [
+              for (final entry in {
+                'all': 'All Statuses',
+                'pending': 'Waiting',
+                'confirmed': 'Confirmed',
+                'preparing': 'Preparing',
+                'ready': 'Ready',
+              }.entries)
+                DropdownMenuItem(
+                  value: entry.key,
+                  child: Text(tr(context, entry.value)),
+                ),
+            ],
+            onChanged: (value) {
+              if (value != null) {
+                setState(() => _status = value);
+              }
+            },
+          ),
+        ];
+        if (constraints.maxWidth >=
+            900 * MediaQuery.textScalerOf(context).scale(1)) {
+          return Row(
+            children: [
+              Expanded(flex: 2, child: controls[0]),
+              const SizedBox(width: 16),
+              Expanded(child: controls[1]),
+              const SizedBox(width: 16),
+              Expanded(child: controls[2]),
+            ],
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            controls[0],
+            const SizedBox(height: 12),
+            controls[1],
+            const SizedBox(height: 12),
+            controls[2],
+          ],
+        );
+      },
+    ),
+  );
   Widget _calendarBody(Location location, HistoricalOrdersState state) {
+    final originalGrouped = groupScheduledOrdersByPacificDay(state.orders);
+    final filtered = state.orders.where(_matches).toList();
     final Map<String, List<OrderSummary>> grouped =
-        groupScheduledOrdersByPacificDay(state.orders);
+        groupScheduledOrdersByPacificDay(filtered);
     final List<OrderSummary> selected =
         grouped[_localDayKey(_selectedDay)] ?? const <OrderSummary>[];
-    final List<OrderSummary> unscheduled = unscheduledCalendarOrders(
-      state.orders,
-    );
-    return RefreshIndicator(
-      onRefresh: ref.read(calendarOrdersProvider.notifier).refresh,
-      child: ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.only(bottom: PelinesSpacing.xl),
-        children: <Widget>[
-          if (state.isRefreshing) const LinearProgressIndicator(minHeight: 2),
-          if (state.refreshError != null)
-            MaterialBanner(
-              content: Text('${state.refreshError} Showing previous data.'),
-              actions: <Widget>[
-                TextButton(
-                  onPressed: ref.read(calendarOrdersProvider.notifier).refresh,
-                  child: const Text('Retry'),
-                ),
-              ],
-            ),
+    final List<OrderSummary> unscheduled = unscheduledCalendarOrders(filtered);
+    final calendar = PelinesCard(
+      key: const Key('calendar-month-panel'),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(
-              PelinesSpacing.md,
-              PelinesSpacing.sm,
-              PelinesSpacing.md,
-              0,
-            ),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: PelinesStateBadge(
-                label: location.name,
-                foreground: PelinesColors.brandPrimary,
-                background: PelinesColors.brandPrimarySoft,
-                icon: Icons.storefront_outlined,
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(PelinesSpacing.md),
+            padding: const EdgeInsets.symmetric(horizontal: 8),
             child: Wrap(
-              spacing: PelinesSpacing.sm,
-              runSpacing: PelinesSpacing.sm,
+              spacing: 12,
+              runSpacing: 12,
               children: [
                 _monthControl(
                   label: 'Month',
                   value: _displayedMonth.month,
-                  values: List.generate(12, (index) => index + 1),
-                  text: (month) =>
-                      DateFormat.MMMM().format(DateTime(2024, month)),
+                  values: List.generate(12, (i) => i + 1),
+                  text: (month) => tr(
+                    context,
+                    DateFormat.MMMM().format(DateTime(2024, month)),
+                  ),
                   onChanged: (month) =>
                       _jumpToMonth(_displayedMonth.year, month),
                   width: 200,
@@ -161,7 +237,7 @@ class _OrdersCalendarScreenState extends ConsumerState<OrdersCalendarScreen> {
                 _monthControl(
                   label: 'Year',
                   value: _displayedMonth.year,
-                  values: List.generate(81, (index) => index + 2020),
+                  values: List.generate(81, (i) => i + 2020),
                   text: (year) => '$year',
                   onChanged: (year) =>
                       _jumpToMonth(year, _displayedMonth.month),
@@ -183,38 +259,165 @@ class _OrdersCalendarScreenState extends ConsumerState<OrdersCalendarScreen> {
                 setState(() => _selectedDay = value),
           ),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: PelinesSpacing.sm),
-            child: PelinesSectionHeading(
-              DateFormat('EEEE, MMMM d').format(_selectedDay),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Text(
+              tr(context, 'Pacific time'),
+              style: PelinesTypography.smallLabel,
             ),
           ),
-          if (grouped.isEmpty)
-            const _CalendarMessage(
-              message: 'No scheduled orders found for this location.',
-            )
-          else if (selected.isEmpty)
-            const _CalendarMessage(message: 'No orders scheduled for this day.')
-          else
-            for (final OrderSummary order in selected)
-              _CalendarOrderCard(order: order),
-          if (unscheduled.isNotEmpty) ...<Widget>[
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: PelinesSpacing.sm,
+        ],
+      ),
+    );
+    final agenda = Column(
+      key: const Key('calendar-day-agenda'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        PelinesCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                MaterialLocalizations.of(context).formatFullDate(_selectedDay),
+                key: const Key('calendar-selected-date'),
+                style: PelinesTypography.sectionTitle(
+                  Theme.of(context).textTheme,
+                )?.copyWith(fontSize: 24),
               ),
-              child: const PelinesSectionHeading('Needs pickup time'),
+              const SizedBox(height: 12),
+              PelinesStateBadge(
+                label: '${selected.length} ${tr(context, 'orders')}',
+                foreground: PelinesColors.brandPrimary,
+                background: PelinesColors.brandPrimarySoft,
+                icon: Icons.receipt_long_outlined,
+              ),
+            ],
+          ),
+        ),
+        if ((selected.isEmpty &&
+                (originalGrouped[_localDayKey(_selectedDay)]?.isNotEmpty ??
+                    false)) ||
+            (originalGrouped.isEmpty &&
+                unscheduled.isEmpty &&
+                unscheduledCalendarOrders(state.orders).isNotEmpty))
+          _CalendarMessage(
+            message: tr(context, 'No orders match these filters'),
+          )
+        else if (originalGrouped.isEmpty)
+          _CalendarMessage(
+            message: tr(
+              context,
+              'No scheduled orders found for this location.',
             ),
-            for (final OrderSummary order in unscheduled)
-              _CalendarOrderCard(order: order, unscheduled: true),
-          ],
-          if (state.orders.length == 100)
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: Text(
-                'Showing the latest 100 orders available from the server.',
-                textAlign: TextAlign.center,
+          )
+        else if (selected.isEmpty)
+          _CalendarMessage(
+            message: tr(context, 'No orders scheduled for this day.'),
+          )
+        else
+          for (final order in selected) _CalendarOrderCard(order: order),
+        if (unscheduled.isNotEmpty) ...[
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 20),
+            child: Text(
+              tr(context, 'Needs pickup time'),
+              style: PelinesTypography.sectionTitle(
+                Theme.of(context).textTheme,
               ),
             ),
+          ),
+          for (final order in unscheduled)
+            _CalendarOrderCard(order: order, unscheduled: true),
+        ],
+      ],
+    );
+    return RefreshIndicator(
+      onRefresh: ref.read(calendarOrdersProvider.notifier).refresh,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        children: [
+          if (state.isRefreshing) const LinearProgressIndicator(minHeight: 2),
+          if (state.refreshError != null)
+            MaterialBanner(
+              content: Text(
+                '${state.refreshError} ${tr(context, 'Showing previous data.')}',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: ref.read(calendarOrdersProvider.notifier).refresh,
+                  child: Text(tr(context, 'Retry')),
+                ),
+              ],
+            ),
+          PelinesPageBody(
+            width: PelinesPageWidth.dashboard,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  tr(context, 'Plan scheduled orders by Pacific date.'),
+                  style: const TextStyle(color: PelinesColors.textSecondary),
+                ),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: PelinesStateBadge(
+                    label: location.name,
+                    foreground: PelinesColors.brandPrimary,
+                    background: PelinesColors.brandPrimarySoft,
+                    icon: Icons.storefront_outlined,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                _filters(),
+                const SizedBox(height: 24),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final wide =
+                        constraints.maxWidth >=
+                        1000 * MediaQuery.textScalerOf(context).scale(1);
+                    return wide
+                        ? Row(
+                            key: const Key('calendar-wide-layout'),
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              SizedBox(width: 440, child: calendar),
+                              const SizedBox(width: 24),
+                              Expanded(child: agenda),
+                            ],
+                          )
+                        : Column(
+                            key: const Key('calendar-stacked-layout'),
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Center(
+                                child: ConstrainedBox(
+                                  constraints: const BoxConstraints(
+                                    maxWidth: 520,
+                                  ),
+                                  child: calendar,
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+                              agenda,
+                            ],
+                          );
+                  },
+                ),
+                if (state.orders.length == 100)
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(
+                      tr(
+                        context,
+                        'Showing the latest 100 orders available from the server.',
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -233,14 +436,7 @@ class _OrdersCalendarScreenState extends ConsumerState<OrdersCalendarScreen> {
       key: ValueKey('calendar-$label-$value'),
       initialValue: value,
       isExpanded: true,
-      decoration: InputDecoration(
-        labelText: label,
-        border: const OutlineInputBorder(),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: PelinesSpacing.sm,
-          vertical: PelinesSpacing.sm,
-        ),
-      ),
+      decoration: PelinesControlStyles.input(label: tr(context, label)),
       items: [
         for (final option in values)
           DropdownMenuItem(
@@ -270,44 +466,71 @@ class _CalendarOrderCard extends StatelessWidget {
   final bool unscheduled;
 
   @override
-  Widget build(BuildContext context) => Card(
-    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-    clipBehavior: Clip.antiAlias,
-    child: InkWell(
-      onTap: () => context.push('/app/orders/${order.id}'),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(top: 12),
+    child: PelinesCard(
+      variant: PelinesCardVariant.compact,
+      child: InkWell(
+        onTap: () => context.push('/app/orders/${order.id}'),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Row(
-              children: <Widget>[
-                Expanded(
-                  child: Text(
-                    unscheduled
-                        ? order.orderNumber
-                        : '${PelinesTime.formatTime(order.scheduledFor!)} · ${order.orderNumber}',
-                    style: const TextStyle(fontWeight: FontWeight.w700),
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              unscheduled
+                  ? tr(context, 'Needs pickup time')
+                  : PelinesTime.formatTime(order.scheduledFor!),
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 4),
+            Text(order.orderNumber, style: PelinesTypography.smallLabel),
+            const SizedBox(height: 12),
+            Text(
+              order.contactName,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+            ),
+            if (order.eventName?.isNotEmpty == true)
+              Text(
+                order.eventName!,
+                style: const TextStyle(fontStyle: FontStyle.italic),
+              ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                PelinesOrderBadges.status(
+                  status: order.status,
+                  label: tr(
+                    context,
+                    statusLabel(
+                      order.status,
+                      order.fulfillmentType,
+                      order.rawStatus,
+                    ),
                   ),
                 ),
-                StatusChip(
-                  status: order.status,
+                PelinesOrderBadges.type(
+                  type: order.orderType,
+                  label: tr(context, orderTypeLabel(order.orderType)),
+                ),
+                PelinesOrderBadges.fulfillment(
                   fulfillment: order.fulfillmentType,
-                  rawStatus: order.rawStatus,
+                  label: tr(context, fulfillmentLabel(order.fulfillmentType)),
                 ),
               ],
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 12),
             Text(
-              order.eventName?.isNotEmpty == true
-                  ? order.eventName!
-                  : order.contactName,
+              money(order.totalCents),
+              textAlign: TextAlign.end,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
             ),
-            Text(
-              '${orderTypeLabel(order.orderType)} · ${fulfillmentLabel(order.fulfillmentType)} · ${money(order.totalCents)}',
+            const SizedBox(height: 12),
+            OrderPreviewAction(
+              key: ValueKey(order.id),
+              order: order,
+              webStyle: true,
             ),
-            const SizedBox(height: PelinesSpacing.sm),
-            OrderPreviewAction(key: ValueKey(order.id), order: order),
           ],
         ),
       ),
@@ -334,7 +557,10 @@ class _CalendarMessage extends StatelessWidget {
         Text(message, textAlign: TextAlign.center),
         if (action != null) ...<Widget>[
           const SizedBox(height: 12),
-          FilledButton(onPressed: action, child:  Text(tr(context, 'Try again'))),
+          FilledButton(
+            onPressed: action,
+            child: Text(tr(context, 'Try again')),
+          ),
         ],
       ],
     ),

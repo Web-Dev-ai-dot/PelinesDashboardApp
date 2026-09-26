@@ -13,10 +13,13 @@ class OrderPreviewAction extends ConsumerStatefulWidget {
   const OrderPreviewAction({
     required this.order,
     this.webStyle = false,
+    this.refreshOnSummaryChange = true,
     super.key,
   });
   final OrderSummary order;
   final bool webStyle;
+  // Detail already owns the canonical GET; list summaries still need hydration.
+  final bool refreshOnSummaryChange;
   @override
   ConsumerState<OrderPreviewAction> createState() => _OrderPreviewActionState();
 }
@@ -27,8 +30,9 @@ class _OrderPreviewActionState extends ConsumerState<OrderPreviewAction> {
   @override
   void didUpdateWidget(covariant OrderPreviewAction oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.order.status != widget.order.status ||
-        oldWidget.order.paymentStatus != widget.order.paymentStatus) {
+    if (widget.refreshOnSummaryChange &&
+        (oldWidget.order.status != widget.order.status ||
+            oldWidget.order.paymentStatus != widget.order.paymentStatus)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) ref.invalidate(orderDetailProvider(widget.order.id));
       });
