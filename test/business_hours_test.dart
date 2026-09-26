@@ -153,6 +153,8 @@ void main() {
         scrollable: find.byType(Scrollable).first,
       );
       expect(find.text('Business hours are not configured.'), findsOneWidget);
+      await tester.ensureVisible(find.byKey(const Key('edit-business-hours')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('edit-business-hours')));
       await tester.pumpAndSettle();
       expect(find.text('Monday'), findsOneWidget);
@@ -162,6 +164,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(repository.hourSaves, 0);
 
+      await tester.ensureVisible(find.byKey(const Key('edit-business-hours')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('edit-business-hours')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('business-day-0')));

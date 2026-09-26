@@ -274,8 +274,11 @@ Future<void> _showDestination(WidgetTester tester, String name) async {
         : 'store';
     final header = find.byKey(Key('nav-group-$group'));
     await tester.scrollUntilVisible(header, 150, scrollable: scroll);
-    await tester.tap(header);
-    await tester.pumpAndSettle();
+    // Scrolling can rebuild an already-expanded group previously offscreen.
+    if (button.evaluate().isEmpty) {
+      await tester.tap(header);
+      await tester.pumpAndSettle();
+    }
   }
   await tester.scrollUntilVisible(button, 150, scrollable: scroll);
   await Scrollable.ensureVisible(tester.element(button), alignment: .5);
@@ -289,6 +292,70 @@ Future<void> _tapDestination(WidgetTester tester, String name) async {
 }
 
 void main() {
+  for (final lang in ['en', 'es']) {
+    testWidgets('Store exact order, labels and navigation $lang', (
+      tester,
+    ) async {
+      await tester.binding.setSurfaceSize(const Size(1200, 1000));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final router = _router();
+      addTearDown(router.dispose);
+      await _pump(
+        tester,
+        router,
+        languageStore: _LanguageStore()..value = lang,
+      );
+      const destinations = [
+        AdminDestination.menu,
+        AdminDestination.regularMenu,
+        AdminDestination.operations,
+        AdminDestination.promotions,
+        AdminDestination.pickup,
+        AdminDestination.delivery,
+        AdminDestination.printing,
+      ];
+      final labels = lang == 'en'
+          ? [
+              'Catering Menu',
+              'Regular Menu',
+              'Locations',
+              'Promotions',
+              'Pickup Settings',
+              'Delivery Settings',
+              'Printer Settings',
+            ]
+          : [
+              'Menú de catering',
+              'Menú regular',
+              'Ubicaciones',
+              'Promociones',
+              'Configuración de pickup',
+              'Configuración de entrega',
+              'Configuración de impresora',
+            ];
+      await _showDestination(tester, 'menu');
+      final positions = [
+        for (final d in destinations)
+          tester.getTopLeft(find.byKey(Key('nav-${d.name}'))).dy,
+      ];
+      for (var i = 1; i < positions.length; i++) {
+        expect(positions[i], greaterThan(positions[i - 1]));
+      }
+      for (var i = 0; i < destinations.length; i++) {
+        final d = destinations[i];
+        final item = find.byKey(Key('nav-${d.name}'));
+        expect(
+          find.descendant(of: item, matching: find.text(labels[i])),
+          findsOneWidget,
+        );
+        await _tapDestination(tester, d.name);
+        expect(router.routeInformationProvider.value.uri.path, d.path);
+        expect(AdminDestination.forPath(d.path), d);
+        expect(tester.takeException(), isNull);
+      }
+      expect(find.text('Store Operations'), findsNothing);
+    });
+  }
   for (final width in [390.0, 1180.0]) {
     for (final language in ['en', 'es']) {
       testWidgets(
@@ -543,7 +610,7 @@ void main() {
   ) async {
     await tester.binding.setSurfaceSize(const Size(390, 900));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    final router = _router(initial: '/app/menu/edit');
+    final router = _router(initial: '/app/menu/catering/edit');
     addTearDown(router.dispose);
     await _pump(tester, router);
     await tester.enterText(find.byType(TextField), 'Keep draft');
@@ -553,7 +620,10 @@ void main() {
     expect(find.text('Discard changes?'), findsOneWidget);
     await tester.tap(find.text('Keep editing'));
     await tester.pumpAndSettle();
-    expect(router.routeInformationProvider.value.uri.path, '/app/menu/edit');
+    expect(
+      router.routeInformationProvider.value.uri.path,
+      '/app/menu/catering/edit',
+    );
     expect(find.text('Keep draft'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -653,7 +723,7 @@ void main() {
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(1180, 900));
       addTearDown(() => tester.binding.setSurfaceSize(null));
-      final router = _router(initial: '/app/menu/edit');
+      final router = _router(initial: '/app/menu/catering/edit');
       addTearDown(router.dispose);
       final store = _SelectionStore();
       final auth = _Auth();
@@ -823,7 +893,7 @@ void main() {
   ) async {
     await tester.binding.setSurfaceSize(const Size(390, 800));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    final router = _router(initial: '/app/menu/edit');
+    final router = _router(initial: '/app/menu/catering/edit');
     addTearDown(router.dispose);
     await _pump(tester, router);
     final drawer = find.byKey(const Key('admin-open-drawer'));
@@ -841,7 +911,10 @@ void main() {
     expect(find.text('Discard changes?'), findsOneWidget);
     await tester.tap(find.text('Keep editing'));
     await tester.pumpAndSettle();
-    expect(router.routeInformationProvider.value.uri.path, '/app/menu/edit');
+    expect(
+      router.routeInformationProvider.value.uri.path,
+      '/app/menu/catering/edit',
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -851,7 +924,7 @@ void main() {
     ) async {
       await tester.binding.setSurfaceSize(Size(width, 800));
       addTearDown(() => tester.binding.setSurfaceSize(null));
-      final router = _router(initial: '/app/menu/edit');
+      final router = _router(initial: '/app/menu/catering/edit');
       addTearDown(router.dispose);
       await _pump(tester, router, scale: 2);
       await tester.enterText(find.byType(TextField), 'Keep this draft');
@@ -891,7 +964,10 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Keep this draft'), findsOneWidget);
-      expect(router.routeInformationProvider.value.uri.path, '/app/menu/edit');
+      expect(
+        router.routeInformationProvider.value.uri.path,
+        '/app/menu/catering/edit',
+      );
       final selected = find.byWidgetPredicate(
         (widget) => widget is Semantics && widget.properties.selected == true,
       );
@@ -928,7 +1004,7 @@ void main() {
         AdminDestination.forPath(
           '/app/menu/store/categories/a/products/b/edit',
         ),
-        AdminDestination.menu,
+        AdminDestination.regularMenu,
       );
       expect(
         AdminDestination.forPath('/app/promotions/a/edit'),
@@ -1003,7 +1079,9 @@ void main() {
         await tester.binding.setSurfaceSize(const Size(1024, 800));
         addTearDown(() => tester.binding.setSurfaceSize(null));
         final router = _router(
-          initial: imperative ? '/app/menu' : '/app/menu/edit',
+          initial: imperative
+              ? '/app/menu/catering'
+              : '/app/menu/catering/edit',
         );
         addTearDown(router.dispose);
         await _pump(tester, router);
@@ -1032,7 +1110,7 @@ void main() {
         expect(find.text('Unsaved restaurant draft'), findsOneWidget);
         expect(
           router.routeInformationProvider.value.uri.path,
-          imperative ? '/app/menu' : '/app/menu/edit',
+          imperative ? '/app/menu/catering' : '/app/menu/catering/edit',
         );
         await _tapDestination(tester, 'calendar');
         await tester.tap(find.text('Discard'));

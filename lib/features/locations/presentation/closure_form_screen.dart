@@ -1,3 +1,6 @@
+import '../../../app/theme/app_theme.dart';
+import 'operations_parity_widgets.dart';
+
 import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -51,10 +54,15 @@ class _ClosureFormScreenState extends ConsumerState<ClosureFormScreen> {
     final ClosureSaveState operation = ref.watch(closureSaveProvider);
     return Scaffold(
       appBar: AdminAppBar(
-        title: Text(widget.closure == null ? tr(context, 'Add Closure') : tr(context, 'Edit Closure')),
+        title: Text(
+          widget.closure == null
+              ? tr(context, 'Add Closure')
+              : tr(context, 'Edit Closure'),
+          style: PelinesTypography.pageTitle(Theme.of(context).textTheme),
+        ),
       ),
       body: PelinesPageBody(
-        child: ListView(
+        child: OperationsFormList(
           padding: const EdgeInsets.all(PelinesSpacing.lg),
           children: <Widget>[
             Align(
@@ -67,15 +75,14 @@ class _ClosureFormScreenState extends ConsumerState<ClosureFormScreen> {
               ),
             ),
             const SizedBox(height: 4),
-             Text(tr(context, 'Temporary closure for regular online orders')),
+            Text(tr(context, 'Temporary closure for regular online orders')),
             const SizedBox(height: 24),
             TextField(
               key: const Key('closure-reason'),
               controller: _reason,
               enabled: !operation.isBusy,
-              decoration:  InputDecoration(
-                labelText: tr(context, 'Reason (optional)'),
-                border: OutlineInputBorder(),
+              decoration: PelinesControlStyles.input(
+                label: tr(context, 'Reason (optional)'),
               ),
             ),
             const SizedBox(height: 16),
@@ -107,18 +114,20 @@ class _ClosureFormScreenState extends ConsumerState<ClosureFormScreen> {
               controller: _notes,
               enabled: !operation.isBusy,
               maxLines: 3,
-              decoration:  InputDecoration(
-                labelText: tr(context, 'Notes'),
-                border: OutlineInputBorder(),
+              decoration: PelinesControlStyles.input(
+                label: tr(context, 'Notes'),
               ),
             ),
             const SizedBox(height: 8),
             SwitchListTile(
               key: const Key('closure-active'),
               contentPadding: EdgeInsets.zero,
-              title:  Text(tr(context, 'Active')),
-              subtitle:  Text(
-                tr(context, 'Inactive closures remain saved but do not block regular orders.'),
+              title: Text(tr(context, 'Active')),
+              subtitle: Text(
+                tr(
+                  context,
+                  'Inactive closures remain saved but do not block regular orders.',
+                ),
               ),
               value: _active,
               onChanged: operation.isBusy
@@ -126,10 +135,26 @@ class _ClosureFormScreenState extends ConsumerState<ClosureFormScreen> {
                   : (bool value) => setState(() => _active = value),
             ),
             const SizedBox(height: 20),
+            OutlinedButton(
+              style: PelinesControlStyles.button(
+                PelinesButtonVariant.secondary,
+              ),
+              onPressed: operation.isBusy
+                  ? null
+                  : () => Navigator.maybePop(context),
+              child: Text(tr(context, 'Cancel')),
+            ),
+            const SizedBox(height: 12),
+
             FilledButton(
+              style: PelinesControlStyles.button(PelinesButtonVariant.primary),
               key: const Key('closure-save'),
               onPressed: operation.isBusy ? null : _save,
-              child: Text(operation.isBusy ? tr(context, 'Saving…') : tr(context, 'Save closure')),
+              child: Text(
+                operation.isBusy
+                    ? tr(context, 'Saving…')
+                    : tr(context, 'Save closure'),
+              ),
             ),
             if (operation.isBusy) ...<Widget>[
               const SizedBox(height: 12),
@@ -199,6 +224,7 @@ class _ClosureFormScreenState extends ConsumerState<ClosureFormScreen> {
               child: const Text('Cancel'),
             ),
             FilledButton(
+              style: PelinesControlStyles.button(PelinesButtonVariant.primary),
               key: const Key('closure-conflict-reload'),
               onPressed: () => Navigator.pop(dialogContext, true),
               child: const Text('Reload'),
@@ -233,6 +259,7 @@ class _DateField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => OutlinedButton(
+    style: PelinesControlStyles.button(PelinesButtonVariant.secondary),
     onPressed: enabled
         ? () async {
             final DateTime now = DateTime.now();

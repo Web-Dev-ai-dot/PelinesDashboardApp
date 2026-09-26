@@ -1,3 +1,6 @@
+import '../../../app/theme/app_theme.dart';
+import '../../../app/theme/pelines_settings_content.dart';
+
 import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -57,8 +60,13 @@ class _RegularDeliveryScreenState extends ConsumerState<RegularDeliveryScreen> {
         }
       },
       child: Scaffold(
-        appBar: AdminAppBar(title:  Text(tr(context, 'Regular Delivery'))),
-        body: ListView(
+        appBar: AdminAppBar(
+          title: Text(
+            tr(context, 'Regular Delivery'),
+            style: PelinesTypography.pageTitle(Theme.of(context).textTheme),
+          ),
+        ),
+        body: PelinesSettingsForm(
           padding: const EdgeInsets.all(PelinesSpacing.lg),
           children: <Widget>[
             Align(
@@ -71,13 +79,16 @@ class _RegularDeliveryScreenState extends ConsumerState<RegularDeliveryScreen> {
               ),
             ),
             const SizedBox(height: 8),
-             Text(
-              tr(context, 'Regular delivery settings affect online delivery orders for the regular menu.'),
+            Text(
+              tr(
+                context,
+                'Regular delivery settings affect online delivery orders for the regular menu.',
+              ),
             ),
             const SizedBox(height: 20),
             SwitchListTile(
               key: const Key('regular-delivery-enabled'),
-              title:  Text(tr(context, 'Enabled')),
+              title: Text(tr(context, 'Enabled')),
               value: _enabled,
               onChanged: operation.isBusy
                   ? null
@@ -91,31 +102,49 @@ class _RegularDeliveryScreenState extends ConsumerState<RegularDeliveryScreen> {
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
-              decoration:  InputDecoration(
-                prefixText: r'$ ',
-                labelText: tr(context, 'Delivery fee'),
-                border: OutlineInputBorder(),
-              ),
+              decoration: PelinesControlStyles.input(
+                label: tr(context, 'Delivery fee'),
+              ).copyWith(prefixText: r'$ '),
               onChanged: (_) => setState(() {}),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 8),
+            Text(tr(context, 'Flat delivery fee added to regular orders.')),
+            const Divider(height: 32),
             Text(
-              tr(context, 'Minimum order'),
+              tr(context, 'Delivery Minimum'),
               style: Theme.of(context).textTheme.labelLarge,
             ),
             Text(
               money(_initial.minimumCents),
               style: Theme.of(context).textTheme.titleLarge,
             ),
-             Text(
-              tr(context, 'This value is currently managed outside the mobile app.'),
+            Text(
+              tr(
+                context,
+                'This value is currently managed outside the mobile app.',
+              ),
             ),
             const SizedBox(height: 24),
+            OutlinedButton(
+              key: const Key('regular-delivery-cancel'),
+              style: PelinesControlStyles.button(
+                PelinesButtonVariant.secondary,
+              ),
+              onPressed: operation.isBusy
+                  ? null
+                  : () => Navigator.maybePop(context),
+              child: Text(tr(context, 'Cancel')),
+            ),
+            const SizedBox(height: 12),
+
             FilledButton(
+              style: PelinesControlStyles.button(PelinesButtonVariant.primary),
               key: const Key('regular-delivery-save'),
               onPressed: operation.isBusy ? null : _save,
               child: Text(
-                operation.isBusy ? tr(context, 'Saving…') : tr(context, 'Save regular delivery'),
+                operation.isBusy
+                    ? tr(context, 'Saving…')
+                    : tr(context, 'Save regular delivery'),
               ),
             ),
             if (operation.isBusy)
@@ -167,6 +196,7 @@ class _RegularDeliveryScreenState extends ConsumerState<RegularDeliveryScreen> {
               child: const Text('Cancel'),
             ),
             FilledButton(
+              style: PelinesControlStyles.button(PelinesButtonVariant.primary),
               onPressed: () => Navigator.pop(dialogContext, true),
               child: const Text('Reload'),
             ),
@@ -199,6 +229,7 @@ class _RegularDeliveryScreenState extends ConsumerState<RegularDeliveryScreen> {
               child: const Text('Keep editing'),
             ),
             FilledButton(
+              style: PelinesControlStyles.button(PelinesButtonVariant.primary),
               onPressed: () => Navigator.pop(dialogContext, true),
               child: const Text('Discard'),
             ),

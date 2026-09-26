@@ -1,3 +1,6 @@
+import '../../../app/theme/app_theme.dart';
+import 'operations_parity_widgets.dart';
+
 import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,10 +11,14 @@ import '../../../app/theme/pelines_tokens.dart';
 import '../models/auto_accept.dart';
 import '../models/location.dart';
 import '../providers/auto_accept_controller.dart';
+import '../providers/service_preferences_write_lock.dart';
+
+enum AutoAcceptScope { regular, catering }
 
 class AutoAcceptScreen extends ConsumerStatefulWidget {
-  const AutoAcceptScreen({super.key, required this.location});
+  const AutoAcceptScreen({super.key, required this.location, this.scope});
   final Location location;
+  final AutoAcceptScope? scope;
 
   @override
   ConsumerState<AutoAcceptScreen> createState() => _AutoAcceptScreenState();
@@ -36,6 +43,7 @@ class _AutoAcceptScreenState extends ConsumerState<AutoAcceptScreen> {
   @override
   Widget build(BuildContext context) {
     final AutoAcceptState operation = ref.watch(autoAcceptProvider);
+    final busy = operation.isBusy || ref.watch(servicePreferencesWriteProvider);
     return AdminPopScope<void>(
       canPop: !_dirty || operation.isBusy,
       onPopInvokedWithResult: (bool didPop, void result) async {
@@ -47,8 +55,13 @@ class _AutoAcceptScreenState extends ConsumerState<AutoAcceptScreen> {
         }
       },
       child: Scaffold(
-        appBar: AdminAppBar(title:  Text(tr(context, 'Auto-Accept Orders'))),
-        body: ListView(
+        appBar: AdminAppBar(
+          title: Text(
+            tr(context, 'Auto-Accept Orders'),
+            style: PelinesTypography.pageTitle(Theme.of(context).textTheme),
+          ),
+        ),
+        body: OperationsFormList(
           padding: const EdgeInsets.all(PelinesSpacing.lg),
           children: <Widget>[
             Align(
@@ -61,41 +74,62 @@ class _AutoAcceptScreenState extends ConsumerState<AutoAcceptScreen> {
               ),
             ),
             const SizedBox(height: 8),
-             Text(
-              tr(context, 'Paid orders can move directly to Confirmed without requiring manual acceptance.'),
+            Text(
+              tr(
+                context,
+                'Paid orders can move directly to Confirmed without requiring manual acceptance.',
+              ),
             ),
             const SizedBox(height: 20),
-            SwitchListTile(
-              key: const Key('auto-accept-regular'),
-              contentPadding: EdgeInsets.zero,
-              title:  Text(tr(context, 'Automatically accept paid regular orders')),
-              value: _regular,
-              onChanged: operation.isBusy
-                  ? null
-                  : (bool value) => _requestChange(
-                      kind: _AutoAcceptKind.regular,
-                      value: value,
-                    ),
-            ),
-            const Divider(height: 28),
-            SwitchListTile(
-              key: const Key('auto-accept-catering'),
-              contentPadding: EdgeInsets.zero,
-              title:  Text(tr(context, 'Automatically accept paid catering orders')),
-              value: _catering,
-              onChanged: operation.isBusy
-                  ? null
-                  : (bool value) => _requestChange(
-                      kind: _AutoAcceptKind.catering,
-                      value: value,
-                    ),
-            ),
+            if (widget.scope != AutoAcceptScope.catering)
+              SwitchListTile(
+                key: const Key('auto-accept-regular'),
+                contentPadding: EdgeInsets.zero,
+                title: Text(
+                  tr(context, 'Automatically accept paid regular orders'),
+                ),
+                value: _regular,
+                onChanged: busy
+                    ? null
+                    : (bool value) => _requestChange(
+                        kind: _AutoAcceptKind.regular,
+                        value: value,
+                      ),
+              ),
+            if (widget.scope == null) const Divider(height: 28),
+            if (widget.scope != AutoAcceptScope.regular)
+              SwitchListTile(
+                key: const Key('auto-accept-catering'),
+                contentPadding: EdgeInsets.zero,
+                title: Text(
+                  tr(context, 'Automatically accept paid catering orders'),
+                ),
+                value: _catering,
+                onChanged: busy
+                    ? null
+                    : (bool value) => _requestChange(
+                        kind: _AutoAcceptKind.catering,
+                        value: value,
+                      ),
+              ),
             const SizedBox(height: 24),
+            OutlinedButton(
+              style: PelinesControlStyles.button(
+                PelinesButtonVariant.secondary,
+              ),
+              onPressed: busy ? null : () => Navigator.maybePop(context),
+              child: Text(tr(context, 'Cancel')),
+            ),
+            const SizedBox(height: 12),
+
             FilledButton(
+              style: PelinesControlStyles.button(PelinesButtonVariant.primary),
               key: const Key('auto-accept-save'),
-              onPressed: operation.isBusy || !_dirty ? null : _save,
+              onPressed: busy || !_dirty ? null : _save,
               child: Text(
-                operation.isBusy ? tr(context, 'Saving…') : tr(context, 'Save auto-accept settings'),
+                operation.isBusy
+                    ? tr(context, 'Saving…')
+                    : tr(context, 'Save auto-accept settings'),
               ),
             ),
             if (operation.isBusy)
@@ -152,6 +186,9 @@ class _AutoAcceptScreenState extends ConsumerState<AutoAcceptScreen> {
                 child: Text(value ? 'Keep manual' : 'Keep auto-accept'),
               ),
               FilledButton(
+                style: PelinesControlStyles.button(
+                  PelinesButtonVariant.primary,
+                ),
                 key: Key('auto-accept-$orderType-confirm'),
                 onPressed: () => Navigator.pop(dialogContext, true),
                 child: Text(
@@ -193,6 +230,7 @@ class _AutoAcceptScreenState extends ConsumerState<AutoAcceptScreen> {
               child: const Text('Cancel'),
             ),
             FilledButton(
+              style: PelinesControlStyles.button(PelinesButtonVariant.primary),
               onPressed: () => Navigator.pop(dialogContext, true),
               child: const Text('Reload'),
             ),
@@ -223,6 +261,7 @@ class _AutoAcceptScreenState extends ConsumerState<AutoAcceptScreen> {
               child: const Text('Keep editing'),
             ),
             FilledButton(
+              style: PelinesControlStyles.button(PelinesButtonVariant.primary),
               onPressed: () => Navigator.pop(dialogContext, true),
               child: const Text('Discard'),
             ),

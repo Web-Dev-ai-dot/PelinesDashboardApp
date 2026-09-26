@@ -8,6 +8,8 @@ import '../models/temporary_closure.dart';
 import '../models/regular_delivery.dart';
 import '../models/catering_delivery.dart';
 import '../models/auto_accept.dart';
+import '../models/auto_cancellation.dart';
+import 'auto_cancellation_repository.dart';
 
 class LocationSettingsConflict implements Exception {
   const LocationSettingsConflict(this.canonical);
@@ -56,7 +58,8 @@ abstract interface class LocationsRepository {
   });
 }
 
-class ApiLocationsRepository implements LocationsRepository {
+class ApiLocationsRepository
+    implements LocationsRepository, AutoCancellationRepository {
   ApiLocationsRepository(this._client);
 
   final ApiClient _client;
@@ -264,6 +267,40 @@ class ApiLocationsRepository implements LocationsRepository {
       cateringChanged: cateringChanged,
       catering: catering,
     );
+    return _locationRequest(
+      () => _client.dio.patch<dynamic>(
+        'locations/$locationId',
+        data: <String, dynamic>{'servicePrefsJson': next},
+      ),
+    );
+  }
+
+  @override
+  Future<Location> saveAutoCancellationSettings({
+    required String locationId,
+    required DateTime originalUpdatedAt,
+    required PickupOrderKind kind,
+    required AutoCancellationRule original,
+    required AutoCancellationRule rule,
+    required bool Function() canWrite,
+  }) async {
+    final validation = rule.validate(kind);
+    if (validation != null) throw ArgumentError(validation);
+    final canonical = await getLocation(locationId);
+    if (!canWrite()) {
+      throw const ApiException(
+        message: 'The selected location changed. No change was sent.',
+      );
+    }
+    if (canonical.updatedAt != originalUpdatedAt ||
+        !AutoCancellationRule.fromJson(
+          canonical.servicePrefsJson,
+          kind,
+        ).sameAs(original)) {
+      throw LocationSettingsConflict(canonical);
+    }
+    if (rule.sameAs(original)) return canonical;
+    final next = rule.mergeInto(canonical.servicePrefsJson, original, kind);
     return _locationRequest(
       () => _client.dio.patch<dynamic>(
         'locations/$locationId',

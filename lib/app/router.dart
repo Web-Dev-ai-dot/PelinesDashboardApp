@@ -14,6 +14,7 @@ import '../features/auth/models/admin_session.dart';
 import '../features/auth/presentation/login_screen.dart';
 import '../features/auth/providers/auth_providers.dart';
 import '../features/locations/presentation/store_operations_screen.dart';
+import '../features/locations/presentation/delivery_settings_screen.dart';
 import '../features/orders/presentation/order_detail_screen.dart';
 import '../features/orders/presentation/historical_orders_screen.dart';
 import '../features/orders/presentation/orders_calendar_screen.dart';
@@ -115,6 +116,20 @@ final routerProvider = Provider<GoRouter>((Ref ref) {
               GoRoute(
                 path: 'store-operations',
                 builder: (_, _) => const StoreOperationsScreen(),
+              ),
+              GoRoute(
+                path: 'store/locations',
+                builder: (_, _) => const StoreOperationsScreen(
+                  section: StoreOperationsSection.locations,
+                ),
+              ),
+              GoRoute(
+                path: 'store/pickup-settings',
+                builder: (_, _) => const PickupSettingsScreen(),
+              ),
+              GoRoute(
+                path: 'store/delivery-settings',
+                builder: (_, _) => const DeliverySettingsScreen(),
               ),
               GoRoute(
                 path: 'account',

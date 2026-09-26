@@ -1,3 +1,6 @@
+import '../../../app/theme/app_theme.dart';
+import '../../../app/theme/pelines_settings_content.dart';
+
 import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -63,8 +66,13 @@ class _CateringDeliveryScreenState
         }
       },
       child: Scaffold(
-        appBar: AdminAppBar(title:  Text(tr(context, 'Catering Delivery'))),
-        body: ListView(
+        appBar: AdminAppBar(
+          title: Text(
+            tr(context, 'Catering Delivery'),
+            style: PelinesTypography.pageTitle(Theme.of(context).textTheme),
+          ),
+        ),
+        body: PelinesSettingsForm(
           padding: const EdgeInsets.all(PelinesSpacing.lg),
           children: <Widget>[
             Align(
@@ -77,16 +85,19 @@ class _CateringDeliveryScreenState
               ),
             ),
             const SizedBox(height: 8),
-             Text(
-              tr(context, 'Catering Delivery controls delivery availability for catering orders only.'),
+            Text(
+              tr(
+                context,
+                'Catering Delivery controls delivery availability for catering orders only.',
+              ),
             ),
             const SizedBox(height: 20),
             SwitchListTile(
               key: const Key('catering-delivery-enabled'),
               contentPadding: EdgeInsets.zero,
-              title:  Text(tr(context, 'Enabled')),
+              title: Text(tr(context, 'Enabled')),
               subtitle: _initial.usesDefault && !_enabledDirty
-                  ?  Text(tr(context, 'Using default setting'))
+                  ? Text(tr(context, 'Using default setting'))
                   : null,
               value: _enabled,
               onChanged: operation.isBusy
@@ -101,16 +112,16 @@ class _CateringDeliveryScreenState
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
-              decoration:  InputDecoration(
-                prefixText: r'$ ',
-                labelText: tr(context, 'Delivery fee'),
-                border: OutlineInputBorder(),
-              ),
+              decoration: PelinesControlStyles.input(
+                label: tr(context, 'Delivery fee'),
+              ).copyWith(prefixText: r'$ '),
               onChanged: (_) => setState(() {}),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 8),
+            Text(tr(context, 'Flat delivery fee added to catering orders.')),
+            const Divider(height: 32),
             Text(
-              tr(context, 'Minimum order'),
+              tr(context, 'Delivery Minimum'),
               style: Theme.of(context).textTheme.labelLarge,
             ),
             Text(
@@ -118,15 +129,33 @@ class _CateringDeliveryScreenState
               key: const Key('catering-delivery-minimum'),
               style: Theme.of(context).textTheme.titleLarge,
             ),
-             Text(
-              tr(context, 'This value is currently managed outside the mobile app.'),
+            Text(
+              tr(
+                context,
+                'This value is currently managed outside the mobile app.',
+              ),
             ),
             const SizedBox(height: 24),
+            OutlinedButton(
+              key: const Key('catering-delivery-cancel'),
+              style: PelinesControlStyles.button(
+                PelinesButtonVariant.secondary,
+              ),
+              onPressed: operation.isBusy
+                  ? null
+                  : () => Navigator.maybePop(context),
+              child: Text(tr(context, 'Cancel')),
+            ),
+            const SizedBox(height: 12),
+
             FilledButton(
+              style: PelinesControlStyles.button(PelinesButtonVariant.primary),
               key: const Key('catering-delivery-save'),
               onPressed: operation.isBusy || !_dirty ? null : _save,
               child: Text(
-                operation.isBusy ? tr(context, 'Saving…') : tr(context, 'Save catering delivery'),
+                operation.isBusy
+                    ? tr(context, 'Saving…')
+                    : tr(context, 'Save catering delivery'),
               ),
             ),
             if (operation.isBusy)
@@ -183,6 +212,7 @@ class _CateringDeliveryScreenState
               child: const Text('Cancel'),
             ),
             FilledButton(
+              style: PelinesControlStyles.button(PelinesButtonVariant.primary),
               onPressed: () => Navigator.pop(dialogContext, true),
               child: const Text('Reload'),
             ),
@@ -222,6 +252,7 @@ class _CateringDeliveryScreenState
               child: Text(_enabled ? 'Keep disabled' : 'Keep enabled'),
             ),
             FilledButton(
+              style: PelinesControlStyles.button(PelinesButtonVariant.primary),
               key: const Key('catering-delivery-confirm'),
               onPressed: () => Navigator.pop(dialogContext, true),
               child: Text(_enabled ? 'Enable delivery' : 'Disable delivery'),
@@ -245,6 +276,7 @@ class _CateringDeliveryScreenState
               child: const Text('Keep editing'),
             ),
             FilledButton(
+              style: PelinesControlStyles.button(PelinesButtonVariant.primary),
               onPressed: () => Navigator.pop(dialogContext, true),
               child: const Text('Discard'),
             ),

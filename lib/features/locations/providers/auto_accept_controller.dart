@@ -6,6 +6,7 @@ import '../data/locations_repository.dart';
 import '../models/auto_accept.dart';
 import '../models/location.dart';
 import 'locations_providers.dart';
+import 'service_preferences_write_lock.dart';
 
 enum AutoAcceptPhase { idle, submitting, reconciling, success, conflict, error }
 
@@ -28,6 +29,37 @@ class AutoAcceptController extends Notifier<AutoAcceptState> {
   AutoAcceptState build() => const AutoAcceptState();
 
   Future<void> save({
+    required String locationId,
+    required DateTime originalUpdatedAt,
+    required bool originalRegular,
+    required bool regular,
+    required bool originalCatering,
+    required bool catering,
+  }) async {
+    if (state.isBusy) return;
+    final lock = ref.read(servicePreferencesWriteProvider.notifier);
+    if (!lock.tryAcquire()) {
+      state = const AutoAcceptState(
+        phase: AutoAcceptPhase.error,
+        message: 'Another service setting is being saved. Please wait.',
+      );
+      return;
+    }
+    try {
+      await _save(
+        locationId: locationId,
+        originalUpdatedAt: originalUpdatedAt,
+        originalRegular: originalRegular,
+        regular: regular,
+        originalCatering: originalCatering,
+        catering: catering,
+      );
+    } finally {
+      lock.release();
+    }
+  }
+
+  Future<void> _save({
     required String locationId,
     required DateTime originalUpdatedAt,
     required bool originalRegular,

@@ -1,3 +1,6 @@
+import '../../../app/theme/app_theme.dart';
+import 'operations_parity_widgets.dart';
+
 import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -44,9 +47,14 @@ class _BusinessHoursScreenState extends ConsumerState<BusinessHoursScreen> {
         if (await _confirmDiscard() && context.mounted) Navigator.pop(context);
       },
       child: Scaffold(
-        appBar: AdminAppBar(title:  Text(tr(context, 'Business Hours'))),
+        appBar: AdminAppBar(
+          title: Text(
+            tr(context, 'Business Hours'),
+            style: PelinesTypography.pageTitle(Theme.of(context).textTheme),
+          ),
+        ),
         body: PelinesPageBody(
-          child: ListView(
+          child: OperationsFormList(
             padding: const EdgeInsets.all(PelinesSpacing.lg),
             children: <Widget>[
               Align(
@@ -59,24 +67,51 @@ class _BusinessHoursScreenState extends ConsumerState<BusinessHoursScreen> {
                 ),
               ),
               const SizedBox(height: 4),
-               Text(tr(context, 'Times are recurring business times in Pacific Time.')),
+              Text(
+                tr(
+                  context,
+                  'Times are recurring business times in Pacific Time.',
+                ),
+              ),
               const SizedBox(height: 8),
-               Text(
-                tr(context, 'Business hours affect regular online ordering. Catering availability is handled separately.'),
+              Text(
+                tr(
+                  context,
+                  'Business hours affect regular online ordering. Catering availability is handled separately.',
+                ),
               ),
               const SizedBox(height: 4),
-               Text(
-                tr(context, 'Temporary closures can override regular business hours.'),
+              Text(
+                tr(
+                  context,
+                  'Temporary closures can override regular business hours.',
+                ),
               ),
               const SizedBox(height: 20),
               for (int index = 0; index < 7; index++)
                 _dayEditor(index, operation.isBusy),
               const SizedBox(height: 20),
+              OutlinedButton(
+                style: PelinesControlStyles.button(
+                  PelinesButtonVariant.secondary,
+                ),
+                onPressed: operation.isBusy
+                    ? null
+                    : () => Navigator.maybePop(context),
+                child: Text(tr(context, 'Cancel')),
+              ),
+              const SizedBox(height: 12),
+
               FilledButton(
+                style: PelinesControlStyles.button(
+                  PelinesButtonVariant.primary,
+                ),
                 key: const Key('business-hours-save'),
                 onPressed: operation.isBusy ? null : _save,
                 child: Text(
-                  operation.isBusy ? tr(context, 'Saving…') : tr(context, 'Save business hours'),
+                  operation.isBusy
+                      ? tr(context, 'Saving…')
+                      : tr(context, 'Save business hours'),
                 ),
               ),
               if (operation.isBusy) ...<Widget>[
@@ -92,7 +127,7 @@ class _BusinessHoursScreenState extends ConsumerState<BusinessHoursScreen> {
 
   Widget _dayEditor(int index, bool busy) {
     final BusinessDayHours day = _draft.days[index];
-    return Card(
+    return OperationsCard(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -100,8 +135,8 @@ class _BusinessHoursScreenState extends ConsumerState<BusinessHoursScreen> {
             SwitchListTile(
               key: Key('business-day-$index'),
               contentPadding: EdgeInsets.zero,
-              title: Text(businessDayLabels[index]),
-              subtitle: Text(day.closed ? 'Closed' : 'Open'),
+              title: Text(tr(context, businessDayLabels[index])),
+              subtitle: Text(tr(context, day.closed ? 'Closed' : 'Open')),
               value: !day.closed,
               onChanged: busy
                   ? null
@@ -122,11 +157,12 @@ class _BusinessHoursScreenState extends ConsumerState<BusinessHoursScreen> {
 
   Widget _timeButton(int index, bool opening, String value, bool busy) {
     return OutlinedButton(
+      style: PelinesControlStyles.button(PelinesButtonVariant.secondary),
       key: Key('business-${opening ? 'open' : 'close'}-$index'),
       onPressed: busy ? null : () => _pickTime(index, opening, value),
       child: Column(
         children: <Widget>[
-          Text(opening ? 'Opens' : 'Closes'),
+          Text(tr(context, opening ? 'Opens' : 'Closes')),
           Text(_displayTime(value)),
         ],
       ),
@@ -196,6 +232,7 @@ class _BusinessHoursScreenState extends ConsumerState<BusinessHoursScreen> {
               child: const Text('Cancel'),
             ),
             FilledButton(
+              style: PelinesControlStyles.button(PelinesButtonVariant.primary),
               onPressed: () => Navigator.pop(dialogContext, true),
               child: const Text('Reload'),
             ),
@@ -230,6 +267,7 @@ class _BusinessHoursScreenState extends ConsumerState<BusinessHoursScreen> {
               child: const Text('Keep editing'),
             ),
             FilledButton(
+              style: PelinesControlStyles.button(PelinesButtonVariant.primary),
               onPressed: () => Navigator.pop(dialogContext, true),
               child: const Text('Discard'),
             ),

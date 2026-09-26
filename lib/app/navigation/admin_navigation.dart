@@ -18,13 +18,24 @@ enum AdminDestination {
   calendar('/app/orders/calendar', 'Calendar', Icons.calendar_month_outlined),
   completed('/app/orders/completed', 'Completed', Icons.check_circle_outline),
   cancelled('/app/orders/cancelled', 'Cancelled', Icons.cancel_outlined),
-  menu('/app/menu', 'Menu', Icons.restaurant_menu_outlined),
-  operations(
-    '/app/store-operations',
-    'Store Operations',
-    Icons.storefront_outlined,
+  menu('/app/menu/catering', 'Catering Menu', Icons.room_service_outlined),
+  regularMenu(
+    '/app/menu/store',
+    'Regular Menu',
+    Icons.restaurant_menu_outlined,
   ),
+  operations('/app/store/locations', 'Locations', Icons.storefront_outlined),
   promotions('/app/promotions', 'Promotions', Icons.local_offer_outlined),
+  pickup(
+    '/app/store/pickup-settings',
+    'Pickup Settings',
+    Icons.shopping_bag_outlined,
+  ),
+  delivery(
+    '/app/store/delivery-settings',
+    'Delivery Settings',
+    Icons.local_shipping_outlined,
+  ),
   printing('/app/printing', 'Printer Settings', Icons.print_outlined),
   account('/app/account', 'Account', Icons.person_outline);
 
@@ -43,6 +54,13 @@ enum AdminDestination {
           normalized.startsWith('${destination.path}/')) {
         return destination;
       }
+    }
+    if (normalized == '/app/menu' || normalized.startsWith('/app/menu/')) {
+      return menu;
+    }
+    if (normalized == '/app/store-operations' ||
+        normalized.startsWith('/app/store-operations/')) {
+      return operations;
     }
     return orders;
   }
@@ -553,8 +571,11 @@ class _AdminDestinationListState extends ConsumerState<_AdminDestinationList> {
   ];
   static const store = [
     AdminDestination.menu,
+    AdminDestination.regularMenu,
     AdminDestination.operations,
     AdminDestination.promotions,
+    AdminDestination.pickup,
+    AdminDestination.delivery,
     AdminDestination.printing,
   ];
   final Map<String, bool> _open = {};
