@@ -11,6 +11,8 @@ import '../data/menu_repository.dart';
 import '../models/menu_models.dart';
 import '../providers/menu_providers.dart';
 import 'menu_screens.dart';
+import 'menu_parity_widgets.dart';
+import '../../../app/theme/app_theme.dart';
 
 class CategoryFormScreen extends ConsumerWidget {
   const CategoryFormScreen({required this.kind, this.categoryId, super.key});
@@ -22,7 +24,7 @@ class CategoryFormScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final Location? location = ref.watch(currentLocationProvider).value;
     if (location == null) {
-      return  Scaffold(
+      return Scaffold(
         body: MenuEmpty(tr(context, 'Choose a location to edit categories.')),
       );
     }
@@ -41,7 +43,7 @@ class CategoryFormScreen extends ConsumerWidget {
           loading: () =>
               const Scaffold(body: Center(child: CircularProgressIndicator())),
           error: (Object error, StackTrace stackTrace) => Scaffold(
-            appBar: AdminAppBar(title:  Text(tr(context, 'Edit Category'))),
+            appBar: AdminAppBar(title: Text(tr(context, 'Edit Category'))),
             body: MenuError(
               message: error.toString(),
               onRetry: () => ref.invalidate(menuCategoryDetailProvider(query)),
@@ -129,15 +131,16 @@ class _CategoryFormState extends ConsumerState<_CategoryForm> {
     final bool? discard = await showDialog<bool>(
       context: context,
       builder: (BuildContext dialogContext) => AlertDialog(
-        title: const Text('Discard unsaved changes?'),
+        title: Text(tr(context, 'Discard unsaved changes?')),
         actions: <Widget>[
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Stay'),
+            child: Text(tr(context, 'Stay')),
           ),
           FilledButton(
+            style: PelinesControlStyles.button(PelinesButtonVariant.primary),
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Discard'),
+            child: Text(tr(context, 'Discard')),
           ),
         ],
       ),
@@ -166,7 +169,10 @@ class _CategoryFormState extends ConsumerState<_CategoryForm> {
       child: Scaffold(
         appBar: AdminAppBar(
           title: Text(
-            widget.initial == null ? tr(context, 'New Category') : tr(context, 'Edit Category'),
+            widget.initial == null
+                ? tr(context, 'New Category')
+                : tr(context, 'Edit Category'),
+            style: PelinesTypography.pageTitle(Theme.of(context).textTheme),
           ),
           leading: IconButton(
             onPressed: _leave,
@@ -174,7 +180,7 @@ class _CategoryFormState extends ConsumerState<_CategoryForm> {
           ),
         ),
         body: PelinesPageBody(
-          child: ListView(
+          child: MenuFormList(
             padding: const EdgeInsets.all(PelinesSpacing.lg),
             children: <Widget>[
               Text('${widget.kind.label} - ${widget.location.name}'),
@@ -183,9 +189,8 @@ class _CategoryFormState extends ConsumerState<_CategoryForm> {
                 controller: _name,
                 enabled: !mutation.isBusy,
                 maxLength: 80,
-                decoration:  InputDecoration(
-                  labelText: tr(context, 'Name'),
-                  border: OutlineInputBorder(),
+                decoration: PelinesControlStyles.input(
+                  label: tr(context, 'Name'),
                 ),
               ),
               const SizedBox(height: 12),
@@ -193,22 +198,24 @@ class _CategoryFormState extends ConsumerState<_CategoryForm> {
                 controller: _sortOrder,
                 enabled: !mutation.isBusy,
                 keyboardType: TextInputType.number,
-                decoration:  InputDecoration(
-                  labelText: tr(context, 'Sort order'),
-                  border: OutlineInputBorder(),
+                decoration: PelinesControlStyles.input(
+                  label: tr(context, 'Sort order'),
                 ),
               ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                title:  Text(tr(context, 'Active')),
+                title: Text(tr(context, 'Active')),
                 value: _active,
                 onChanged: mutation.isBusy
                     ? null
                     : (bool value) => setState(() => _active = value),
               ),
               if (input == null)
-                 Text(
-                  tr(context, 'Enter a name up to 80 characters and a non-negative sort order.'),
+                Text(
+                  tr(
+                    context,
+                    'Enter a name up to 80 characters and a non-negative sort order.',
+                  ),
                   style: TextStyle(color: PelinesColors.destructive),
                 ),
               if (mutation.message != null) Text(mutation.message!),
@@ -216,10 +223,16 @@ class _CategoryFormState extends ConsumerState<_CategoryForm> {
               PelinesActionBar(
                 children: <Widget>[
                   OutlinedButton(
+                    style: PelinesControlStyles.button(
+                      PelinesButtonVariant.secondary,
+                    ),
                     onPressed: mutation.isBusy ? null : _leave,
-                    child:  Text(tr(context, 'Cancel')),
+                    child: Text(tr(context, 'Cancel')),
                   ),
                   FilledButton(
+                    style: PelinesControlStyles.button(
+                      PelinesButtonVariant.primary,
+                    ),
                     onPressed: input == null || !_dirty || mutation.isBusy
                         ? null
                         : () async {
@@ -242,8 +255,11 @@ class _CategoryFormState extends ConsumerState<_CategoryForm> {
                 ],
               ),
               const SizedBox(height: 12),
-               Text(
-                tr(context, 'Subcategory schedules are preserved and are not edited in this form.'),
+              Text(
+                tr(
+                  context,
+                  'Subcategory schedules are preserved and are not edited in this form.',
+                ),
               ),
             ],
           ),

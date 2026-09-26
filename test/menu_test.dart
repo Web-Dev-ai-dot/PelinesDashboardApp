@@ -1,3 +1,13 @@
+import 'dart:async';
+
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
+import 'package:pelines_admin_app/app/theme/app_theme.dart';
+import 'package:pelines_admin_app/features/menu/presentation/product_form_screen.dart';
+import 'package:pelines_admin_app/features/menu/presentation/category_form_screen.dart';
+import 'package:pelines_admin_app/features/menu/presentation/modifier_form_screen.dart';
+import 'package:pelines_admin_app/features/menu/presentation/menu_parity_widgets.dart';
+
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -18,6 +28,7 @@ import 'package:pelines_admin_app/features/menu/providers/menu_providers.dart';
 import 'package:pelines_admin_app/features/menu/providers/modifier_providers.dart';
 
 void main() {
+  _webParityTests();
   test(
     'summary groups inherit product context without becoming full details',
     () {
@@ -746,7 +757,7 @@ void main() {
     expect(repository.modifierGroupCreateCalls, 0);
   });
 
-  testWidgets('landing follows Menu to category to product and Back', (
+  testWidgets('landing follows Menu to catalog to product and Back', (
     tester,
   ) async {
     final GoRouter router = GoRouter(
@@ -792,12 +803,15 @@ void main() {
     );
     await tester.tap(find.text('Regular Menu'));
     await tester.pumpAndSettle();
-    expect(find.text('Store Category'), findsOneWidget);
-    await tester.tap(find.text('Store Category'));
-    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('regular-category-header-category-a')),
+      findsOneWidget,
+    );
     expect(find.text('Test Product'), findsOneWidget);
     expect(find.textContaining(r'$12.50'), findsOneWidget);
     expect(find.textContaining('Unavailable'), findsOneWidget);
+    await tester.ensureVisible(find.text('Test Product'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Test Product'));
     await tester.pumpAndSettle();
     expect(find.text('Product Detail'), findsOneWidget);
@@ -1098,4 +1112,278 @@ class _Adapter implements HttpClientAdapter {
 
   @override
   void close({bool force = false}) {}
+}
+
+Future<void> _parityPump(
+  WidgetTester tester,
+  Widget screen, {
+  double width = 390,
+  double scale = 1,
+  String language = 'en',
+  _Repository? repository,
+}) async {
+  tester.view.physicalSize = Size(width, 900);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        currentLocationProvider.overrideWith(_CurrentLocation.new),
+        menuRepositoryProvider.overrideWithValue(repository ?? _Repository()),
+      ],
+      child: MaterialApp(
+        theme: AppTheme.light,
+        locale: Locale(language),
+        supportedLocales: AdminLocalizations.supportedLocales,
+        localizationsDelegates: const [
+          AdminLocalizations.delegate,
+          ...GlobalMaterialLocalizations.delegates,
+        ],
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context)
+              .copyWith(textScaler: TextScaler.linear(scale)),
+          child: child!,
+        ),
+        home: screen,
+      ),
+    ),
+  );
+  await tester.pump();
+}
+
+const _productsScreen = MenuProductsScreen(
+  kind: MenuKind.store,
+  categoryId: 'category-a',
+  categoryName: 'Store Category',
+);
+
+void _webParityTests() {
+  for (final viewport in [
+    (390.0, 1.0, 1),
+    (768.0, 1.0, 2),
+    (1400.0, 1.0, 3),
+    (320.0, 2.0, 1),
+    (1180.0, 2.0, 1),
+  ]) {
+    for (final language in ['en', 'es']) {
+      testWidgets('menu parity ${viewport.$1} scale ${viewport.$2} $language', (
+        tester,
+      ) async {
+        await _parityPump(
+          tester,
+          _productsScreen,
+          width: viewport.$1,
+          scale: viewport.$2,
+          language: language,
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(ValueKey('menu-grid-${viewport.$3}')),
+          findsOneWidget,
+        );
+        expect(find.byKey(const Key('menu-new-product')), findsOneWidget);
+        expect(find.byKey(const Key('menu-active-category')), findsOneWidget);
+        expect(find.text('Test Product'), findsOneWidget);
+        expect(find.text(r'$12.50'), findsOneWidget);
+        expect(
+          find.text(language == 'es' ? 'No disponible' : 'Unavailable'),
+          findsOneWidget,
+        );
+        expect(find.byKey(const Key('menu-image-fallback')), findsOneWidget);
+        expect(tester.takeException(), isNull);
+        final search = find.descendant(
+          of: find.byKey(const Key('menu-product-search')),
+          matching: find.byType(TextField),
+        );
+        await tester.enterText(search, 'missing');
+        await tester.pumpAndSettle();
+        expect(find.text('Test Product'), findsNothing);
+        expect(
+          find.text(
+            language == 'es'
+                ? 'No hay productos que coincidan con la búsqueda.'
+                : 'No products match your search.',
+          ),
+          findsOneWidget,
+        );
+        await tester.enterText(search, 'TEST');
+        await tester.pumpAndSettle();
+        expect(find.text('Test Product'), findsOneWidget);
+        await tester.drag(find.byType(ListView).first, const Offset(0, -800));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
+  for (final language in ['en', 'es']) {
+    testWidgets('product detail modifiers and image controls $language 2x', (
+      tester,
+    ) async {
+      await _parityPump(
+        tester,
+        const MenuProductDetailScreen(
+          kind: MenuKind.store,
+          categoryId: 'category-a',
+          categoryName: 'Store Category',
+          productId: 'product-uuid',
+        ),
+        width: 320,
+        scale: 2,
+        language: language,
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Test Product'), findsOneWidget);
+      expect(find.text('Sauce'), findsOneWidget);
+      expect(
+        find.text(
+          language == 'es' ? 'Obligatorio - Elige 1' : 'Required - Choose 1',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Hot'), findsOneWidget);
+      expect(find.text(r'+$1.50'), findsOneWidget);
+      await tester.drag(find.byType(ListView).first, const Offset(0, -4000));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    });
+    testWidgets('catalog search and real actions $language at 2x', (
+      tester,
+    ) async {
+      await _parityPump(
+        tester,
+        const MenuCategoriesScreen(kind: MenuKind.store),
+        width: 320,
+        scale: 2,
+        language: language,
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.text(language == 'es' ? 'Nueva categoría' : 'New Category'),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('regular-category-category-a')),
+        findsOneWidget,
+      );
+      final search = find.descendant(
+        of: find.byKey(const Key('regular-search')),
+        matching: find.byType(TextField),
+      );
+      await tester.enterText(search, 'missing');
+      await tester.pumpAndSettle();
+      expect(find.text('Test Product'), findsNothing);
+      await tester.enterText(search, 'test');
+      await tester.pumpAndSettle();
+      expect(find.text('Test Product'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+    for (final screen in <String, Widget>{
+      'product': const ProductFormScreen(
+        kind: MenuKind.store,
+        categoryId: 'category-a',
+        categoryName: 'Store Category',
+        productId: 'product-uuid',
+      ),
+      'category': const CategoryFormScreen(
+        kind: MenuKind.store,
+        categoryId: 'category-a',
+      ),
+      'group': const ModifierFormScreen(
+        kind: MenuKind.store,
+        categoryId: 'category-a',
+        productId: 'product-uuid',
+        groupId: 'group',
+      ),
+      'option': const ModifierFormScreen(
+        kind: MenuKind.store,
+        categoryId: 'category-a',
+        productId: 'product-uuid',
+        groupId: 'group',
+        optionId: 'option',
+        optionForm: true,
+      ),
+    }.entries) {
+      testWidgets('${screen.key} form styled with draft guard $language 2x', (
+        tester,
+      ) async {
+        await _parityPump(
+          tester,
+          screen.value,
+          width: 320,
+          scale: 2,
+          language: language,
+        );
+        await tester.pumpAndSettle();
+        expect(find.byType(MenuFormList), findsOneWidget);
+        final field = find.byType(TextField).first;
+        expect(
+          tester.widget<TextField>(field).decoration!.enabledBorder,
+          isA<OutlineInputBorder>(),
+        );
+        await tester.ensureVisible(field);
+        await tester.enterText(field, 'Backend draft name');
+        await tester.pump();
+        await tester.tap(find.byIcon(Icons.arrow_back).first);
+        await tester.pumpAndSettle();
+        expect(find.byType(AlertDialog), findsOneWidget);
+        await tester.tap(find.text(language == 'es' ? 'Permanecer' : 'Stay'));
+        await tester.pumpAndSettle();
+        expect(
+          tester.widget<TextField>(field).controller!.text,
+          'Backend draft name',
+        );
+        await tester.drag(find.byType(ListView).first, const Offset(0, -2500));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
+  testWidgets('product loading error retry empty stay distinct', (
+    tester,
+  ) async {
+    final repo = _ParityRepository()..hold = Completer<void>();
+    await _parityPump(tester, _productsScreen, repository: repo);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byKey(const Key('menu-new-product')), findsOneWidget);
+    repo.fail = true;
+    repo.hold!.complete();
+    await tester.pumpAndSettle();
+    expect(find.textContaining('explicit menu failure'), findsOneWidget);
+    expect(find.text('No products in this category.'), findsNothing);
+    repo.fail = false;
+    await tester.tap(find.text('Try again'));
+    await tester.pumpAndSettle();
+    expect(find.text('No products in this category.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('network product image keeps aspect fill and failure fallback', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MenuPhoto(url: 'https://example.test/product.png'),
+        ),
+      ),
+    );
+    expect(tester.widget<Image>(find.byType(Image)).fit, BoxFit.cover);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('menu-image-fallback')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+}
+
+class _ParityRepository extends _Repository {
+  Completer<void>? hold;
+  bool fail = false;
+  @override
+  Future<List<MenuProduct>> getProducts({
+    required String locationSlug,
+    required String categoryId,
+  }) async {
+    await hold?.future;
+    if (fail) throw const ApiException(message: 'explicit menu failure');
+    return [];
+  }
 }

@@ -165,6 +165,7 @@ class ProductWriteInput {
     this.subcategory = '',
     this.servesCount,
     this.disclaimer = '',
+    this.imageUrl,
   });
   final String categoryId;
   final String name;
@@ -175,6 +176,7 @@ class ProductWriteInput {
   final String subcategory;
   final int? servesCount;
   final String disclaimer;
+  final String? imageUrl;
   Map<String, dynamic> toJson() => <String, dynamic>{
     'categoryId': categoryId,
     'name': name,
@@ -186,6 +188,7 @@ class ProductWriteInput {
     'subcategory': subcategory,
     'disclaimer': disclaimer,
     if (servesCount != null) 'servesCount': servesCount,
+    if (imageUrl != null) 'imageUrl': imageUrl,
   };
 }
 

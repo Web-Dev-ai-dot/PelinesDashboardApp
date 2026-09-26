@@ -1,6 +1,7 @@
 import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../app/navigation/admin_navigation.dart';
 import '../../../app/theme/pelines_components.dart';
@@ -11,6 +12,8 @@ import '../data/menu_repository.dart';
 import '../models/menu_models.dart';
 import '../providers/menu_providers.dart';
 import 'menu_screens.dart';
+import 'menu_parity_widgets.dart';
+import '../../../app/theme/app_theme.dart';
 
 class ProductFormScreen extends ConsumerWidget {
   const ProductFormScreen({
@@ -28,7 +31,7 @@ class ProductFormScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final Location? location = ref.watch(currentLocationProvider).value;
     if (location == null) {
-      return  Scaffold(
+      return Scaffold(
         body: MenuEmpty(tr(context, 'Choose a location to edit products.')),
       );
     }
@@ -51,7 +54,7 @@ class ProductFormScreen extends ConsumerWidget {
           loading: () =>
               const Scaffold(body: Center(child: CircularProgressIndicator())),
           error: (error, stack) => Scaffold(
-            appBar: AdminAppBar(title:  Text(tr(context, 'Edit Product'))),
+            appBar: AdminAppBar(title: Text(tr(context, 'Edit Product'))),
             body: MenuError(
               message: error.toString(),
               onRetry: () => ref.invalidate(menuProductDetailProvider(query)),
@@ -95,6 +98,7 @@ class _FormState extends ConsumerState<_Form> {
   TextEditingController get disclaimer => fields[5];
   TextEditingController get sortOrder => fields[6];
   late bool available;
+  late String selectedCategoryId;
   @override
   void initState() {
     super.initState();
@@ -113,6 +117,7 @@ class _FormState extends ConsumerState<_Form> {
       TextEditingController(text: p?.sortOrder.toString() ?? '0'),
     ];
     available = p?.isAvailable ?? true;
+    selectedCategoryId = widget.categoryId;
     for (final field in fields) {
       field.addListener(_changed);
     }
@@ -144,7 +149,7 @@ class _FormState extends ConsumerState<_Form> {
       return null;
     }
     return ProductWriteInput(
-      categoryId: widget.categoryId,
+      categoryId: selectedCategoryId,
       name: name.text.trim(),
       description: description.text,
       priceCents: cents,
@@ -165,7 +170,8 @@ class _FormState extends ConsumerState<_Form> {
           !available;
     }
     if (i == null) return true;
-    return p.name != i.name ||
+    return p.categoryId != i.categoryId ||
+        p.name != i.name ||
         (p.description ?? '') != i.description ||
         p.priceCents != i.priceCents ||
         p.isAvailable != i.isAvailable ||
@@ -183,15 +189,16 @@ class _FormState extends ConsumerState<_Form> {
     final discard = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title:  Text(tr(context, 'Discard unsaved changes?')),
+        title: Text(tr(context, 'Discard unsaved changes?')),
         actions: <Widget>[
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child:  Text(tr(context, 'Stay')),
+            child: Text(tr(context, 'Stay')),
           ),
           FilledButton(
+            style: PelinesControlStyles.button(PelinesButtonVariant.primary),
             onPressed: () => Navigator.pop(context, true),
-            child:  Text(tr(context, 'Discard')),
+            child: Text(tr(context, 'Discard')),
           ),
         ],
       ),
@@ -208,7 +215,7 @@ class _FormState extends ConsumerState<_Form> {
       locationId: widget.location.id,
       locationSlug: widget.location.slug,
       kind: widget.kind,
-      categoryId: widget.categoryId,
+      categoryId: selectedCategoryId,
       productId: widget.initial?.id,
     );
     final mutation = ref.watch(productMutationProvider(key));
@@ -219,36 +226,163 @@ class _FormState extends ConsumerState<_Form> {
       },
       child: Scaffold(
         appBar: AdminAppBar(
-          title: Text(widget.initial == null ? tr(context, 'New Product') : tr(context, 'Edit Product')),
+          title: Text(
+            widget.initial == null
+                ? tr(context, 'New Product')
+                : tr(context, 'Edit Product'),
+            style: PelinesTypography.pageTitle(Theme.of(context).textTheme),
+          ),
           leading: IconButton(
             onPressed: _leave,
             icon: const Icon(Icons.arrow_back),
           ),
         ),
         body: PelinesPageBody(
-          child: ListView(
+          child: MenuFormList(
             padding: const EdgeInsets.all(PelinesSpacing.lg),
             children: <Widget>[
               Text('${widget.categoryName} · ${widget.location.name}'),
               const SizedBox(height: 16),
+              if (widget.initial != null) ...[
+                ProductImageAdministration(
+                  imageUrl: widget.initial!.imageUrl,
+                  locationId: widget.location.id,
+                  locationSlug: widget.location.slug,
+                  kind: widget.kind,
+                  categoryId: widget.categoryId,
+                  productId: widget.initial!.id,
+                ),
+                Text(tr(context, 'Photo changes are saved separately.')),
+                TextButton(
+                  onPressed: mutation.isBusy
+                      ? null
+                      : () => context.push(
+                          '/app/menu/${widget.kind.name}/categories/${widget.categoryId}/products/${widget.initial!.id}?category=${Uri.encodeQueryComponent(widget.categoryName)}',
+                        ),
+                  child: Text(tr(context, 'Manage modifiers')),
+                ),
+              ],
+              ...[
+                if (widget.initial == null)
+                  Text(
+                    tr(
+                      context,
+                      'Save the item to add its photo and modifiers.',
+                    ),
+                  ),
+                ref
+                    .watch(
+                      menuCategoriesProvider((
+                        locationId: widget.location.id,
+                        locationSlug: widget.location.slug,
+                        kind: widget.kind,
+                      )),
+                    )
+                    .when(
+                      loading: () => const LinearProgressIndicator(),
+                      error: (e, _) => Text(e.toString()),
+                      data: (categories) => DropdownButtonFormField<String>(
+                        key: ValueKey(
+                          '${widget.kind.name}-edit-category-$selectedCategoryId',
+                        ),
+                        initialValue:
+                            categories.any((c) => c.id == selectedCategoryId)
+                            ? selectedCategoryId
+                            : null,
+                        isExpanded: true,
+                        decoration: PelinesControlStyles.input(
+                          label: tr(context, 'Category'),
+                        ),
+                        items: [
+                          for (final c in categories)
+                            DropdownMenuItem(value: c.id, child: Text(c.name)),
+                        ],
+                        onChanged: mutation.isBusy
+                            ? null
+                            : (id) {
+                                if (id != null) {
+                                  setState(() => selectedCategoryId = id);
+                                }
+                              },
+                      ),
+                    ),
+                const SizedBox(height: 16),
+              ],
               _text(name, tr(context, 'Name')),
               _text(description, tr(context, 'Description'), lines: 3),
-              _text(price, tr(context, 'Price'), number: true),
-              _text(subcategory, tr(context, 'Subcategory')),
-              _text(serves, tr(context, 'Serves'), number: true),
+              MenuFieldPair(
+                first: _text(price, tr(context, 'Price'), number: true),
+                second: Column(
+                  children: [
+                    ref
+                        .watch(
+                          menuProductsProvider((
+                            locationId: widget.location.id,
+                            locationSlug: widget.location.slug,
+                            categoryId: selectedCategoryId,
+                          )),
+                        )
+                        .when(
+                          loading: () => const LinearProgressIndicator(),
+                          error: (error, _) => Text(error.toString()),
+                          data: (products) {
+                            final labels =
+                                products
+                                    .map((p) => p.subcategory?.trim() ?? '')
+                                    .where((s) => s.isNotEmpty)
+                                    .toSet()
+                                    .toList()
+                                  ..sort();
+                            return DropdownButtonFormField<String>(
+                              key: ValueKey(
+                                '${widget.kind.name}-subcategory-$selectedCategoryId-${subcategory.text}',
+                              ),
+                              initialValue: labels.contains(subcategory.text)
+                                  ? subcategory.text
+                                  : null,
+                              isExpanded: true,
+                              decoration: PelinesControlStyles.input(
+                                label: tr(context, 'Subcategory'),
+                              ),
+                              items: [
+                                for (final label in labels)
+                                  DropdownMenuItem(
+                                    value: label,
+                                    child: Text(label),
+                                  ),
+                              ],
+                              onChanged: mutation.isBusy
+                                  ? null
+                                  : (label) {
+                                      if (label != null) {
+                                        subcategory.text = label;
+                                      }
+                                    },
+                            );
+                          },
+                        ),
+                    _text(subcategory, tr(context, 'Subcategory name')),
+                  ],
+                ),
+              ),
+              if (widget.kind == MenuKind.catering)
+                _text(serves, tr(context, 'Serves'), number: true),
               _text(disclaimer, tr(context, 'Disclaimer'), lines: 2),
               _text(sortOrder, tr(context, 'Sort order'), number: true),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                title:  Text(tr(context, 'Available')),
+                title: Text(tr(context, 'Available')),
                 value: available,
                 onChanged: mutation.isBusy
                     ? null
                     : (value) => setState(() => available = value),
               ),
               if (input == null)
-                 Text(
-                  tr(context, 'Enter a name, a valid non-negative price, and valid numeric values.'),
+                Text(
+                  tr(
+                    context,
+                    'Enter a name, a valid non-negative price, and valid numeric values.',
+                  ),
                   style: TextStyle(color: PelinesColors.destructive),
                 ),
               if (mutation.message != null) Text(mutation.message!),
@@ -256,10 +390,16 @@ class _FormState extends ConsumerState<_Form> {
               PelinesActionBar(
                 children: <Widget>[
                   OutlinedButton(
+                    style: PelinesControlStyles.button(
+                      PelinesButtonVariant.secondary,
+                    ),
                     onPressed: mutation.isBusy ? null : _leave,
-                    child:  Text(tr(context, 'Cancel')),
+                    child: Text(tr(context, 'Cancel')),
                   ),
                   FilledButton(
+                    style: PelinesControlStyles.button(
+                      PelinesButtonVariant.primary,
+                    ),
                     onPressed: input == null || !dirty || mutation.isBusy
                         ? null
                         : () async {
@@ -267,7 +407,27 @@ class _FormState extends ConsumerState<_Form> {
                                 .read(productMutationProvider(key).notifier)
                                 .save(input!);
                             if (ok && mounted) {
-                              Navigator.of(this.context).pop(true);
+                              final saved = ref
+                                  .read(productMutationProvider(key))
+                                  .product!;
+                              final categories = ref
+                                  .read(
+                                    menuCategoriesProvider((
+                                      locationId: widget.location.id,
+                                      locationSlug: widget.location.slug,
+                                      kind: widget.kind,
+                                    )),
+                                  )
+                                  .value;
+                              final categoryName =
+                                  categories
+                                      ?.where((c) => c.id == saved.categoryId)
+                                      .firstOrNull
+                                      ?.name ??
+                                  widget.categoryName;
+                              this.context.pushReplacement(
+                                '/app/menu/${widget.kind.name}/categories/${saved.categoryId}/products/${saved.id}?category=${Uri.encodeQueryComponent(categoryName)}',
+                              );
                             }
                           },
                     child: PelinesButtonLabel(
@@ -301,11 +461,8 @@ class _FormState extends ConsumerState<_Form> {
       keyboardType: number
           ? const TextInputType.numberWithOptions(decimal: true)
           : null,
-      decoration: InputDecoration(
-        labelText: label,
-        prefixText: label == 'Price' ? r'$' : null,
-        border: const OutlineInputBorder(),
-      ),
+      decoration: PelinesControlStyles.input(label: label)
+          .copyWith(prefixText: controller == price ? r'$' : null),
     ),
   );
 }

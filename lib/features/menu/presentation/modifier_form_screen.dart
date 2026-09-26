@@ -10,6 +10,8 @@ import '../data/menu_repository.dart';
 import '../models/menu_models.dart';
 import '../providers/modifier_providers.dart';
 import 'menu_screens.dart';
+import 'menu_parity_widgets.dart';
+import '../../../app/theme/app_theme.dart';
 
 class ModifierFormScreen extends ConsumerWidget {
   const ModifierFormScreen({
@@ -33,7 +35,9 @@ class ModifierFormScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final location = ref.watch(currentLocationProvider).value;
     if (location == null) {
-      return  Scaffold(body: MenuEmpty(tr(context, 'Choose a location to continue.')));
+      return Scaffold(
+        body: MenuEmpty(tr(context, 'Choose a location to continue.')),
+      );
     }
     final ModifierContext modifierContext = (
       locationId: location.id,
@@ -62,7 +66,7 @@ class ModifierFormScreen extends ConsumerWidget {
                 .where((value) => value.id == groupId)
                 .firstOrNull;
             if (group == null) {
-              return  Scaffold(
+              return Scaffold(
                 body: MenuEmpty(tr(context, 'Modifier group not found.')),
               );
             }
@@ -78,7 +82,7 @@ class ModifierFormScreen extends ConsumerWidget {
                       .where((value) => value.id == optionId)
                       .firstOrNull;
             if (optionId != null && option == null) {
-              return  Scaffold(
+              return Scaffold(
                 body: MenuEmpty(tr(context, 'Modifier option not found.')),
               );
             }
@@ -194,7 +198,9 @@ class _ModifierGroupFormState extends ConsumerState<ModifierGroupForm> {
       dirty: _dirty,
       busy: mutation.isBusy,
       message: mutation.message,
-      saveLabel: widget.initial == null ? tr(context, 'Create Group') : tr(context, 'Save Group'),
+      saveLabel: widget.initial == null
+          ? tr(context, 'Create Group')
+          : tr(context, 'Save Group'),
       onSave: input == null || !_dirty
           ? null
           : () async {
@@ -204,21 +210,37 @@ class _ModifierGroupFormState extends ConsumerState<ModifierGroupForm> {
               if (saved && mounted) Navigator.pop(this.context, true);
             },
       children: <Widget>[
-        _textField(_name, tr(context, 'Name'), enabled: !mutation.isBusy, maxLength: 80),
+        _textField(
+          _name,
+          tr(context, 'Name'),
+          enabled: !mutation.isBusy,
+          maxLength: 80,
+        ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
-          title:  Text(tr(context, 'Required')),
+          title: Text(tr(context, 'Required')),
           value: _required,
           onChanged: mutation.isBusy
               ? null
               : (value) => setState(() => _required = value),
         ),
-        _textField(_min, tr(context, 'Minimum selections'), enabled: !mutation.isBusy),
-        _textField(_max, tr(context, 'Maximum selections'), enabled: !mutation.isBusy),
+        _textField(
+          _min,
+          tr(context, 'Minimum selections'),
+          enabled: !mutation.isBusy,
+        ),
+        _textField(
+          _max,
+          tr(context, 'Maximum selections'),
+          enabled: !mutation.isBusy,
+        ),
         _textField(_sort, tr(context, 'Sort order'), enabled: !mutation.isBusy),
         if (input == null)
-           Text(
-            tr(context, 'Name is required. Use max >= 1, min <= max, and sort >= 0. Required groups need min >= 1; optional groups need min = 0.'),
+          Text(
+            tr(
+              context,
+              'Name is required. Use max >= 1, min <= max, and sort >= 0. Required groups need min >= 1; optional groups need min = 0.',
+            ),
             style: TextStyle(color: PelinesColors.destructive),
           ),
       ],
@@ -308,11 +330,15 @@ class _ModifierOptionFormState extends ConsumerState<ModifierOptionForm> {
     final mutation = ref.watch(modifierMutationProvider(widget.contextKey));
     final input = _input;
     return _ModifierScaffold(
-      title: widget.initial == null ? tr(context, 'Add Option') : tr(context, 'Edit Option'),
+      title: widget.initial == null
+          ? tr(context, 'Add Option')
+          : tr(context, 'Edit Option'),
       dirty: _dirty,
       busy: mutation.isBusy,
       message: mutation.message,
-      saveLabel: widget.initial == null ? tr(context, 'Create Option') : tr(context, 'Save Option'),
+      saveLabel: widget.initial == null
+          ? tr(context, 'Create Option')
+          : tr(context, 'Save Option'),
       onSave: input == null || !_dirty
           ? null
           : () async {
@@ -327,7 +353,12 @@ class _ModifierOptionFormState extends ConsumerState<ModifierOptionForm> {
             },
       children: <Widget>[
         Text('Group: ${widget.group.name}'),
-        _textField(_name, tr(context, 'Name'), enabled: !mutation.isBusy, maxLength: 80),
+        _textField(
+          _name,
+          tr(context, 'Name'),
+          enabled: !mutation.isBusy,
+          maxLength: 80,
+        ),
         _textField(
           _price,
           tr(context, 'Price delta (dollars)'),
@@ -336,7 +367,7 @@ class _ModifierOptionFormState extends ConsumerState<ModifierOptionForm> {
         ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
-          title:  Text(tr(context, 'Default option')),
+          title: Text(tr(context, 'Default option')),
           value: _default,
           onChanged: mutation.isBusy
               ? null
@@ -344,8 +375,11 @@ class _ModifierOptionFormState extends ConsumerState<ModifierOptionForm> {
         ),
         _textField(_sort, tr(context, 'Sort order'), enabled: !mutation.isBusy),
         if (input == null)
-           Text(
-            tr(context, 'Name is required. Price accepts up to two decimals, including negative values. Sort order must be an integer.'),
+          Text(
+            tr(
+              context,
+              'Name is required. Price accepts up to two decimals, including negative values. Sort order must be an integer.',
+            ),
             style: TextStyle(color: PelinesColors.destructive),
           ),
       ],
@@ -368,10 +402,7 @@ Widget _textField(
     keyboardType: label == 'Name'
         ? TextInputType.text
         : TextInputType.numberWithOptions(signed: decimal, decimal: decimal),
-    decoration: InputDecoration(
-      labelText: label,
-      border: const OutlineInputBorder(),
-    ),
+    decoration: PelinesControlStyles.input(label: label),
   ),
 );
 
@@ -401,15 +432,16 @@ class _ModifierScaffold extends StatelessWidget {
     final discard = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title:  Text(tr(context, 'Discard unsaved changes?')),
+        title: Text(tr(context, 'Discard unsaved changes?')),
         actions: <Widget>[
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
-            child:  Text(tr(context, 'Stay')),
+            child: Text(tr(context, 'Stay')),
           ),
           FilledButton(
+            style: PelinesControlStyles.button(PelinesButtonVariant.primary),
             onPressed: () => Navigator.pop(dialogContext, true),
-            child:  Text(tr(context, 'Discard')),
+            child: Text(tr(context, 'Discard')),
           ),
         ],
       ),
@@ -425,14 +457,17 @@ class _ModifierScaffold extends StatelessWidget {
     },
     child: Scaffold(
       appBar: AdminAppBar(
-        title: Text(title),
+        title: Text(
+          title,
+          style: PelinesTypography.pageTitle(Theme.of(context).textTheme),
+        ),
         leading: IconButton(
           onPressed: busy ? null : () => _leave(context),
           icon: const Icon(Icons.arrow_back),
         ),
       ),
       body: PelinesPageBody(
-        child: ListView(
+        child: MenuFormList(
           padding: const EdgeInsets.all(PelinesSpacing.lg),
           children: <Widget>[
             ...children,
@@ -441,10 +476,16 @@ class _ModifierScaffold extends StatelessWidget {
             PelinesActionBar(
               children: <Widget>[
                 OutlinedButton(
+                  style: PelinesControlStyles.button(
+                    PelinesButtonVariant.secondary,
+                  ),
                   onPressed: busy ? null : () => _leave(context),
-                  child:  Text(tr(context, 'Cancel')),
+                  child: Text(tr(context, 'Cancel')),
                 ),
                 FilledButton(
+                  style: PelinesControlStyles.button(
+                    PelinesButtonVariant.primary,
+                  ),
                   onPressed: busy ? null : onSave,
                   child: PelinesButtonLabel(
                     busy: busy,
