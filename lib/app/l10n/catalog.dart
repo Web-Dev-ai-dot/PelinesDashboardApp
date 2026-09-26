@@ -1,5 +1,6 @@
 // English source messages and their Spanish UI translations. Backend values are never catalog keys.
 const spanishCatalog = <String, String>{
+  'Mute': 'Silenciar',
   "Not enforced yet": "Aún no aplicado",
   "These settings are shown for interface review. They are not currently enforced when orders are placed.": "Estos ajustes se muestran para revisión de la interfaz. Actualmente no se aplican al realizar pedidos.",
   "Accept regular orders": "Aceptar pedidos regulares",

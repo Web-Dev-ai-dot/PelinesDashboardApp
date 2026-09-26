@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -18,6 +20,44 @@ import 'package:pelines_admin_app/features/orders/providers/orders_providers.dar
 import 'order_test_data.dart';
 
 void main() {
+  for (final change in ['logout', 'location', 'acknowledge']) {
+    test('late snapshot read cannot undo $change', () async {
+      final store = _HeldStore();
+      final container = _container(store, _FakeSound());
+      addTearDown(container.dispose);
+      final controller = container.read(orderAlertsProvider.notifier);
+      await container.read(orderAlertsProvider.future);
+      await controller.processSnapshot(
+        locationId: 'a',
+        orders: [],
+        mayPlaySound: true,
+      );
+      await controller.processSnapshot(
+        locationId: 'a',
+        orders: [_order('A')],
+        mayPlaySound: true,
+      );
+      store.hold = Completer<void>();
+      final pending = controller.processSnapshot(
+        locationId: 'a',
+        orders: [_order('A'), _order('B')],
+        mayPlaySound: true,
+      );
+      await store.readStarted.future;
+      if (change == 'logout') {
+        controller.clearMemory();
+      } else if (change == 'location') {
+        controller.invalidatePendingSnapshots();
+      } else {
+        await controller.acknowledge('A');
+      }
+      store.hold!.complete();
+      await pending;
+      final state = container.read(orderAlertsProvider).requireValue;
+      expect(state.unseenIds, change == 'location' ? ['A'] : isEmpty);
+      expect(state.knownIds, isNot(contains('B')));
+    });
+  }
   test('persisted legacy JSON loads as version zero and writes full snapshot version', () async {
     SharedPreferences.setMockInitialValues({
       'pelines.order_alerts.a': '{"known":["A"],"unseen":["A"]}',
@@ -69,7 +109,7 @@ void main() {
         'old',
         'new',
       ]);
-      expect(sound.playCalls, 1);
+      expect(sound.playCalls, 0);
     },
   );
 
@@ -106,11 +146,11 @@ void main() {
         restarted.read(orderAlertsProvider).requireValue.unseenIds,
         isNot(contains('0')),
       );
-      expect(sound.playCalls, 1);
+      expect(sound.playCalls, 0);
     },
   );
 
-  test('first load seeds without sound and later pending/confirmed alert once per batch', () async {
+  test('first load seeds and detection queues pending/confirmed without owning audio', () async {
     final _MemoryStore store = _MemoryStore();
     final _FakeSound sound = _FakeSound();
     final ProviderContainer container = _container(store, sound);
@@ -143,7 +183,7 @@ void main() {
       'C',
       'D',
     ]);
-    expect(sound.playCalls, 1);
+    expect(sound.playCalls, 0);
 
     await controller.processSnapshot(
       locationId: 'a',
@@ -155,7 +195,7 @@ void main() {
       ],
       mayPlaySound: true,
     );
-    expect(sound.playCalls, 1);
+    expect(sound.playCalls, 0);
   });
 
   test('noneligible orders never become unseen or play sound', () async {
@@ -274,13 +314,13 @@ void main() {
         ],
         mayPlaySound: true,
       );
-      expect(sound.playCalls, 1);
+      expect(sound.playCalls, 0);
       await controller.processSnapshot(
         locationId: 'a',
         orders: <OrderSummary>[_order('A1')],
         mayPlaySound: true,
       );
-      expect(sound.playCalls, 1);
+      expect(sound.playCalls, 0);
     },
   );
 
@@ -365,6 +405,8 @@ void main() {
       expect(container.read(orderAlertsProvider).value!.unseenIds, ['B', 'C']);
       await tester.tap(find.byKey(const Key('alert-acknowledge')));
       await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
       expect(find.text('1 of 1'), findsOneWidget);
       expect(container.read(orderAlertsProvider).value!.unseenIds, ['C']);
       await tester.tap(find.byKey(const Key('alert-acknowledge')));
@@ -416,10 +458,26 @@ class _MemoryStore implements OrderAlertStore {
   }
 }
 
+class _HeldStore extends _MemoryStore {
+  Completer<void>? hold;
+  final readStarted = Completer<void>();
+  @override
+  Future<StoredOrderAlerts?> read(String locationId) async {
+    final snapshot = await super.read(locationId);
+    if (hold != null) {
+      if (!readStarted.isCompleted) readStarted.complete();
+      await hold!.future;
+    }
+    return snapshot;
+  }
+}
+
 class _FakeSound implements OrderAlertSound {
   int playCalls = 0;
   @override
-  Future<void> play() async => playCalls++;
+  Future<void> play({int soundCount = 1}) async => playCalls++;
+  @override
+  Future<void> stop() async {}
   @override
   Future<void> dispose() async {}
 }

@@ -12,6 +12,7 @@ import '../../locations/models/location.dart';
 import '../models/order_models.dart';
 import '../models/order_status_action.dart';
 import '../providers/order_alerts_controller.dart';
+import '../providers/order_alert_coordinator.dart';
 import '../providers/orders_providers.dart';
 import 'cancel_order_action.dart';
 import 'order_parity_content.dart';
@@ -54,8 +55,14 @@ class _NewOrderAlertQueueState extends ConsumerState<NewOrderAlertQueue> {
   Future<void> _complete() async {
     if (_advancing || _current == null) return;
     _advancing = true;
+    final feedback = ref.read(orderAlertCoordinatorProvider);
+    feedback.mute();
     await ref.read(orderAlertsProvider.notifier).acknowledge(_current!);
     if (!mounted) return;
+    if (feedback.locationId != widget.location.id ||
+        feedback.orderId != _current) {
+      return;
+    }
     final alerts = ref.read(orderAlertsProvider).value;
     final ids = alerts?.locationId == widget.location.id
         ? alerts!.unseenIds
@@ -63,9 +70,20 @@ class _NewOrderAlertQueueState extends ConsumerState<NewOrderAlertQueue> {
     if (ids.isEmpty) {
       widget.onEmpty();
     } else {
-      setState(() {
-        _current = ids.first;
-        _advancing = false;
+      feedback.advance(() {
+        if (!mounted) return;
+        final latest = ref.read(orderAlertsProvider).value;
+        final remaining = latest?.locationId == widget.location.id
+            ? latest!.unseenIds
+            : <String>[];
+        if (remaining.isEmpty) {
+          widget.onEmpty();
+          return;
+        }
+        setState(() {
+          _current = remaining.first;
+          _advancing = false;
+        });
       });
     }
   }
@@ -115,10 +133,14 @@ class _NewOrderDecisionState extends ConsumerState<_NewOrderDecision> {
   bool _acting = false;
   bool _completed = false;
   bool _requiresRefresh = false;
+  bool _refreshOnCompletion = false;
+  late final OrderAlertCoordinator _feedback;
 
   @override
   void initState() {
     super.initState();
+    _feedback = ref.read(orderAlertCoordinatorProvider);
+    _feedback.present(widget.location.id, widget.orderId);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) unawaited(_refresh());
     });
@@ -132,6 +154,7 @@ class _NewOrderDecisionState extends ConsumerState<_NewOrderDecision> {
       _loading = true;
       _error = null;
     });
+    final token = _feedback.generation;
     // Observe the first GET result, including an error while Riverpod schedules
     // a read retry. Awaiting provider.future alone hides those errors from UI.
     final result = Completer<OrderDetail>();
@@ -161,22 +184,45 @@ class _NewOrderDecisionState extends ConsumerState<_NewOrderDecision> {
         _order = order;
         _requiresRefresh = false;
       });
+      if (_feedback.orderId == widget.orderId &&
+          order.locationId == widget.location.id) {
+        _feedback.verify(
+          token,
+          needsDecision:
+              OrderStatusAction.forOrder(order.status, order.fulfillmentType) ==
+              OrderStatusAction.acceptOrder,
+          paid: order.paymentStatus.isOperationallyPaid,
+        );
+      }
     } on Object catch (error) {
+      if (mounted &&
+          token == _feedback.generation &&
+          _feedback.orderId == widget.orderId &&
+          error is ApiException &&
+          error.statusCode == 404) {
+        _feedback.resolve();
+      }
       if (mounted) setState(() => _error = error);
     } finally {
       subscription.close();
       if (mounted) setState(() => _loading = false);
+      if (mounted && _refreshOnCompletion) {
+        _refreshOnCompletion = false;
+        unawaited(_refresh());
+      }
     }
   }
 
   Future<void> _finish() async {
     if (_completed) return;
+    _feedback.mute();
     _completed = true;
     await widget.onComplete();
   }
 
   Future<void> _accept(OrderDetail order) async {
     if (_completed || _acting || _loading) return;
+    _feedback.mute();
     setState(() => _acting = true);
     try {
       await ref
@@ -202,6 +248,7 @@ class _NewOrderDecisionState extends ConsumerState<_NewOrderDecision> {
           next.canonicalOrder != null &&
           next.action != null &&
           next.canonicalOrder!.status == next.action!.target) {
+        _feedback.resolve();
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) unawaited(_finish());
         });
@@ -216,7 +263,11 @@ class _NewOrderDecisionState extends ConsumerState<_NewOrderDecision> {
       }
     });
     ref.listen<int>(appResumeTickProvider, (_, _) {
-      if (!_loading) unawaited(_refresh());
+      if (_loading) {
+        _refreshOnCompletion = true;
+      } else {
+        unawaited(_refresh());
+      }
     });
     final order = mutation.canonicalOrder ?? _order;
     final busy = _loading || _acting || mutation.isBusy || notes.isBusy;
@@ -237,8 +288,10 @@ class _NewOrderDecisionState extends ConsumerState<_NewOrderDecision> {
         needsDecision &&
         ref.watch(orderCancellationEnabledProvider) &&
         OrderStatusAction.canCancel(order);
-    final canAcknowledge = !busy && (missing || (safe && !needsDecision));
-    final canDefer = !busy && !_requiresRefresh && (safe || missing);
+    final canAcknowledge =
+        !_completed && !busy && (missing || (safe && !needsDecision));
+    final canDefer =
+        !_completed && !busy && !_requiresRefresh && (safe || missing);
     return Scaffold(
       key: const Key('new-order-fullscreen'),
       backgroundColor: PelinesColors.page,
@@ -268,6 +321,16 @@ class _NewOrderDecisionState extends ConsumerState<_NewOrderDecision> {
                         Text('1 ${tr(context, 'of')} ${widget.count}'),
                       ],
                     ),
+                  ),
+                  IconButton(
+                    key: const Key('alert-mute'),
+                    tooltip: tr(context, 'Mute'),
+                    constraints: const BoxConstraints(
+                      minWidth: 48,
+                      minHeight: 48,
+                    ),
+                    icon: const Icon(Icons.volume_off_outlined, size: 20),
+                    onPressed: _feedback.mute,
                   ),
                   IconButton(
                     key: const Key('alert-defer'),
@@ -376,7 +439,9 @@ class _NewOrderDecisionState extends ConsumerState<_NewOrderDecision> {
                                 Size(48, 56),
                               ),
                             ),
-                        onPressed: busy ? null : () => _accept(order),
+                        onPressed: busy || _completed
+                            ? null
+                            : () => _accept(order),
                         child: PelinesButtonLabel(
                           busy: busy,
                           label: busy
@@ -396,8 +461,15 @@ class _NewOrderDecisionState extends ConsumerState<_NewOrderDecision> {
                     if (canCancel)
                       CancelOrderAction(
                         order: order,
-                        busy: busy,
+                        busy: busy || _completed,
                         expanded: true,
+                        onConfirmationOpened: _feedback.beginConfirmation,
+                        onConfirmationClosed: (confirmed) {
+                          if (_feedback.orderId == widget.orderId &&
+                              _feedback.locationId == widget.location.id) {
+                            _feedback.endConfirmation(confirmed: confirmed);
+                          }
+                        },
                       ),
                     TextButton(
                       key: const Key('alert-refresh'),

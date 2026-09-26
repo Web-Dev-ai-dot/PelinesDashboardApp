@@ -51,6 +51,9 @@ class OrderAlertsState {
 class OrderAlertsController extends AsyncNotifier<OrderAlertsState> {
   static const int maxIdsPerLocation = 200;
   Future<void> _serial = Future<void>.value();
+  int _epoch = 0;
+
+  void invalidatePendingSnapshots() => _epoch++;
 
   @override
   Future<OrderAlertsState> build() async => const OrderAlertsState();
@@ -60,10 +63,13 @@ class OrderAlertsController extends AsyncNotifier<OrderAlertsState> {
     required List<OrderSummary> orders,
     required bool mayPlaySound,
   }) {
+    final epoch = _epoch;
     final Completer<void> done = Completer<void>();
     _serial = _serial
         .then((_) async {
-          await _processSnapshot(locationId, orders, mayPlaySound);
+          if (ref.mounted && epoch == _epoch) {
+            await _processSnapshot(locationId, orders, epoch);
+          }
           done.complete();
         })
         .catchError((Object error, StackTrace stackTrace) {
@@ -75,10 +81,11 @@ class OrderAlertsController extends AsyncNotifier<OrderAlertsState> {
   Future<void> _processSnapshot(
     String locationId,
     List<OrderSummary> orders,
-    bool mayPlaySound,
+    int epoch,
   ) async {
     final OrderAlertStore store = ref.read(orderAlertStoreProvider);
     final StoredOrderAlerts? stored = await store.read(locationId);
+    if (!ref.mounted || epoch != _epoch) return;
     final bool sameLocation = state.value?.locationId == locationId;
     final List<String> known = sameLocation
         ? List<String>.of(state.value!.knownIds)
@@ -110,9 +117,7 @@ class OrderAlertsController extends AsyncNotifier<OrderAlertsState> {
           .toList(growable: false);
       known.addAll(newIds);
       unseen.addAll(newIds.where((String id) => !unseen.contains(id)));
-      if (newIds.isNotEmpty && mayPlaySound) {
-        unawaited(ref.read(orderAlertSoundProvider).play());
-      }
+      // Presentation owns audio/haptics. Detection only maintains the queue.
     }
 
     unseen.removeWhere((String id) => !operationalIds.contains(id));
@@ -150,6 +155,8 @@ class OrderAlertsController extends AsyncNotifier<OrderAlertsState> {
         !current.unseenIds.contains(orderId)) {
       return;
     }
+    // A pending snapshot read must not restore this acknowledgement.
+    _epoch++;
     final OrderAlertsState next = OrderAlertsState(
       locationId: locationId,
       knownIds: current.knownIds,
@@ -174,6 +181,7 @@ class OrderAlertsController extends AsyncNotifier<OrderAlertsState> {
   }
 
   void clearMemory() {
+    _epoch++;
     state = const AsyncData<OrderAlertsState>(OrderAlertsState());
   }
 

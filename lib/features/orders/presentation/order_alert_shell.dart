@@ -9,6 +9,7 @@ import '../../auth/providers/auth_providers.dart';
 import '../../locations/models/location.dart';
 import '../../locations/providers/locations_providers.dart';
 import '../providers/order_alerts_controller.dart';
+import '../providers/order_alert_coordinator.dart';
 import '../providers/orders_providers.dart';
 
 class OrderAlertShell extends ConsumerStatefulWidget {
@@ -24,34 +25,47 @@ class _OrderAlertShellState extends ConsumerState<OrderAlertShell>
     with WidgetsBindingObserver {
   Timer? _timer;
   bool _isResumed = true;
+  bool _sessionEnded = false;
   RawDialogRoute<void>? _alertRoute;
   NavigatorState? _alertNavigator;
   String? _alertLocation;
   late final FullscreenAlertVisibility _visibility;
+  late final OrderAlertCoordinator _feedback;
 
   @override
   void initState() {
     super.initState();
     _visibility = ref.read(fullscreenOrderAlertVisibleProvider.notifier);
+    _feedback = ref.read(orderAlertCoordinatorProvider);
     WidgetsBinding.instance.addObserver(this);
     _isResumed =
         WidgetsBinding.instance.lifecycleState == null ||
         WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
-    if (_isResumed) _startPolling();
+    if (_isResumed) {
+      _feedback.resume();
+      _startPolling();
+    }
+    if (!_isResumed) _feedback.suspend();
     // Seed from an already-loaded snapshot as well as subsequent polling.
     ref.listenManual<AsyncValue<TodayOrdersState>>(
       todayOrdersProvider,
       (_, next) => _processSnapshot(next),
       fireImmediately: true,
     );
-    ref.listenManual<AsyncValue<Location?>>(
-      currentLocationProvider,
-      (_, _) => _processSnapshot(ref.read(todayOrdersProvider)),
-      fireImmediately: true,
-    );
+    ref.listenManual<AsyncValue<Location?>>(currentLocationProvider, (
+      previous,
+      next,
+    ) {
+      if (previous?.value?.id != next.value?.id) {
+        _feedback.dismiss();
+        ref.read(orderAlertsProvider.notifier).invalidatePendingSnapshots();
+      }
+      _processSnapshot(ref.read(todayOrdersProvider));
+    }, fireImmediately: true);
   }
 
   void _processSnapshot(AsyncValue<TodayOrdersState> next) {
+    if (!mounted || _sessionEnded) return;
     final Location? selected = ref.read(currentLocationProvider).value;
     final TodayOrdersState? snapshot = next.value;
     if (selected == null ||
@@ -64,6 +78,7 @@ class _OrderAlertShellState extends ConsumerState<OrderAlertShell>
         snapshot.refreshError != null) {
       return;
     }
+    _feedback.reconcile(selected.id, snapshot.fullLocationSnapshot!);
     unawaited(
       ref
           .read(orderAlertsProvider.notifier)
@@ -77,6 +92,7 @@ class _OrderAlertShellState extends ConsumerState<OrderAlertShell>
 
   @override
   void dispose() {
+    _feedback.dismiss();
     _timer?.cancel();
     final route = _alertRoute;
     final navigator = _alertNavigator;
@@ -94,10 +110,12 @@ class _OrderAlertShellState extends ConsumerState<OrderAlertShell>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _isResumed = state == AppLifecycleState.resumed;
     if (_isResumed) {
+      _feedback.resume();
       _startPolling();
       ref.read(appResumeTickProvider.notifier).resumed();
       unawaited(ref.read(todayOrdersProvider.notifier).refresh());
     } else {
+      _feedback.suspend();
       _timer?.cancel();
       _timer = null;
     }
@@ -105,6 +123,7 @@ class _OrderAlertShellState extends ConsumerState<OrderAlertShell>
 
   void _startPolling() {
     _timer?.cancel();
+    if (_sessionEnded) return;
     _timer = Timer.periodic(
       const Duration(seconds: 15),
       (_) => unawaited(ref.read(todayOrdersProvider.notifier).refresh()),
@@ -122,7 +141,17 @@ class _OrderAlertShellState extends ConsumerState<OrderAlertShell>
       next,
     ) {
       if (previous?.value != null && next.value == null) {
+        _sessionEnded = true;
+        _timer?.cancel();
+        _timer = null;
+        _feedback.logout();
         ref.read(orderAlertsProvider.notifier).clearMemory();
+      } else if (_sessionEnded && next.value != null) {
+        _sessionEnded = false;
+        if (_isResumed) {
+          _feedback.resume();
+          _startPolling();
+        }
       }
     });
 
@@ -141,7 +170,8 @@ class _OrderAlertShellState extends ConsumerState<OrderAlertShell>
       }
       return;
     }
-    if (!_isResumed ||
+    if (_sessionEnded ||
+        !_isResumed ||
         location == null ||
         alerts?.locationId != location.id ||
         alerts!.unseenIds.isEmpty) {
@@ -165,6 +195,7 @@ class _OrderAlertShellState extends ConsumerState<OrderAlertShell>
     unawaited(
       navigator.push(route).whenComplete(() {
         if (_alertRoute == route) {
+          _feedback.dismiss();
           _alertRoute = null;
           _alertLocation = null;
           _visibility.setVisible(false);
@@ -174,6 +205,7 @@ class _OrderAlertShellState extends ConsumerState<OrderAlertShell>
   }
 
   void _closeAlert() {
+    _feedback.dismiss();
     final route = _alertRoute;
     _alertRoute = null;
     _alertLocation = null;

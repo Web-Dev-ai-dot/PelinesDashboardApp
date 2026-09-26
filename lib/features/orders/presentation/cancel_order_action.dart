@@ -13,11 +13,15 @@ class CancelOrderAction extends ConsumerStatefulWidget {
     required this.order,
     required this.busy,
     this.expanded = false,
+    this.onConfirmationOpened,
+    this.onConfirmationClosed,
     super.key,
   });
   final OrderDetail order;
   final bool busy;
   final bool expanded;
+  final VoidCallback? onConfirmationOpened;
+  final ValueChanged<bool>? onConfirmationClosed;
 
   @override
   ConsumerState<CancelOrderAction> createState() => CancelOrderActionState();
@@ -50,6 +54,7 @@ class CancelOrderActionState extends ConsumerState<CancelOrderAction> {
 
   Future<void> _confirm() async {
     if (_confirming || widget.busy) return;
+    widget.onConfirmationOpened?.call();
     final OrderDetail order = widget.order;
     setState(() => _confirming = true);
     try {
@@ -78,6 +83,8 @@ class CancelOrderActionState extends ConsumerState<CancelOrderAction> {
           ],
         ),
       );
+      if (!mounted) return;
+      widget.onConfirmationClosed?.call(confirmed == true);
       if (confirmed != true || !mounted) return;
       await ref
           .read(orderMutationProvider(order.id).notifier)

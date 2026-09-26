@@ -22,6 +22,8 @@ import 'package:pelines_admin_app/features/orders/models/order_models.dart';
 import 'package:pelines_admin_app/features/orders/presentation/order_alert_shell.dart';
 import 'package:pelines_admin_app/features/orders/presentation/order_detail_screen.dart';
 import 'package:pelines_admin_app/features/orders/providers/order_alerts_controller.dart';
+import 'package:pelines_admin_app/features/orders/providers/order_alert_coordinator.dart';
+import 'package:pelines_admin_app/features/account/models/profile.dart';
 import 'package:pelines_admin_app/features/orders/providers/orders_providers.dart';
 
 import 'order_test_data.dart';
@@ -105,11 +107,23 @@ final _location = Location(
 class _Location extends CurrentLocationController {
   @override
   Future<Location?> build() async => _location;
+  void clear() => state = const AsyncData(null);
 }
 
 class _Auth extends AuthController {
   @override
   Future<AdminSession?> build() async => null;
+  void signedIn() => state = AsyncData(
+    AdminSession(
+      profile: Profile(
+        id: 'admin',
+        role: ProfileRole.admin,
+        createdAt: DateTime.utc(2026),
+        updatedAt: DateTime.utc(2026),
+      ),
+    ),
+  );
+  void signedOut() => state = const AsyncData(null);
 }
 
 class _Store implements OrderAlertStore {
@@ -123,8 +137,20 @@ class _Store implements OrderAlertStore {
 }
 
 class _Sound implements OrderAlertSound {
+  int plays = 0;
+  int stops = 0;
+  bool fail = false;
   @override
-  Future<void> play() async {}
+  Future<void> play({int soundCount = 1}) async {
+    plays++;
+    if (fail) throw StateError('native effects unavailable');
+  }
+
+  @override
+  Future<void> stop() async {
+    stops++;
+  }
+
   @override
   Future<void> dispose() async {}
 }
@@ -245,6 +271,7 @@ class _Harness {
   _Harness(this.container, this.repo);
   final ProviderContainer container;
   final _Repo repo;
+  _Sound get sound => container.read(orderAlertSoundProvider) as _Sound;
   List<String> get unseen =>
       container.read(orderAlertsProvider).requireValue.unseenIds;
   Future<void> emit(WidgetTester tester) async {
@@ -271,6 +298,14 @@ Future<_Harness> _pump(
       authControllerProvider.overrideWith(_Auth.new),
       orderAlertStoreProvider.overrideWithValue(_Store()),
       orderAlertSoundProvider.overrideWithValue(_Sound()),
+      orderAlertCoordinatorProvider.overrideWith((ref) {
+        final feedback = OrderAlertCoordinator(
+          ref.read(orderAlertSoundProvider),
+          now: tester.binding.clock.now,
+        );
+        ref.onDispose(feedback.dispose);
+        return feedback;
+      }),
       if (!realToday) todayOrdersProvider.overrideWith(() => _Today(repo)),
     ],
   );
@@ -312,6 +347,220 @@ Future<_Harness> _pump(
 
 void main() {
   setUpAll(PelinesTime.initialize);
+  testWidgets(
+    '10.4 Mute keeps fullscreen and unseen with zero PATCH, even on audio failure',
+    (tester) async {
+      final h = await _pump(tester);
+      h.sound.fail = true;
+      h.repo.orders['A'] = _detail('A');
+      await h.emit(tester);
+      expect(h.sound.plays, 1);
+      final stops = h.sound.stops;
+      await tester.tap(find.byKey(const Key('alert-mute')));
+      expect(h.sound.stops, greaterThan(stops));
+      await tester.pump(const Duration(seconds: 10));
+      expect(h.sound.plays, 1);
+      expect(h.repo.patches, 0);
+      expect(h.unseen, ['A']);
+      expect(find.byKey(const Key('new-order-fullscreen')), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    '10.4 Accept stops before delayed mutation; Mute remains enabled',
+    (tester) async {
+      final h = await _pump(tester);
+      h.repo.orders['A'] = _detail('A');
+      await h.emit(tester);
+      h.repo.holdPatch = Completer<void>();
+      final stops = h.sound.stops;
+      await tester.tap(find.byKey(const Key('alert-accept')));
+      expect(h.sound.stops, greaterThan(stops));
+      await tester.pump();
+      expect(
+        tester
+            .widget<IconButton>(find.byKey(const Key('alert-mute')))
+            .onPressed,
+        isNotNull,
+      );
+      await tester.tap(find.byKey(const Key('alert-mute')));
+      await tester.pump(const Duration(seconds: 6));
+      expect(h.sound.plays, 1);
+      expect(h.unseen, ['A']);
+      h.repo.holdPatch!.complete();
+      await tester.pumpAndSettle();
+      expect(h.repo.patches, 1);
+      expect(h.unseen, isEmpty);
+    },
+  );
+
+  testWidgets('10.4 Cancel stops at confirmation, Keep resumes after pause', (
+    tester,
+  ) async {
+    final h = await _pump(tester, cancel: true);
+    h.repo.orders['A'] = _detail('A');
+    await h.emit(tester);
+    final stops = h.sound.stops;
+    await tester.tap(find.byKey(const Key('cancel-order-action')));
+    expect(h.sound.stops, greaterThan(stops));
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 6));
+    expect(h.sound.plays, 1);
+    await tester.tap(find.byKey(const Key('cancel-order-keep')));
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 1));
+    expect(h.sound.plays, 1);
+    await tester.pump(const Duration(seconds: 1));
+    expect(h.sound.plays, 2);
+    await tester.tap(find.byKey(const Key('cancel-order-action')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('cancel-order-confirm')));
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 6));
+    expect(h.sound.plays, 2);
+    expect(h.repo.patches, 1);
+  });
+
+  testWidgets(
+    '10.4 X stops A immediately; B/C wait and each owns one session',
+    (tester) async {
+      final h = await _pump(tester);
+      h.repo.orders['A'] = _detail('A');
+      await h.emit(tester);
+      h.repo.orders['B'] = _detail('B');
+      h.repo.orders['C'] = _detail('C');
+      await h.emit(tester);
+      expect(h.sound.plays, 1);
+      final stops = h.sound.stops;
+      await tester.tap(find.byKey(const Key('alert-defer')));
+      expect(h.sound.stops, greaterThan(stops));
+      await tester.pumpAndSettle();
+      expect(h.unseen, ['B', 'C']);
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('A'), findsOneWidget);
+      expect(h.sound.plays, 1);
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+      expect(find.text('B'), findsOneWidget);
+      expect(h.sound.plays, 2);
+      await tester.tap(find.byKey(const Key('alert-defer')));
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+      expect(find.text('C'), findsOneWidget);
+      expect(h.sound.plays, 3);
+      expect(h.repo.patches, 0);
+    },
+  );
+
+  testWidgets(
+    '10.4 timeout keeps fullscreen; confirmed is initial pulse only',
+    (tester) async {
+      final h = await _pump(tester);
+      h.repo.orders['A'] = _detail('A');
+      h.repo.orders['B'] = _detail('B', status: OrderStatus.confirmed);
+      await h.emit(tester);
+      for (var i = 0; i < 24; i++) {
+        await tester.pump(const Duration(seconds: 5));
+        await tester.pumpAndSettle();
+      }
+      final plays = h.sound.plays;
+      await tester.pump(const Duration(seconds: 10));
+      expect(h.sound.plays, plays);
+      expect(find.byKey(const Key('new-order-fullscreen')), findsOneWidget);
+      expect(h.unseen, ['A', 'B']);
+      await tester.tap(find.byKey(const Key('alert-defer')));
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+      expect(h.sound.plays, plays + 1);
+      await tester.pump(const Duration(seconds: 10));
+      expect(h.sound.plays, plays + 1);
+    },
+  );
+
+  for (final change in ['confirmed', 'unpaid', 'missing']) {
+    testWidgets(
+      '10.4 canonical $change stops while pinned fullscreen remains',
+      (tester) async {
+        final h = await _pump(tester);
+        h.repo.orders['A'] = _detail('A');
+        await h.emit(tester);
+        if (change == 'missing') {
+          h.repo.orders.remove('A');
+        } else {
+          h.repo.orders['A'] = _detail(
+            'A',
+            status: change == 'confirmed'
+                ? OrderStatus.confirmed
+                : OrderStatus.pending,
+            payment: change == 'unpaid'
+                ? PaymentStatus.failed
+                : PaymentStatus.paid,
+          );
+        }
+        final stops = h.sound.stops;
+        await h.emit(tester);
+        expect(h.sound.stops, greaterThan(stops));
+        await tester.pump(const Duration(seconds: 10));
+        expect(h.sound.plays, 1);
+        expect(find.byKey(const Key('new-order-fullscreen')), findsOneWidget);
+      },
+    );
+  }
+
+  testWidgets('10.4 inactive/background stop; failed resume GET cannot rearm', (
+    tester,
+  ) async {
+    final h = await _pump(tester);
+    h.repo.orders['A'] = _detail('A');
+    await h.emit(tester);
+    final stops = h.sound.stops;
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    expect(h.sound.stops, greaterThan(stops));
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await tester.pump(const Duration(seconds: 10));
+    expect(h.sound.plays, 1);
+    h.repo.getError = const ApiException(message: 'Network unavailable');
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 6));
+    expect(h.sound.plays, 1);
+    h.repo.getError = null;
+    await tester.tap(find.byKey(const Key('alert-refresh')));
+    await tester.pumpAndSettle();
+    expect(h.sound.plays, 2);
+  });
+
+  for (final change in ['logout', 'location']) {
+    testWidgets('10.4 $change stops and closes fullscreen', (tester) async {
+      final h = await _pump(tester);
+      (h.container.read(authControllerProvider.notifier) as _Auth).signedIn();
+      await tester.pumpAndSettle();
+      h.repo.orders['A'] = _detail('A');
+      await h.emit(tester);
+      final stops = h.sound.stops;
+      if (change == 'logout') {
+        (h.container.read(authControllerProvider.notifier) as _Auth)
+            .signedOut();
+      } else {
+        (h.container.read(currentLocationProvider.notifier) as _Location)
+            .clear();
+      }
+      await tester.pumpAndSettle();
+      expect(h.sound.stops, greaterThan(stops));
+      await tester.pump(const Duration(seconds: 20));
+      await h.emit(
+        tester,
+      ); // Even a late snapshot must not reopen after logout.
+      expect(h.sound.plays, 1);
+      expect(find.byKey(const Key('new-order-fullscreen')), findsNothing);
+    });
+  }
+
   for (final (width, height, scale) in [
     (320.0, 740.0, 2.0),
     (768.0, 1024.0, 1.0),
@@ -660,12 +909,16 @@ void main() {
         }
         await tester.pumpAndSettle();
         expect(h.repo.patches, 1);
+        await tester.pump(const Duration(seconds: 2));
+        await tester.pumpAndSettle();
         expect(h.repo.gets, greaterThanOrEqualTo(3));
         expect(
           h.repo.orders['A']!.status,
           cancel ? OrderStatus.cancelled : OrderStatus.confirmed,
         );
         expect(h.unseen, ['B']);
+        await tester.pump(const Duration(seconds: 2));
+        await tester.pumpAndSettle();
         expect(find.text('B'), findsOneWidget);
       },
     );
@@ -731,6 +984,8 @@ void main() {
     await tester.tap(find.byKey(const Key('alert-defer')));
     await tester.pumpAndSettle();
     expect(h.unseen, ['B']);
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
     expect(find.text('B'), findsOneWidget);
     expect(find.byKey(const Key('new-order-fullscreen')), findsOneWidget);
     expect(
@@ -1068,6 +1323,8 @@ void main() {
         expect(h.repo.patches, 0);
         await tester.tap(find.byKey(const Key('alert-acknowledge')));
         await tester.pumpAndSettle();
+        await tester.pump(const Duration(seconds: 2));
+        await tester.pumpAndSettle();
         expect(find.text('B'), findsOneWidget);
         expect(find.text('1 of 1'), findsOneWidget);
         expect(find.byKey(const Key('alert-accept')), findsOneWidget);
@@ -1096,6 +1353,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(h.repo.orders['A']!.status, OrderStatus.cancelled);
       expect(h.unseen, ['B']);
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
       expect(find.text('B'), findsOneWidget);
     },
   );
