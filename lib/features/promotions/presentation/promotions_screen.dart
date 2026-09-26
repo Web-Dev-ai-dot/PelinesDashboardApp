@@ -1,3 +1,5 @@
+import '../../../app/theme/app_theme.dart';
+
 import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -19,15 +21,12 @@ class PromotionsScreen extends ConsumerWidget {
     final AsyncValue<Location?> location = ref.watch(currentLocationProvider);
     final AsyncValue<List<Discount>> promotions = ref.watch(promotionsProvider);
     return Scaffold(
-      appBar: AdminAppBar(title:  Text(tr(context, 'Promotions'))),
-      floatingActionButton: location.value == null
-          ? null
-          : FloatingActionButton.extended(
-              key: const Key('add-promotion'),
-              onPressed: () => context.push('/app/promotions/new'),
-              icon: const Icon(Icons.add),
-              label:  Text(tr(context, 'Add Promotion')),
-            ),
+      appBar: AdminAppBar(
+        title: Text(
+          tr(context, 'Promotions'),
+          style: PelinesTypography.pageTitle(Theme.of(context).textTheme),
+        ),
+      ),
       body: location.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (Object error, StackTrace stack) => _ErrorView(
@@ -36,19 +35,59 @@ class PromotionsScreen extends ConsumerWidget {
         ),
         data: (Location? selected) {
           if (selected == null) {
-            return  Center(child: Text(tr(context, 'Choose a location to continue.')));
+            return Center(
+              child: Text(tr(context, 'Choose a location to continue.')),
+            );
           }
-          return promotions.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (Object error, StackTrace stack) => _ErrorView(
-              message: _errorMessage(error),
-              onRetry: ref.read(promotionsProvider.notifier).refresh,
-            ),
-            data: (List<Discount> all) => _PromotionList(
-              location: selected,
-              discounts: all,
-              onRefresh: ref.read(promotionsProvider.notifier).refresh,
-            ),
+          return Column(
+            children: [
+              PelinesPageBody(
+                width: PelinesPageWidth.dashboard,
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Wrap(
+                    spacing: 16,
+                    runSpacing: 12,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      PelinesStateBadge(
+                        label: selected.name,
+                        foreground: PelinesColors.brandPrimary,
+                        background: PelinesColors.brandPrimarySoft,
+                        icon: Icons.storefront_outlined,
+                      ),
+                      PelinesButton(
+                        key: const Key('add-promotion'),
+                        label: tr(context, 'Add Promotion'),
+                        onPressed: () => context.push('/app/promotions/new'),
+                      ),
+                      IconButton(
+                        tooltip: tr(context, 'Refresh'),
+                        onPressed: ref
+                            .read(promotionsProvider.notifier)
+                            .refresh,
+                        icon: const Icon(Icons.refresh),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Expanded(
+                child: promotions.when(
+                  loading: () =>
+                      const Center(child: CircularProgressIndicator()),
+                  error: (Object error, StackTrace stack) => _ErrorView(
+                    message: _errorMessage(error),
+                    onRetry: ref.read(promotionsProvider.notifier).refresh,
+                  ),
+                  data: (List<Discount> all) => _PromotionList(
+                    location: selected,
+                    discounts: all,
+                    onRefresh: ref.read(promotionsProvider.notifier).refresh,
+                  ),
+                ),
+              ),
+            ],
           );
         },
       ),
@@ -79,7 +118,7 @@ class _PromotionList extends StatelessWidget {
         onRefresh: onRefresh,
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
-          slivers:  [
+          slivers: [
             SliverFillRemaining(
               hasScrollBody: false,
               child: Padding(
@@ -103,27 +142,34 @@ class _PromotionList extends StatelessWidget {
     }
     return RefreshIndicator(
       onRefresh: onRefresh,
-      child: ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(
-          PelinesSpacing.md,
-          PelinesSpacing.sm,
-          PelinesSpacing.md,
-          PelinesSpacing.xxl,
+      child: PelinesPageBody(
+        width: PelinesPageWidth.dashboard,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(
+            PelinesSpacing.md,
+            PelinesSpacing.sm,
+            PelinesSpacing.md,
+            PelinesSpacing.xxl,
+          ),
+          children: <Widget>[
+            if (local.isNotEmpty) ...<Widget>[
+              _SectionTitle(tr(context, 'This location')),
+              _PromotionTable(
+                discounts: local,
+                scope: tr(context, 'This location'),
+              ),
+            ],
+            if (global.isNotEmpty) ...<Widget>[
+              if (local.isNotEmpty) const SizedBox(height: 18),
+              _SectionTitle(tr(context, 'All locations')),
+              _PromotionTable(
+                discounts: global,
+                scope: tr(context, 'All locations'),
+              ),
+            ],
+          ],
         ),
-        children: <Widget>[
-          if (local.isNotEmpty) ...<Widget>[
-             _SectionTitle(tr(context, 'This location')),
-            for (final Discount discount in local)
-              _PromotionCard(discount: discount, scope: tr(context, 'This location')),
-          ],
-          if (global.isNotEmpty) ...<Widget>[
-            if (local.isNotEmpty) const SizedBox(height: 18),
-             _SectionTitle(tr(context, 'All locations')),
-            for (final Discount discount in global)
-              _PromotionCard(discount: discount, scope: tr(context, 'All locations')),
-          ],
-        ],
       ),
     );
   }
@@ -137,66 +183,115 @@ class _SectionTitle extends StatelessWidget {
   Widget build(BuildContext context) => PelinesSectionHeading(label);
 }
 
-class _PromotionCard extends StatelessWidget {
-  const _PromotionCard({required this.discount, required this.scope});
-  final Discount discount;
-  final String scope;
+String promotionValue(BuildContext context, Discount discount) =>
+    discount.discountLabel.replaceFirst('off', tr(context, 'off'));
+String promotionUsage(BuildContext context, Discount discount) => discount
+    .usageLabel
+    .replaceFirst('claimed', tr(context, 'claimed'))
+    .replaceFirst('Unlimited', tr(context, 'Unlimited'));
 
+class _PromotionTable extends StatelessWidget {
+  const _PromotionTable({required this.discounts, required this.scope});
+  final List<Discount> discounts;
+  final String scope;
   @override
-  Widget build(BuildContext context) {
-    final PromotionEffectiveStatus status = discount.effectiveStatus(
-      DateTime.now(),
-    );
-    return Card(
-      margin: const EdgeInsets.only(bottom: PelinesSpacing.sm),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(PelinesRadius.prominentCard),
-        onTap: () => context.push('/app/promotions/${discount.id}'),
-        child: Padding(
-          padding: const EdgeInsets.all(PelinesSpacing.md),
+  Widget build(BuildContext context) => PelinesAdaptiveTable<Discount>(
+    key: ValueKey('promotions-${discounts.first.locationId ?? 'global'}'),
+    rows: discounts,
+    empty: const SizedBox.shrink(),
+    columns: [
+      PelinesTableColumn(
+        label: tr(context, 'Code'),
+        cell: (d) => _code(context, d),
+      ),
+      PelinesTableColumn(
+        label: tr(context, 'Discount Type'),
+        cell: (d) => Text(
+          tr(context, d.type == 'percent' ? 'Percentage' : 'Fixed amount'),
+        ),
+      ),
+      PelinesTableColumn(
+        label: tr(context, 'Discount'),
+        cell: (d) => Text(promotionValue(context, d)),
+      ),
+      PelinesTableColumn(
+        label: tr(context, 'Applies to'),
+        cell: (d) => Text(tr(context, d.appliesToLabel)),
+      ),
+      PelinesTableColumn(label: tr(context, 'Scope'), cell: (_) => Text(scope)),
+      PelinesTableColumn(
+        label: tr(context, 'Usage claimed'),
+        cell: (d) => Text(promotionUsage(context, d)),
+      ),
+      PelinesTableColumn(
+        label: tr(context, 'Status'),
+        cell: (d) => _StatusChip(d.effectiveStatus(DateTime.now())),
+      ),
+      PelinesTableColumn(
+        label: tr(context, 'View'),
+        cell: (d) => _view(context, d),
+      ),
+    ],
+    cardBuilder: (context, d) => PelinesCard(
+      key: ValueKey('promotion-card-${d.id}'),
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: () => context.push('/app/promotions/${d.id}'),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Row(
-                children: <Widget>[
-                  Expanded(
-                    child: Text(
-                      discount.code,
-                      style: Theme.of(context).textTheme.titleMedium
-                          ?.copyWith(fontWeight: FontWeight.w800),
-                    ),
-                  ),
-                  _StatusChip(status),
-                  const SizedBox(width: 4),
-                  const Icon(Icons.chevron_right),
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Wrap(
+                spacing: 12,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  _code(context, d),
+                  _StatusChip(d.effectiveStatus(DateTime.now())),
                 ],
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 16),
               Text(
-                discount.discountLabel,
+                promotionValue(context, d),
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 8),
-              Text(discount.appliesToLabel),
-              const SizedBox(height: PelinesSpacing.xs),
+              Text(tr(context, d.appliesToLabel)),
+              const SizedBox(height: 12),
               PelinesStateBadge(
                 label: scope,
-                foreground: scope == 'All locations'
+                foreground: d.locationId == null
                     ? PelinesColors.textSecondary
                     : PelinesColors.brandPrimary,
-                background: scope == 'All locations'
+                background: d.locationId == null
                     ? PelinesColors.mutedSurface
                     : PelinesColors.brandPrimarySoft,
-                icon: scope == 'All locations'
+                icon: d.locationId == null
                     ? Icons.lock_outline
-                    : Icons.edit_outlined,
+                    : Icons.storefront_outlined,
+              ),
+              const Divider(height: 28),
+              PelinesLabelValueRow(
+                label: Text(
+                  '${tr(context, 'Usage claimed')}: ${promotionUsage(context, d)}',
+                ),
+                value: _view(context, d),
               ),
             ],
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+  Widget _code(BuildContext context, Discount d) => Text(
+    d.code,
+    style: PelinesTypography.sectionTitle(Theme.of(context).textTheme)
+        ?.copyWith(fontSize: 22),
+  );
+  Widget _view(BuildContext context, Discount d) => PelinesViewAction(
+    label: tr(context, 'View'),
+    onPressed: () => context.push('/app/promotions/${d.id}'),
+  );
 }
 
 class PromotionStatusChip extends StatelessWidget {
@@ -227,8 +322,8 @@ class _StatusChip extends StatelessWidget {
         PelinesColors.mutedSurface,
       ),
       PromotionEffectiveStatus.expired => (
-        PelinesColors.textPrimary,
-        PelinesColors.brandYellowSoft,
+        PelinesColors.destructive,
+        PelinesColors.brandPrimarySoft,
       ),
       PromotionEffectiveStatus.usageLimitReached => (
         PelinesColors.destructive,
@@ -236,7 +331,8 @@ class _StatusChip extends StatelessWidget {
       ),
     };
     return PelinesStateBadge(
-      label: status.label,
+      label: AdminLocalizations.of(context)
+          .text(status.label, key: 'promotion.${status.label}'),
       foreground: foreground,
       background: background,
     );
@@ -259,7 +355,11 @@ class _ErrorView extends StatelessWidget {
           const SizedBox(height: 12),
           Text(message, textAlign: TextAlign.center),
           const SizedBox(height: 16),
-          FilledButton(onPressed: onRetry, child:  Text(tr(context, 'Try again'))),
+          FilledButton(
+            style: PelinesControlStyles.button(PelinesButtonVariant.primary),
+            onPressed: onRetry,
+            child: Text(tr(context, 'Try again')),
+          ),
         ],
       ),
     ),

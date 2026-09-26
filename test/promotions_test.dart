@@ -2,6 +2,8 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'package:pelines_admin_app/core/api/api_client.dart';
 import 'package:pelines_admin_app/core/api/api_exception.dart';
 import 'package:pelines_admin_app/features/locations/models/location.dart';
@@ -71,6 +73,87 @@ void main() {
       );
     });
   });
+
+  test('web date precedence, offsets and millisecond boundaries', () {
+    final now = DateTime.parse('2026-09-05T12:00:00Z');
+    final invalidRange = _discount(
+      startsAt: now.add(const Duration(days: 1)),
+      endsAt: now.subtract(const Duration(days: 1)),
+    );
+    expect(invalidRange.effectiveStatus(now), PromotionEffectiveStatus.expired);
+    expect(
+      _discount(
+        isActive: false,
+        endsAt: now.subtract(const Duration(days: 1)),
+      ).effectiveStatus(now),
+      PromotionEffectiveStatus.inactive,
+    );
+    final sameInstant = DateTime.parse('2026-09-05T05:00:00-07:00');
+    final bounded = _discount(startsAt: sameInstant, endsAt: sameInstant);
+    expect(
+      bounded.effectiveStatus(now.subtract(const Duration(milliseconds: 1))),
+      PromotionEffectiveStatus.scheduled,
+    );
+    expect(bounded.effectiveStatus(now), PromotionEffectiveStatus.active);
+    expect(
+      bounded.effectiveStatus(now.add(const Duration(milliseconds: 1))),
+      PromotionEffectiveStatus.expired,
+    );
+  });
+
+  for (final width in [390.0, 900.0]) {
+    for (final language in ['en', 'es']) {
+      for (final status in PromotionEffectiveStatus.values.take(4)) {
+        testWidgets('$status list/detail $language at $width', (tester) async {
+          tester.view.physicalSize = Size(width, 1200);
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          final now = DateTime.now();
+          final discount = _discount(
+            locationId: 'location-a',
+            isActive: status != PromotionEffectiveStatus.inactive,
+            startsAt: status == PromotionEffectiveStatus.scheduled
+                ? now.add(const Duration(days: 30))
+                : null,
+            endsAt: status == PromotionEffectiveStatus.expired
+                ? now.subtract(const Duration(days: 30))
+                : null,
+          );
+          final container = await _readyContainer(
+            _FakePromotionsRepository([discount]),
+          );
+          addTearDown(container.dispose);
+          final label = AdminLocalizations(Locale(language)).text(
+            status.label,
+            key: 'promotion.${status.label}',
+          );
+          for (final screen in <Widget>[
+            const PromotionsScreen(),
+            const PromotionDetailScreen(discountId: 'discount-id'),
+          ]) {
+            await tester.pumpWidget(
+              UncontrolledProviderScope(
+                container: container,
+                child: MaterialApp(
+                  locale: Locale(language),
+                  supportedLocales: AdminLocalizations.supportedLocales,
+                  localizationsDelegates: const [
+                    AdminLocalizations.delegate,
+                    ...GlobalMaterialLocalizations.delegates,
+                  ],
+                  home: screen,
+                ),
+              ),
+            );
+            await tester.pumpAndSettle();
+            expect(find.text(label), findsOneWidget);
+            expect(tester.takeException(), isNull);
+          }
+        });
+      }
+    }
+  }
 
   for (final bool requested in <bool>[false, true]) {
     test(
@@ -192,6 +275,10 @@ void main() {
       find.byKey(const Key('promotion-active-action')),
       400,
     );
+    await tester.ensureVisible(
+      find.byKey(const Key('promotion-active-action')),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('promotion-active-action')));
     await tester.pumpAndSettle();
     expect(find.text('Deactivate SUMMER10?'), findsOneWidget);

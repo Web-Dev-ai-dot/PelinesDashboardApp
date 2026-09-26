@@ -1,3 +1,6 @@
+import '../../locations/presentation/operations_parity_widgets.dart';
+import '../../../app/theme/app_theme.dart';
+
 import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -37,7 +40,12 @@ class _PromotionDetailScreenState extends ConsumerState<PromotionDetailScreen> {
     final Location? location = ref.watch(currentLocationProvider).value;
     final AsyncValue<List<Discount>> source = ref.watch(promotionsProvider);
     return Scaffold(
-      appBar: AdminAppBar(title:  Text(tr(context, 'Promotion Details'))),
+      appBar: AdminAppBar(
+        title: Text(
+          tr(context, 'Promotion Details'),
+          style: PelinesTypography.pageTitle(Theme.of(context).textTheme),
+        ),
+      ),
       body: source.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (Object error, StackTrace stack) => Center(
@@ -49,8 +57,11 @@ class _PromotionDetailScreenState extends ConsumerState<PromotionDetailScreen> {
                 Text(error.toString(), textAlign: TextAlign.center),
                 const SizedBox(height: 16),
                 FilledButton(
+                  style: PelinesControlStyles.button(
+                    PelinesButtonVariant.primary,
+                  ),
                   onPressed: ref.read(promotionsProvider.notifier).refresh,
-                  child:  Text(tr(context, 'Try again')),
+                  child: Text(tr(context, 'Try again')),
                 ),
               ],
             ),
@@ -59,7 +70,7 @@ class _PromotionDetailScreenState extends ConsumerState<PromotionDetailScreen> {
         data: (List<Discount> values) {
           final Discount? discount = _find(values);
           if (discount == null) {
-            return  Center(
+            return Center(
               child: Text(tr(context, 'This promotion no longer exists.')),
             );
           }
@@ -68,11 +79,14 @@ class _PromotionDetailScreenState extends ConsumerState<PromotionDetailScreen> {
               (discount.locationId == null ||
                   discount.locationId == location.id);
           if (!applies) {
-            return  Center(
+            return Center(
               child: Padding(
                 padding: EdgeInsets.all(24),
                 child: Text(
-                  tr(context, 'This promotion is not available for the selected location.'),
+                  tr(
+                    context,
+                    'This promotion is not available for the selected location.',
+                  ),
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -120,7 +134,7 @@ class _Details extends ConsumerWidget {
     );
     final bool global = discount.locationId == null;
     final bool manageable = discount.locationId == location.id;
-    return ListView(
+    return OperationsFormList(
       padding: const EdgeInsets.all(PelinesSpacing.lg),
       children: <Widget>[
         PelinesStateBadge(
@@ -136,24 +150,43 @@ class _Details extends ConsumerWidget {
           icon: global ? Icons.lock_outline : Icons.edit_outlined,
         ),
         const SizedBox(height: PelinesSpacing.md),
-        _Field(tr(context, 'Code'), discount.code),
+        Text(
+          discount.code,
+          style: PelinesTypography.pageTitle(Theme.of(context).textTheme),
+        ),
+        const SizedBox(height: 20),
         _StatusField(discount.effectiveStatus(DateTime.now())),
-        _Field(tr(context, 'Discount'), discount.discountLabel),
-        _Field(tr(context, 'Applies to'), discount.appliesToLabel),
-        _Field(tr(context, 'Scope'), global ? tr(context, 'All locations') : location.name),
+        _Field(tr(context, 'Discount'), promotionValue(context, discount)),
+        _Field(tr(context, 'Applies to'), tr(context, discount.appliesToLabel)),
+        _Field(
+          tr(context, 'Scope'),
+          global ? tr(context, 'All locations') : location.name,
+        ),
         _Field(tr(context, 'Minimum order subtotal'), discount.minimumLabel),
-        _Field(tr(context, 'Starts'), discount.startsLabel ?? 'No start date'),
-        _Field(tr(context, 'Ends'), discount.endsLabel ?? 'No end date'),
-        _Field(tr(context, 'Usage claimed'), discount.usageLabel),
-         Padding(
+        _Field(
+          tr(context, 'Starts'),
+          discount.startsLabel ?? tr(context, 'No start date'),
+        ),
+        _Field(
+          tr(context, 'Ends'),
+          discount.endsLabel ?? tr(context, 'No end date'),
+        ),
+        _Field(tr(context, 'Usage claimed'), promotionUsage(context, discount)),
+        Padding(
           padding: EdgeInsets.only(bottom: 20),
           child: Text(
-            tr(context, 'This count may include orders that were created but not completed.'),
+            tr(
+              context,
+              'This count may include orders that were created but not completed.',
+            ),
           ),
         ),
-        _Field(tr(context, 'Active setting'), discount.isActive ? tr(context, 'On') : tr(context, 'Off')),
+        _Field(
+          tr(context, 'Active setting'),
+          discount.isActive ? tr(context, 'On') : tr(context, 'Off'),
+        ),
         if (global)
-           Card(
+          Card(
             child: Padding(
               padding: EdgeInsets.all(PelinesSpacing.md),
               child: Row(
@@ -163,7 +196,10 @@ class _Details extends ConsumerWidget {
                   SizedBox(width: PelinesSpacing.sm),
                   Expanded(
                     child: Text(
-                      tr(context, 'This promotion applies to all locations and can only be managed from the desktop dashboard.'),
+                      tr(
+                        context,
+                        'This promotion applies to all locations and can only be managed from the desktop dashboard.',
+                      ),
                     ),
                   ),
                 ],
@@ -172,15 +208,17 @@ class _Details extends ConsumerWidget {
           ),
         if (manageable) ...<Widget>[
           OutlinedButton.icon(
+            style: PelinesControlStyles.button(PelinesButtonVariant.secondary),
             key: const Key('edit-promotion'),
             onPressed: operation.isBusy
                 ? null
                 : () => context.push('/app/promotions/${discount.id}/edit'),
             icon: const Icon(Icons.edit_outlined),
-            label:  Text(tr(context, 'Edit Promotion')),
+            label: Text(tr(context, 'Edit Promotion')),
           ),
           const SizedBox(height: 10),
           FilledButton(
+            style: PelinesControlStyles.button(PelinesButtonVariant.primary),
             key: const Key('promotion-active-action'),
             onPressed: operation.isBusy
                 ? null
@@ -214,19 +252,36 @@ class _Details extends ConsumerWidget {
             ),
             content: Text(
               activating
-                  ? tr(context, 'The promotion will become eligible again if its dates, usage limit, location and order requirements are also satisfied.')
-                  : tr(context, 'Customers will no longer be able to apply this promotion to new orders.'),
+                  ? tr(
+                      context,
+                      'The promotion will become eligible again if its dates, usage limit, location and order requirements are also satisfied.',
+                    )
+                  : tr(
+                      context,
+                      'Customers will no longer be able to apply this promotion to new orders.',
+                    ),
             ),
             actions: <Widget>[
               TextButton(
                 key: const Key('promotion-confirm-cancel'),
                 onPressed: () => Navigator.pop(dialogContext, false),
-                child: Text(activating ? tr(context, 'Cancel') : tr(context, 'Keep active')),
+                child: Text(
+                  activating
+                      ? tr(context, 'Cancel')
+                      : tr(context, 'Keep active'),
+                ),
               ),
               FilledButton(
+                style: PelinesControlStyles.button(
+                  PelinesButtonVariant.primary,
+                ),
                 key: const Key('promotion-confirm-submit'),
                 onPressed: () => Navigator.pop(dialogContext, true),
-                child: Text(activating ? tr(context, 'Activate') : tr(context, 'Deactivate')),
+                child: Text(
+                  activating
+                      ? tr(context, 'Activate')
+                      : tr(context, 'Deactivate'),
+                ),
               ),
             ],
           ),
@@ -252,18 +307,24 @@ class _Details extends ConsumerWidget {
           await showDialog<bool>(
             context: context,
             builder: (BuildContext dialogContext) => AlertDialog(
-              title:  Text(tr(context, 'This promotion was changed elsewhere.')),
-              content:  Text(
-                tr(context, 'Reload before trying again to avoid overwriting the latest change.'),
+              title: Text(tr(context, 'This promotion was changed elsewhere.')),
+              content: Text(
+                tr(
+                  context,
+                  'Reload before trying again to avoid overwriting the latest change.',
+                ),
               ),
               actions: <Widget>[
                 TextButton(
                   onPressed: () => Navigator.pop(dialogContext, false),
-                  child:  Text(tr(context, 'Cancel')),
+                  child: Text(tr(context, 'Cancel')),
                 ),
                 FilledButton(
+                  style: PelinesControlStyles.button(
+                    PelinesButtonVariant.primary,
+                  ),
                   onPressed: () => Navigator.pop(dialogContext, true),
-                  child:  Text(tr(context, 'Reload')),
+                  child: Text(tr(context, 'Reload')),
                 ),
               ],
             ),
@@ -315,7 +376,10 @@ class _StatusField extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Text(tr(context, 'Status'), style: Theme.of(context).textTheme.labelLarge),
+        Text(
+          tr(context, 'Status'),
+          style: Theme.of(context).textTheme.labelLarge,
+        ),
         const SizedBox(height: 6),
         PromotionStatusChip(status),
       ],

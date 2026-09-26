@@ -1,3 +1,6 @@
+import '../../locations/presentation/operations_parity_widgets.dart';
+import '../../../app/theme/app_theme.dart';
+
 import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -22,8 +25,10 @@ class PromotionFormScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final Location? location = ref.watch(currentLocationProvider).value;
     if (location == null) {
-      return  Scaffold(
-        body: Center(child: Text(tr(context, 'Choose a location to continue.'))),
+      return Scaffold(
+        body: Center(
+          child: Text(tr(context, 'Choose a location to continue.')),
+        ),
       );
     }
     if (discountId == null) {
@@ -35,22 +40,34 @@ class PromotionFormScreen extends ConsumerWidget {
           loading: () =>
               const Scaffold(body: Center(child: CircularProgressIndicator())),
           error: (Object error, StackTrace stack) => Scaffold(
-            appBar: AdminAppBar(title:  Text(tr(context, 'Edit Promotion'))),
+            appBar: AdminAppBar(
+              title: Text(
+                tr(context, 'Edit Promotion'),
+                style: PelinesTypography.pageTitle(Theme.of(context).textTheme),
+              ),
+            ),
             body: Center(child: Text(error.toString())),
           ),
           data: (List<Discount> values) {
             final Discount? discount = _find(values, discountId!);
             if (discount == null) {
-              return  Scaffold(
-                body: Center(child: Text(tr(context, 'This promotion no longer exists.'))),
+              return Scaffold(
+                body: Center(
+                  child: Text(tr(context, 'This promotion no longer exists.')),
+                ),
               );
             }
             if (discount.locationId != location.id) {
-              return  Scaffold(
+              return Scaffold(
                 body: Center(
                   child: Padding(
                     padding: EdgeInsets.all(24),
-                    child: Text(tr(context, 'This promotion cannot be edited from mobile.')),
+                    child: Text(
+                      tr(
+                        context,
+                        'This promotion cannot be edited from mobile.',
+                      ),
+                    ),
                   ),
                 ),
               );
@@ -182,13 +199,18 @@ class _PromotionFormState extends ConsumerState<_PromotionForm> {
       },
       child: Scaffold(
         appBar: AdminAppBar(
-          title: Text(_editing ? tr(context, 'Edit Promotion') : tr(context, 'Add Promotion')),
+          title: Text(
+            _editing
+                ? tr(context, 'Edit Promotion')
+                : tr(context, 'Add Promotion'),
+            style: PelinesTypography.pageTitle(Theme.of(context).textTheme),
+          ),
           leading: IconButton(
             onPressed: operation.isBusy ? null : _leave,
             icon: const Icon(Icons.arrow_back),
           ),
         ),
-        body: ListView(
+        body: OperationsFormList(
           padding: const EdgeInsets.all(PelinesSpacing.lg),
           children: <Widget>[
             PelinesReadOnlyField(
@@ -205,14 +227,21 @@ class _PromotionFormState extends ConsumerState<_PromotionForm> {
               ],
             ),
             DropdownButtonFormField<String>(
+              isExpanded: true,
+              itemHeight: null,
               initialValue: _type,
-              decoration:  InputDecoration(
-                labelText: tr(context, 'Discount Type'),
-                border: OutlineInputBorder(),
+              decoration: PelinesControlStyles.input(
+                label: tr(context, 'Discount Type'),
               ),
-              items:  <DropdownMenuItem<String>>[
-                DropdownMenuItem(value: 'percent', child: Text(tr(context, 'Percentage'))),
-                DropdownMenuItem(value: 'fixed', child: Text(tr(context, 'Fixed amount'))),
+              items: <DropdownMenuItem<String>>[
+                DropdownMenuItem(
+                  value: 'percent',
+                  child: Text(tr(context, 'Percentage')),
+                ),
+                DropdownMenuItem(
+                  value: 'fixed',
+                  child: Text(tr(context, 'Fixed amount')),
+                ),
               ],
               onChanged: operation.isBusy
                   ? null
@@ -227,12 +256,13 @@ class _PromotionFormState extends ConsumerState<_PromotionForm> {
               number: true,
             ),
             DropdownButtonFormField<String>(
+              isExpanded: true,
+              itemHeight: null,
               initialValue: _appliesTo,
-              decoration:  InputDecoration(
-                labelText: tr(context, 'Applies To'),
-                border: OutlineInputBorder(),
+              decoration: PelinesControlStyles.input(
+                label: tr(context, 'Applies To'),
               ),
-              items:  <DropdownMenuItem<String>>[
+              items: <DropdownMenuItem<String>>[
                 DropdownMenuItem(
                   value: 'regular',
                   child: Text(tr(context, 'Regular orders')),
@@ -265,7 +295,7 @@ class _PromotionFormState extends ConsumerState<_PromotionForm> {
             }),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title:  Text(tr(context, 'Unlimited usage')),
+              title: Text(tr(context, 'Unlimited usage')),
               value: _unlimited,
               onChanged: operation.isBusy
                   ? null
@@ -285,14 +315,17 @@ class _PromotionFormState extends ConsumerState<_PromotionForm> {
               const SizedBox(height: 4),
               Text(widget.initial!.usageLabel),
               const SizedBox(height: 4),
-               Text(
-                tr(context, 'Usage claimed may include orders that were created but not completed.'),
+              Text(
+                tr(
+                  context,
+                  'Usage claimed may include orders that were created but not completed.',
+                ),
               ),
               const SizedBox(height: 12),
             ],
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title:  Text(tr(context, 'Active')),
+              title: Text(tr(context, 'Active')),
               value: _active,
               onChanged: operation.isBusy
                   ? null
@@ -316,7 +349,16 @@ class _PromotionFormState extends ConsumerState<_PromotionForm> {
                   style: TextStyle(color: Theme.of(context).colorScheme.error),
                 ),
               ),
+            OutlinedButton(
+              style: PelinesControlStyles.button(
+                PelinesButtonVariant.secondary,
+              ),
+              onPressed: operation.isBusy ? null : _leave,
+              child: Text(tr(context, 'Cancel')),
+            ),
+            const SizedBox(height: 12),
             FilledButton(
+              style: PelinesControlStyles.button(PelinesButtonVariant.primary),
               key: const Key('promotion-form-save'),
               onPressed: operation.isBusy || !_dirty || !validation.isValid
                   ? null
@@ -357,12 +399,8 @@ class _PromotionFormState extends ConsumerState<_PromotionForm> {
       keyboardType: number
           ? const TextInputType.numberWithOptions(decimal: true)
           : null,
-      decoration: InputDecoration(
-        labelText: label,
-        prefixText: prefix,
-        suffixText: suffix,
-        border: const OutlineInputBorder(),
-      ),
+      decoration: PelinesControlStyles.input(label: label)
+          .copyWith(prefixText: prefix, suffixText: suffix),
     ),
   );
 
@@ -434,6 +472,9 @@ class _PromotionFormState extends ConsumerState<_PromotionForm> {
                   child: const Text('Cancel'),
                 ),
                 FilledButton(
+                  style: PelinesControlStyles.button(
+                    PelinesButtonVariant.primary,
+                  ),
                   onPressed: () => Navigator.pop(dialogContext, true),
                   child: const Text('Reload'),
                 ),
@@ -489,6 +530,9 @@ class _PromotionFormState extends ConsumerState<_PromotionForm> {
                 child: const Text('Keep editing'),
               ),
               FilledButton(
+                style: PelinesControlStyles.button(
+                  PelinesButtonVariant.primary,
+                ),
                 onPressed: () => Navigator.pop(dialogContext, true),
                 child: const Text('Discard'),
               ),

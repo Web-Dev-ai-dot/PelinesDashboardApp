@@ -23,7 +23,7 @@ void main() {
         unlimited: false,
         startDate: DateTime(2026, 9, 5),
         endDate: DateTime(2026, 9, 30),
-      ).validate('location-a');
+      ).validate('location-a', now: DateTime.utc(2026, 9, 5, 12));
       expect(result.body, <String, dynamic>{
         'code': 'SUMMER_10',
         'type': 'percent',
@@ -109,7 +109,7 @@ void main() {
       final PromotionWriteResult same = _draft(
         startDate: day,
         endDate: day,
-      ).validate('location-a');
+      ).validate('location-a', now: DateTime.utc(2026, 9, 5, 12));
       expect(same.isValid, true);
       expect(same.body!['startsAt'], '2026-09-05T07:00:00.000Z');
       expect(same.body!['endsAt'], '2026-09-06T06:59:59.999Z');
@@ -124,6 +124,46 @@ void main() {
   });
 
   group('Pacific dates', () {
+    test('past end dates are blocked at Pacific midnight, including edits', () {
+      final day = DateTime(2026, 9, 5);
+      final draft = _draft(endDate: day);
+      expect(
+        draft
+            .validate('location-a', now: DateTime.utc(2026, 9, 6, 6, 59, 59))
+            .isValid,
+        true,
+      );
+      final expired = draft.validate(
+        'location-a',
+        now: DateTime.utc(2026, 9, 6, 7),
+      );
+      expect(expired.isValid, false);
+      expect(
+        expired.message,
+        'End date cannot be in the past. Choose today or a future date.',
+      );
+      expect(
+        _draft(endDate: DateTime(2026, 9, 7))
+            .validate('location-a', now: DateTime.utc(2026, 9, 6, 7))
+            .isValid,
+        true,
+      );
+      expect(
+        _draft()
+            .validate('location-a', now: DateTime.utc(2026, 9, 6, 7))
+            .isValid,
+        true,
+      );
+      final existing = Discount.fromJson(
+        _json()..['endsAt'] = '2026-09-06T06:59:59.999Z',
+      );
+      expect(
+        PromotionDraft.fromDiscount(existing)
+            .validate('location-a', now: DateTime.utc(2026, 9, 6, 7))
+            .isValid,
+        false,
+      );
+    });
     test('PDT and PST use different real offsets', () {
       expect(
         pacificStartOfDayUtc(DateTime(2026, 9, 5)).toIso8601String(),

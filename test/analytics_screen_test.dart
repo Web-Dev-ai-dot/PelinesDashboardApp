@@ -1,3 +1,5 @@
+import 'package:pelines_admin_app/app/theme/app_theme.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -96,6 +98,7 @@ void main() {
       UncontrolledProviderScope(
         container: container,
         child: MaterialApp(
+          theme: AppTheme.light,
           locale: Locale(language),
           supportedLocales: AdminLocalizations.supportedLocales,
           localizationsDelegates: const [
@@ -117,6 +120,68 @@ void main() {
     await tester.pump();
   }
 
+  for (final viewport in [
+    (390.0, 1.0, 1),
+    (768.0, 1.0, 2),
+    (1400.0, 1.0, 4),
+    (320.0, 2.0, 1),
+  ]) {
+    for (final lang in ['en', 'es']) {
+      testWidgets(
+        'web analytics hierarchy ${viewport.$1} ${viewport.$2} $lang',
+        (tester) async {
+          await mount(
+            tester,
+            width: viewport.$1,
+            scale: viewport.$2,
+            language: lang,
+          );
+          repository.requests.single.complete(sample());
+          await tester.pumpAndSettle();
+          expect(find.byKey(const Key('analytics-filter-bar')), findsOneWidget);
+          expect(
+            find.byKey(ValueKey('analytics-kpi-columns-${viewport.$3}')),
+            findsOneWidget,
+          );
+          final sections = lang == 'es'
+              ? [
+                  'Resumen de ventas',
+                  'Volumen de pedidos',
+                  'Productos',
+                  'Operaciones',
+                ]
+              : ['Sales Overview', 'Order Volume', 'Products', 'Operations'];
+          for (final title in sections) {
+            expect(find.text(title), findsOneWidget);
+          }
+          for (var i = 1; i < sections.length; i++) {
+            expect(
+              tester.getTopLeft(find.text(sections[i])).dy,
+              greaterThan(tester.getTopLeft(find.text(sections[i - 1])).dy),
+            );
+          }
+          expect(find.text('Backend Taco'), findsOneWidget);
+          expect(find.text('#1'), findsOneWidget);
+          expect(
+            find.byKey(const Key('analytics-sales-chart')),
+            findsOneWidget,
+          );
+          expect(
+            find.byKey(const Key('analytics-cancellation-comparison')),
+            findsOneWidget,
+          );
+          for (var i = 0; i < 6; i++) {
+            await tester.drag(
+              find.byType(SingleChildScrollView).first,
+              const Offset(0, -650),
+            );
+            await tester.pumpAndSettle();
+            expect(tester.takeException(), isNull);
+          }
+        },
+      );
+    }
+  }
   testWidgets('loading then four KPIs, local range change and refresh', (
     tester,
   ) async {
@@ -128,7 +193,8 @@ void main() {
       expect(find.byKey(Key('analytics-kpi-$label')), findsOneWidget);
     }
     expect(find.text('US\$11.00'), findsNWidgets(2));
-    expect(find.text('This period is still in progress.'), findsOneWidget);
+    // The page and operational cohort both identify the ongoing period.
+    expect(find.text('This period is still in progress.'), findsNWidgets(2));
     await tester.tap(find.byKey(const Key('analytics-last7Days')));
     await tester.pumpAndSettle();
     expect(repository.requests.length, 1);
@@ -180,17 +246,23 @@ void main() {
       'Pedido promedio',
       'Artículos vendidos',
       'Actualizar',
-      'Los datos pueden estar incompletos',
     ]) {
       expect(find.text(text), findsOneWidget);
     }
     expect(find.textContaining('Pedido más antiguo cargado'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('analytics-truncation')),
+        matching: find.text('Los datos pueden estar incompletos'),
+      ),
+      findsOneWidget,
+    );
     expect(find.textContaining('Pedidos cargados'), findsOneWidget);
     expect(
       find.byKey(const Key('analytics-comparison-unavailable')),
       findsOneWidget,
     );
-    expect(find.text('— vs. período anterior'), findsNWidgets(4));
+    expect(find.text('— vs. período anterior'), findsNWidgets(5));
     expect(tester.takeException(), isNull);
   });
 
@@ -231,7 +303,7 @@ void main() {
     expect(repository.requests.length, 1);
   });
 
-  for (final width in [320.0, 390.0, 1100.0]) {
+  for (final width in [320.0, 390.0, 768.0, 1400.0]) {
     testWidgets('responsive columns at $width', (tester) async {
       await mount(tester, width: width);
       repository.requests.single.complete(sample());
@@ -245,11 +317,11 @@ void main() {
       final average = tester.getTopLeft(
         find.byKey(const Key('analytics-kpi-Average Order')),
       );
-      if (width == 320) {
+      if (width < 432) {
         expect(orders.dy, greaterThan(sales.dy));
       } else {
         expect(orders.dy, sales.dy);
-        expect(average.dy, width == 1100 ? sales.dy : greaterThan(sales.dy));
+        expect(average.dy, width == 1400 ? sales.dy : greaterThan(sales.dy));
       }
       expect(tester.takeException(), isNull);
     });

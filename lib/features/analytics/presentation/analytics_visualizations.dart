@@ -1,3 +1,5 @@
+import '../../../app/theme/pelines_components.dart';
+
 import 'dart:math' as math;
 
 import 'package:fl_chart/fl_chart.dart';
@@ -11,6 +13,7 @@ import '../application/analytics_visualization_data.dart';
 import '../data/analytics_repository.dart';
 import '../models/analytics_date_range.dart';
 import '../models/analytics_result.dart';
+import 'analytics_operational_cards.dart';
 
 NumberFormat _money(BuildContext context) => NumberFormat.currency(
   locale: Localizations.localeOf(context).toLanguageTag(),
@@ -60,7 +63,7 @@ class AnalyticsVisualizations extends StatelessWidget {
         const SizedBox(height: 24),
         AnalyticsSalesChart(dataset: dataset, period: period),
         const SizedBox(height: 16),
-        AnalyticsTopProducts(products: period.products),
+        PelinesSectionHeading(tr(context, 'Order Volume')),
         const SizedBox(height: 16),
         LayoutBuilder(
           builder: (context, constraints) {
@@ -106,6 +109,14 @@ class AnalyticsVisualizations extends StatelessWidget {
           },
         ),
         const SizedBox(height: 16),
+        PelinesSectionHeading(tr(context, 'Products')),
+        const SizedBox(height: 16),
+        AnalyticsTopProducts(products: period.products),
+        const SizedBox(height: 24),
+        PelinesSectionHeading(tr(context, 'Operations')),
+        const SizedBox(height: 16),
+        AnalyticsOperationalCards(dataset: dataset, range: period.range),
+        const SizedBox(height: 16),
         _Section(
           title: 'Order Status',
           child: Column(
@@ -129,6 +140,10 @@ class AnalyticsVisualizations extends StatelessWidget {
                 value: period.cancellationRate == null
                     ? '—'
                     : '${NumberFormat('0.0', Localizations.localeOf(context).toLanguageTag()).format(period.cancellationRate)}%',
+              ),
+              _CancellationComparison(
+                result: result,
+                covered: analyticsComparisonIsCovered(dataset, result),
               ),
               Text(
                 tr(context, 'Cancelled eligible orders / all eligible orders.'),
@@ -226,7 +241,14 @@ class AnalyticsSalesChart extends StatelessWidget {
                         maxX: math.max(1, points.length - 1).toDouble(),
                         minY: 0,
                         maxY: peak == 0 ? 1 : peak * 1.15,
-                        gridData: const FlGridData(drawVerticalLine: false),
+                        gridData: FlGridData(
+                          drawVerticalLine: false,
+                          getDrawingHorizontalLine: (_) => const FlLine(
+                            color: PelinesColors.border,
+                            strokeWidth: 1,
+                            dashArray: [4, 4],
+                          ),
+                        ),
                         borderData: FlBorderData(show: false),
                         titlesData: FlTitlesData(
                           topTitles: const AxisTitles(
@@ -297,6 +319,12 @@ class AnalyticsSalesChart extends StatelessWidget {
                           LineChartBarData(
                             color: PelinesColors.brandPrimary,
                             barWidth: 3,
+                            belowBarData: BarAreaData(
+                              show: true,
+                              color: PelinesColors.brandPrimarySoft.withValues(
+                                alpha: .45,
+                              ),
+                            ),
                             isCurved: false,
                             dotData: FlDotData(show: points.length <= 31),
                             spots: [
@@ -348,13 +376,19 @@ class AnalyticsTopProducts extends StatelessWidget {
             padding: const EdgeInsets.only(top: 16),
             child: Text(tr(context, 'No products in the loaded sales.')),
           ),
-        for (final product in products.take(5))
+        for (final (rank, product) in products.take(5).indexed)
           Padding(
             key: Key('analytics-product-${product.key}'),
             padding: const EdgeInsets.symmetric(vertical: 12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                PelinesStateBadge(
+                  label: '#${rank + 1}',
+                  foreground: PelinesColors.brandPrimary,
+                  background: PelinesColors.brandPrimarySoft,
+                ),
+                const SizedBox(height: 8),
                 Semantics(
                   label: tr(context, 'Product'),
                   child: Text(
@@ -398,10 +432,12 @@ class _Breakdown extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  tr(context, entry.key),
-                  style: Theme.of(context).textTheme.titleSmall,
+                PelinesStateBadge(
+                  label: tr(context, entry.key),
+                  foreground: PelinesColors.brandPrimary,
+                  background: PelinesColors.brandPrimarySoft,
                 ),
+                const SizedBox(height: 8),
                 Wrap(
                   spacing: 24,
                   runSpacing: 4,
@@ -428,12 +464,13 @@ class _ValueRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 8),
-    child: Row(
-      children: [
-        Expanded(child: Text(label)),
-        const SizedBox(width: 12),
-        Text(value),
-      ],
+    child: PelinesLabelValueRow(
+      label: Text(label),
+      value: Text(
+        value,
+        style: PelinesTypography.pageTitle(Theme.of(context).textTheme)
+            ?.copyWith(fontSize: 24),
+      ),
     ),
   );
 }
@@ -443,21 +480,37 @@ class _Section extends StatelessWidget {
   final String title;
   final Widget child;
   @override
-  Widget build(BuildContext context) => Container(
+  Widget build(BuildContext context) => PelinesCard(
     key: Key('analytics-section-$title'),
-    padding: const EdgeInsets.all(PelinesSpacing.md),
-    decoration: BoxDecoration(
-      color: PelinesColors.card,
-      border: Border.all(color: PelinesColors.border),
-      borderRadius: BorderRadius.circular(PelinesRadius.card),
-    ),
+    variant: PelinesCardVariant.compact,
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(tr(context, title), style: Theme.of(context).textTheme.titleLarge),
+        PelinesSectionHeading(tr(context, title)),
         const SizedBox(height: 16),
         child,
       ],
     ),
   );
+}
+
+class _CancellationComparison extends StatelessWidget {
+  const _CancellationComparison({required this.result, required this.covered});
+  final AnalyticsResult result;
+  final bool covered;
+  @override
+  Widget build(BuildContext context) {
+    final delta = covered ? result.cancellationRatePointChange : null;
+    final text = delta == null
+        ? '—'
+        : '${delta > 0 ? '+' : ''}${NumberFormat('0.0', Localizations.localeOf(context).toLanguageTag()).format(delta)} ${tr(context, 'percentage points')}';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Text(
+        '$text ${tr(context, 'vs previous period')}',
+        key: const Key('analytics-cancellation-comparison'),
+        style: Theme.of(context).textTheme.bodySmall,
+      ),
+    );
+  }
 }

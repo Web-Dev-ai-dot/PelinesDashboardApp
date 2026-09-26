@@ -95,6 +95,34 @@ Future<void> mount(
 }
 
 void main() {
+  for (final covered in [true, false]) {
+    testWidgets(
+      'cancellation comparison uses model points with coverage $covered',
+      (tester) async {
+        final dataset = data([
+          row(status: 'cancelled'),
+          row(),
+          row(at: '2026-03-08T18:00:00Z'),
+          if (!covered) ...List.generate(2000, (_) => row()),
+        ]);
+        final computed = result(dataset, day());
+        await mount(
+          tester,
+          AnalyticsVisualizations(dataset: dataset, result: computed),
+        );
+        final comparison = tester.widget<Text>(
+          find.byKey(const Key('analytics-cancellation-comparison')),
+        );
+        expect(
+          comparison.data,
+          covered
+              ? '+50.0 percentage points vs previous period'
+              : '— vs previous period',
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
   test('Today aggregates actual Pacific hours across both DST transitions', () {
     for (final fixture in [
       (

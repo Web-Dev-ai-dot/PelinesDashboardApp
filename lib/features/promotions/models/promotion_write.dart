@@ -58,7 +58,7 @@ class PromotionDraft {
   final bool unlimited;
   final bool isActive;
 
-  PromotionWriteResult validate(String locationId) {
+  PromotionWriteResult validate(String locationId, {DateTime? now}) {
     final String normalizedCode = code.trim().toUpperCase();
     if (normalizedCode.isEmpty) {
       return const PromotionWriteResult.error('Enter a promotion code.');
@@ -99,6 +99,14 @@ class PromotionDraft {
         _dateOnly(startDate!).isAfter(_dateOnly(endDate!))) {
       return const PromotionWriteResult.error(
         'Start date must be on or before end date.',
+      );
+    }
+    // Keep the existing Pacific calendar/payload semantics, including today.
+    if (endDate != null &&
+        _dateOnly(endDate!)
+            .isBefore(pacificCalendarDate(now ?? DateTime.now()))) {
+      return const PromotionWriteResult.error(
+        'End date cannot be in the past. Choose today or a future date.',
       );
     }
     final int? usage = unlimited

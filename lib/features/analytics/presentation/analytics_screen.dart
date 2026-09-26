@@ -1,3 +1,5 @@
+import '../../../app/theme/pelines_components.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -49,7 +51,12 @@ class AnalyticsScreen extends ConsumerWidget {
         analytics != null &&
         analyticsComparisonIsCovered(loaded.dataset, analytics);
     return Scaffold(
-      appBar: AdminAppBar(title: Text(tr(context, 'Analytics'))),
+      appBar: AdminAppBar(
+        title: Text(
+          tr(context, 'Analytics'),
+          style: PelinesTypography.pageTitle(Theme.of(context).textTheme),
+        ),
+      ),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: refresh,
@@ -58,7 +65,9 @@ class AnalyticsScreen extends ConsumerWidget {
             padding: const EdgeInsets.all(PelinesSpacing.md),
             child: Center(
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1200),
+                constraints: const BoxConstraints(
+                  maxWidth: PelinesLayout.dashboardMaxWidth,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -110,8 +119,18 @@ class AnalyticsScreen extends ConsumerWidget {
                     ] else if (period != null) ...[
                       if (loaded.isRefreshing) const LinearProgressIndicator(),
                       if (loaded.refreshError != null)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        Container(
+                          margin: const EdgeInsets.symmetric(vertical: 12),
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: PelinesColors.brandPrimarySoft,
+                            border: Border.all(
+                              color: PelinesColors.brandPrimary,
+                            ),
+                            borderRadius: BorderRadius.circular(
+                              PelinesRadius.control,
+                            ),
+                          ),
                           child: Text(
                             tr(
                               context,
@@ -145,19 +164,22 @@ class AnalyticsScreen extends ConsumerWidget {
                             ],
                           ),
                         ),
+                      PelinesSectionHeading(tr(context, 'Sales Overview')),
+                      const SizedBox(height: 16),
                       LayoutBuilder(
                         builder: (context, constraints) {
                           final scale =
                               MediaQuery.textScalerOf(context).scale(14) / 14;
-                          final columns = constraints.maxWidth >= 880 * scale
+                          final columns = constraints.maxWidth >= 1080 * scale
                               ? 4
-                              : constraints.maxWidth >= 340 * scale
+                              : constraints.maxWidth >= 400 * scale
                               ? 2
                               : 1;
                           final width =
                               (constraints.maxWidth - 12 * (columns - 1)) /
                               columns;
                           return Wrap(
+                            key: ValueKey('analytics-kpi-columns-$columns'),
                             spacing: 12,
                             runSpacing: 12,
                             children: [
@@ -244,20 +266,41 @@ class _KpiCard extends StatelessWidget {
   final MetricComparison comparison;
   final bool comparisonCovered;
   @override
-  Widget build(BuildContext context) => Container(
+  Widget build(BuildContext context) => PelinesCard(
     key: Key('analytics-kpi-$label'),
-    padding: const EdgeInsets.all(PelinesSpacing.md),
-    decoration: BoxDecoration(
-      color: PelinesColors.card,
-      border: Border.all(color: PelinesColors.border),
-      borderRadius: BorderRadius.circular(PelinesRadius.card),
-    ),
+    variant: PelinesCardVariant.compact,
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(tr(context, label), style: Theme.of(context).textTheme.labelLarge),
-        const SizedBox(height: 12),
-        Text(value, style: Theme.of(context).textTheme.headlineSmall),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Text(
+                tr(context, label),
+                style: PelinesTypography.smallLabel,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Icon(
+              switch (label) {
+                'Sales' => Icons.attach_money,
+                'Orders' => Icons.receipt_long_outlined,
+                'Average Order' => Icons.trending_up,
+                _ => Icons.restaurant_outlined,
+              },
+              color: PelinesColors.brandPrimary,
+              size: 20,
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Text(
+          value,
+          style: PelinesTypography.pageTitle(Theme.of(context).textTheme)
+              ?.copyWith(fontSize: 30),
+        ),
+        const Divider(height: 24),
         AnalyticsComparison(metric: comparison, covered: comparisonCovered),
       ],
     ),

@@ -70,11 +70,11 @@ class Discount {
   PromotionEffectiveStatus effectiveStatus(DateTime now) {
     final DateTime instant = now.toUtc();
     if (!isActive) return PromotionEffectiveStatus.inactive;
-    if (startsAt != null && instant.isBefore(startsAt!.toUtc())) {
-      return PromotionEffectiveStatus.scheduled;
-    }
     if (endsAt != null && instant.isAfter(endsAt!.toUtc())) {
       return PromotionEffectiveStatus.expired;
+    }
+    if (startsAt != null && instant.isBefore(startsAt!.toUtc())) {
+      return PromotionEffectiveStatus.scheduled;
     }
     if (usageLimit != null && timesRedeemed >= usageLimit!) {
       return PromotionEffectiveStatus.usageLimitReached;

@@ -1,3 +1,6 @@
+import '../../../app/theme/pelines_components.dart';
+import '../../../app/theme/pelines_tokens.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -18,72 +21,108 @@ class AnalyticsFilters extends ConsumerWidget {
     final location = ref.watch(currentLocationProvider);
     final locale = Localizations.localeOf(context).toLanguageTag();
     final date = DateFormat.yMMMd(locale);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        PelinesLocationSelector(
-          locationName:
-              location.value?.name ?? tr(context, 'Choose a location'),
-          onPressed: () => showModalBottomSheet<void>(
-            context: context,
-            isScrollControlled: true,
-            builder: (_) => const _LocationPicker(),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            for (final entry in {
-              AnalyticsDatePreset.today: 'Today',
-              AnalyticsDatePreset.last7Days: '7 Days',
-              AnalyticsDatePreset.last30Days: '30 Days',
-              AnalyticsDatePreset.last90Days: '90 Days',
-            }.entries)
-              ChoiceChip(
-                key: Key('analytics-${entry.key.name}'),
-                label: Text(tr(context, entry.value)),
-                selected: range.preset == entry.key,
-                onSelected: (_) => ref
-                    .read(analyticsRangeProvider.notifier)
-                    .selectPreset(entry.key),
-              ),
-            ChoiceChip(
-              key: const Key('analytics-custom'),
-              avatar: const Icon(Icons.date_range, size: 18),
-              label: Text(tr(context, 'Custom')),
-              selected: range.preset == null,
-              onSelected: (_) async {
-                final now = PelinesTime.now();
-                final first = range.startDate.isBefore(DateTime.utc(2000))
-                    ? range.startDate
-                    : DateTime(2000);
-                final last = DateTime(now.year, now.month, now.day);
-                final picked = await showDateRangePicker(
-                  context: context,
-                  firstDate: first,
-                  lastDate: range.endDate.isAfter(last) ? range.endDate : last,
-                  initialDateRange: DateTimeRange(
-                    start: range.startDate,
-                    end: range.endDate,
-                  ),
-                );
-                if (picked != null && context.mounted) {
-                  ref
-                      .read(analyticsRangeProvider.notifier)
-                      .selectCustom(picked.start, picked.end);
-                }
-              },
+    return PelinesCard(
+      key: const Key('analytics-filter-bar'),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          PelinesLocationSelector(
+            locationName:
+                location.value?.name ?? tr(context, 'Choose a location'),
+            onPressed: () => showModalBottomSheet<void>(
+              context: context,
+              isScrollControlled: true,
+              builder: (_) => const _LocationPicker(),
             ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Text(
-          '${date.format(range.startDate)} – ${date.format(range.endDate)} · Pacific',
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-      ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final entry in {
+                AnalyticsDatePreset.today: 'Today',
+                AnalyticsDatePreset.last7Days: '7 Days',
+                AnalyticsDatePreset.last30Days: '30 Days',
+                AnalyticsDatePreset.last90Days: '90 Days',
+              }.entries)
+                ChoiceChip(
+                  showCheckmark: false,
+                  selectedColor: PelinesColors.brandPrimary,
+                  backgroundColor: PelinesColors.card,
+                  side: const BorderSide(color: PelinesColors.border),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 12,
+                  ),
+                  key: Key('analytics-${entry.key.name}'),
+                  label: Text(
+                    tr(context, entry.value),
+                    style: TextStyle(
+                      color: range.preset == entry.key
+                          ? PelinesColors.card
+                          : PelinesColors.textPrimary,
+                    ),
+                  ),
+                  selected: range.preset == entry.key,
+                  onSelected: (_) => ref
+                      .read(analyticsRangeProvider.notifier)
+                      .selectPreset(entry.key),
+                ),
+              ChoiceChip(
+                showCheckmark: false,
+                selectedColor: PelinesColors.brandPrimary,
+                backgroundColor: PelinesColors.card,
+                side: const BorderSide(color: PelinesColors.border),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 12,
+                ),
+                key: const Key('analytics-custom'),
+                avatar: const Icon(Icons.date_range, size: 18),
+                label: Text(
+                  tr(context, 'Custom'),
+                  style: TextStyle(
+                    color: range.preset == null
+                        ? PelinesColors.card
+                        : PelinesColors.textPrimary,
+                  ),
+                ),
+                selected: range.preset == null,
+                onSelected: (_) async {
+                  final now = PelinesTime.now();
+                  final first = range.startDate.isBefore(DateTime.utc(2000))
+                      ? range.startDate
+                      : DateTime(2000);
+                  final last = DateTime(now.year, now.month, now.day);
+                  final picked = await showDateRangePicker(
+                    context: context,
+                    firstDate: first,
+                    lastDate: range.endDate.isAfter(last)
+                        ? range.endDate
+                        : last,
+                    initialDateRange: DateTimeRange(
+                      start: range.startDate,
+                      end: range.endDate,
+                    ),
+                  );
+                  if (picked != null && context.mounted) {
+                    ref
+                        .read(analyticsRangeProvider.notifier)
+                        .selectCustom(picked.start, picked.end);
+                  }
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '${date.format(range.startDate)} – ${date.format(range.endDate)} · Pacific',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      ),
     );
   }
 }
