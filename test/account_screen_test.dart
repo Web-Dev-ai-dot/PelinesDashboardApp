@@ -117,7 +117,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Discard'));
       await tester.pumpAndSettle();
-      expect(find.text('Profile'), findsOneWidget);
+      expect(find.byKey(const Key('profile-card')), findsOneWidget);
       expect(harness.account.updateCalls, 0);
     },
   );

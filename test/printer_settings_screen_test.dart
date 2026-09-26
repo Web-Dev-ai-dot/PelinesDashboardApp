@@ -1,3 +1,5 @@
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -34,6 +36,7 @@ class _Location extends CurrentLocationController {
 
 void main() {
   sqfliteFfiInit();
+  _block8PrinterTests();
   for (final (width, height, scale) in <(double, double, double)>[
     (390, 844, 1),
     (320, 700, 2),
@@ -393,10 +396,8 @@ void main() {
           expect(jobs.single.status, PrintJobStatus.submitted);
           await tester.drag(find.byType(ListView), const Offset(0, -900));
           await settle();
-          expect(
-            find.textContaining('TEST · test · Submitted'),
-            findsOneWidget,
-          );
+          expect(find.textContaining('TEST · test'), findsOneWidget);
+          expect(find.text('Submitted'), findsOneWidget);
           expect(find.text('Printed successfully'), findsNothing);
           runtime.adapter.delay = const Duration(milliseconds: 100);
           runtime.adapter.outcome = PrintOutcome.unknown;
@@ -446,5 +447,143 @@ class _Socket implements PrinterSocket {
   @override
   void destroy() {
     closed = true;
+  }
+}
+
+void _block8PrinterTests() {
+  for (final size in [
+    (390.0, 1.0),
+    (768.0, 1.0),
+    (1400.0, 1.0),
+    (320.0, 2.0),
+  ]) {
+    for (final lang in ['en', 'es']) {
+      testWidgets('printer sections and jobs ${size.$1} ${size.$2} $lang', (
+        tester,
+      ) async {
+        await tester.binding.setSurfaceSize(Size(size.$1, 1000));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        await tester.runAsync(() async {
+          final runtime = PrintingRuntime(
+            await openPrintingDatabase(
+              factory: databaseFactoryFfiNoIsolate,
+              path: inMemoryDatabasePath,
+            ),
+            connector: _Connector(),
+          );
+          await runtime.start();
+          for (final status in [
+            PrintJobStatus.unknown,
+            PrintJobStatus.failedBeforeSend,
+            PrintJobStatus.submitted,
+          ]) {
+            final now = DateTime.utc(2026, 9, 12);
+            await runtime.jobs.insert(
+              PrintJob(
+                id: status.name,
+                orderId: status.name,
+                locationId: 'location-id',
+                purpose: PrintPurpose.test,
+                status: status,
+                createdAt: now,
+                updatedAt: now,
+                printerId: 'fake',
+                ticket: const TicketBuilder().build(orderDetail()),
+                lastError: 'Backend diagnostic stays unchanged',
+              ),
+            );
+          }
+          final container = ProviderContainer(
+            overrides: [
+              printingRuntimeProvider.overrideWith((ref) async => runtime),
+              currentLocationProvider.overrideWith(_Location.new),
+            ],
+          );
+          Future<void> settle() async {
+            for (var i = 0; i < 8; i++) {
+              await Future<void>.delayed(const Duration(milliseconds: 10));
+              await tester.pump();
+            }
+            expect(tester.takeException(), isNull);
+          }
+
+          try {
+            await tester.pumpWidget(
+              UncontrolledProviderScope(
+                container: container,
+                child: MaterialApp(
+                  theme: AppTheme.light,
+                  locale: Locale(lang),
+                  supportedLocales: AdminLocalizations.supportedLocales,
+                  localizationsDelegates: const [
+                    AdminLocalizations.delegate,
+                    ...GlobalMaterialLocalizations.delegates,
+                  ],
+                  builder: (context, child) => MediaQuery(
+                    data: MediaQuery.of(context)
+                        .copyWith(textScaler: TextScaler.linear(size.$2)),
+                    child: child!,
+                  ),
+                  home: const PrinterSettingsScreen(),
+                ),
+              ),
+            );
+            await settle();
+            expect(find.text('Troutdale'), findsOneWidget);
+            expect(
+              find.byKey(const Key('printer-device-card')),
+              findsOneWidget,
+            );
+            for (final key in [
+              'printer-connection-card',
+              'printer-preferences-card',
+              'print-jobs-table',
+            ]) {
+              await tester.scrollUntilVisible(
+                find.byKey(Key(key)),
+                250,
+                scrollable: find.byType(Scrollable).first,
+                maxScrolls: 80,
+              );
+              await settle();
+            }
+            if (size.$1 == 1400) {
+              expect(find.byType(DataTable), findsOneWidget);
+            } else {
+              expect(
+                find.byKey(const Key('print-job-unknown')),
+                findsOneWidget,
+              );
+            }
+            expect(
+              find.textContaining('Backend diagnostic stays unchanged'),
+              findsWidgets,
+            );
+            final review = find.widgetWithText(
+              TextButton,
+              lang == 'es' ? 'Revisar' : 'Review',
+            );
+            await tester.ensureVisible(review);
+            await settle();
+            await tester.tap(review);
+            await settle();
+            expect(find.byType(AlertDialog), findsOneWidget);
+            Navigator.of(tester.element(find.byType(AlertDialog))).pop(false);
+            await settle();
+            expect(
+              (await runtime.jobs.list()).where(
+                (j) => j.status == PrintJobStatus.unknown,
+              ),
+              hasLength(1),
+            );
+            expect(runtime.adapter.printCalls, 0);
+          } finally {
+            await tester.pumpWidget(const SizedBox.shrink());
+            container.dispose();
+            await runtime.dispose();
+          }
+        });
+      });
+    }
   }
 }

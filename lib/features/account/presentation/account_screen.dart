@@ -1,3 +1,6 @@
+import '../../../app/theme/app_theme.dart';
+import '../../../app/theme/pelines_settings_content.dart';
+
 import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -18,7 +21,12 @@ class AccountScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final AsyncValue<AdminSession?> session = ref.watch(authControllerProvider);
     return Scaffold(
-      appBar: AdminAppBar(title:  Text(tr(context, 'Account'))),
+      appBar: AdminAppBar(
+        title: Text(
+          tr(context, 'My Profile'),
+          style: PelinesTypography.pageTitle(Theme.of(context).textTheme),
+        ),
+      ),
       body: session.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (Object error, StackTrace stack) => _AccountError(
@@ -28,7 +36,10 @@ class AccountScreen extends ConsumerWidget {
         data: (AdminSession? value) {
           if (value == null || value.email == null || value.email!.isEmpty) {
             return _AccountError(
-              message: tr(context, 'Your authenticated email is unavailable. Please sign in again.'),
+              message: tr(
+                context,
+                'Your authenticated email is unavailable. Please sign in again.',
+              ),
               onRetry: ref.read(authControllerProvider.notifier).retrySession,
             );
           }
@@ -50,26 +61,34 @@ class _AccountContent extends ConsumerWidget {
       child: ListView(
         padding: const EdgeInsets.all(PelinesSpacing.lg),
         children: <Widget>[
-           PelinesSectionHeading(tr(context, 'Profile')),
-          const SizedBox(height: PelinesSpacing.xs),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(PelinesSpacing.md),
-              child: Column(
-                children: <Widget>[
-                  _ProfileRow(tr(context, 'Full name'), _display(profile.fullName)),
-                  const Divider(),
+          PelinesSettingsCard(
+            key: const Key('profile-card'),
+            title: tr(context, 'My Profile'),
+            children: [
+              PelinesSettingsFields(
+                children: [
+                  _ProfileRow(
+                    tr(context, 'Full name'),
+                    _display(profile.fullName),
+                  ),
+                  _ProfileRow(
+                    tr(context, 'Email'),
+                    session.email!,
+                    helper: tr(context, 'Read-only'),
+                  ),
                   _ProfileRow(tr(context, 'Phone'), _display(profile.phone)),
-                  const Divider(),
-                  _ProfileRow(tr(context, 'Email'), session.email!, helper: tr(context, 'Read-only')),
-                  const Divider(),
-                   _ProfileRow(tr(context, 'Role'), tr(context, 'Admin'), helper: tr(context, 'Read-only')),
+                  _ProfileRow(
+                    tr(context, 'Role'),
+                    tr(context, 'Admin'),
+                    helper: tr(context, 'Read-only'),
+                  ),
                 ],
               ),
-            ),
+            ],
           ),
           const SizedBox(height: PelinesSpacing.md),
           FilledButton.icon(
+            style: PelinesControlStyles.button(PelinesButtonVariant.primary),
             key: const Key('edit-profile'),
             onPressed: () => Navigator.push<void>(
               context,
@@ -79,7 +98,7 @@ class _AccountContent extends ConsumerWidget {
               ),
             ),
             icon: const Icon(Icons.edit_outlined),
-            label:  Text(tr(context, 'Edit Profile')),
+            label: Text(tr(context, 'Edit Profile')),
           ),
         ],
       ),
@@ -144,42 +163,54 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       },
       child: Scaffold(
         appBar: AdminAppBar(
-          title:  Text(tr(context, 'Edit Profile')),
+          title: Text(
+            tr(context, 'Edit Profile'),
+            style: PelinesTypography.pageTitle(Theme.of(context).textTheme),
+          ),
           leading: IconButton(
             onPressed: operation.isBusy ? null : _leave,
             icon: const Icon(Icons.arrow_back),
           ),
         ),
         body: PelinesPageBody(
-          child: ListView(
+          child: PelinesSettingsForm(
             padding: const EdgeInsets.all(PelinesSpacing.lg),
             children: <Widget>[
-              TextField(
-                key: const Key('profile-full-name'),
-                controller: _name,
-                enabled: !operation.isBusy,
-                maxLength: 120,
-                decoration:  InputDecoration(
-                  labelText: tr(context, 'Full name'),
-                  border: OutlineInputBorder(),
-                ),
+              PelinesSettingsFields(
+                children: [
+                  TextField(
+                    key: const Key('profile-full-name'),
+                    controller: _name,
+                    enabled: !operation.isBusy,
+                    maxLength: 120,
+                    decoration: PelinesControlStyles.input(
+                      label: tr(context, 'Full name'),
+                    ),
+                  ),
+                  TextField(
+                    key: const Key('profile-phone'),
+                    controller: _phone,
+                    enabled: !operation.isBusy,
+                    maxLength: 40,
+                    keyboardType: TextInputType.phone,
+                    decoration: PelinesControlStyles.input(
+                      label: tr(context, 'Phone'),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: PelinesSpacing.sm),
-              TextField(
-                key: const Key('profile-phone'),
-                controller: _phone,
-                enabled: !operation.isBusy,
-                maxLength: 40,
-                keyboardType: TextInputType.phone,
-                decoration:  InputDecoration(
-                  labelText: tr(context, 'Phone'),
-                  border: OutlineInputBorder(),
-                ),
+              PelinesSettingsFields(
+                children: [
+                  PelinesReadOnlyField(
+                    label: tr(context, 'Email'),
+                    value: widget.email,
+                  ),
+                  PelinesReadOnlyField(
+                    label: tr(context, 'Role'),
+                    value: tr(context, 'Admin'),
+                  ),
+                ],
               ),
-              const SizedBox(height: PelinesSpacing.sm),
-              PelinesReadOnlyField(label: tr(context, 'Email'), value: widget.email),
-              const SizedBox(height: PelinesSpacing.sm),
-               PelinesReadOnlyField(label: tr(context, 'Role'), value: tr(context, 'Admin')),
               const SizedBox(height: PelinesSpacing.xl),
               if (desired.message != null)
                 Padding(
@@ -202,12 +233,27 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                     ),
                   ),
                 ),
+              OutlinedButton(
+                style: PelinesControlStyles.button(
+                  PelinesButtonVariant.secondary,
+                ),
+                onPressed: operation.isBusy ? null : _leave,
+                child: Text(tr(context, 'Cancel')),
+              ),
+              const SizedBox(height: 12),
               FilledButton(
+                style: PelinesControlStyles.button(
+                  PelinesButtonVariant.primary,
+                ),
                 key: const Key('profile-save'),
                 onPressed: operation.isBusy || !desired.isValid || !_dirty
                     ? null
                     : _save,
-                child: Text(operation.isBusy ? tr(context, 'Saving...') : tr(context, 'Save Changes')),
+                child: Text(
+                  operation.isBusy
+                      ? tr(context, 'Saving...')
+                      : tr(context, 'Save Changes'),
+                ),
               ),
               if (operation.isBusy)
                 const Padding(
@@ -247,6 +293,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                   child: const Text('Cancel'),
                 ),
                 FilledButton(
+                  style: PelinesControlStyles.button(
+                    PelinesButtonVariant.primary,
+                  ),
                   onPressed: () => Navigator.pop(dialogContext, true),
                   child: const Text('Reload'),
                 ),
@@ -289,6 +338,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                 child: const Text('Keep editing'),
               ),
               FilledButton(
+                style: PelinesControlStyles.button(
+                  PelinesButtonVariant.primary,
+                ),
                 onPressed: () => Navigator.pop(dialogContext, true),
                 child: const Text('Discard'),
               ),
@@ -307,33 +359,10 @@ class _ProfileRow extends StatelessWidget {
   final String? helper;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: PelinesSpacing.xs),
-    child: PelinesLabelValueRow(
-      label: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label.toUpperCase(),
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: PelinesColors.textSecondary,
-              letterSpacing: 0.5,
-            ),
-          ),
-          if (helper != null)
-            Text(
-              helper!,
-              style: Theme.of(context).textTheme.bodySmall
-                  ?.copyWith(color: PelinesColors.textSecondary),
-            ),
-        ],
-      ),
-      value: Text(
-        value,
-        style: Theme.of(context).textTheme.bodyLarge
-            ?.copyWith(fontWeight: FontWeight.w600),
-      ),
-    ),
+  Widget build(BuildContext context) => InputDecorator(
+    decoration: PelinesControlStyles.input(label: label)
+        .copyWith(helperText: helper),
+    child: Text(value, style: Theme.of(context).textTheme.bodyLarge),
   );
 }
 
@@ -353,7 +382,11 @@ class _AccountError extends StatelessWidget {
           const SizedBox(height: 12),
           Text(message, textAlign: TextAlign.center),
           const SizedBox(height: 16),
-          FilledButton(onPressed: onRetry, child:  Text(tr(context, 'Try again'))),
+          FilledButton(
+            style: PelinesControlStyles.button(PelinesButtonVariant.primary),
+            onPressed: onRetry,
+            child: Text(tr(context, 'Try again')),
+          ),
         ],
       ),
     ),

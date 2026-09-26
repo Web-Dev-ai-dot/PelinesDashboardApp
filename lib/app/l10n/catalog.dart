@@ -78,7 +78,16 @@ const spanishCatalog = <String, String>{
   "Order Volume": "Volumen de pedidos",
   "Operations": "Operaciones",
   "percentage points": "puntos porcentuales",
+  "Device": "Dispositivo",
+  "Connection": "Conexión",
+  "Purpose": "Propósito",
+  "Attempts": "Intentos",
+  "Created": "Creado",
+  "Details": "Detalles",
+  "Actions": "Acciones",
 
+  "Show password": "Mostrar contraseña",
+  "Hide password": "Ocultar contraseña",
 
   "promotion.Active": "Activa",
   "promotion.Inactive": "Inactiva",

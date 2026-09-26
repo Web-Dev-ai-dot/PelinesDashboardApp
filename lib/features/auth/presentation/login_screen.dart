@@ -1,3 +1,6 @@
+import '../../../app/theme/app_theme.dart';
+import '../../../app/theme/pelines_components.dart';
+
 import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -50,182 +53,174 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     return Scaffold(
       body: SafeArea(
         child: LayoutBuilder(
-          builder: (BuildContext context, BoxConstraints constraints) {
-            final double horizontalPadding = constraints.maxWidth < 360
-                ? PelinesSpacing.md
-                : PelinesSpacing.xl;
-            final double logoWidth = (constraints.maxWidth * 0.52)
-                .clamp(160.0, 240.0)
-                .toDouble();
-            return Center(
-              child: SingleChildScrollView(
-                padding: EdgeInsets.symmetric(
-                  horizontal: horizontalPadding,
-                  vertical: PelinesSpacing.xl,
-                ),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 480),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: <Widget>[
-                      Semantics(
-                        image: true,
-                        label: 'Pelines Tequila and Mezcal',
-                        child: Center(
-                          child: Image.asset(
-                            'assets/branding/pelines_logo.png',
-                            width: logoWidth,
-                            fit: BoxFit.contain,
-                          ),
-                        ),
+          builder: (context, constraints) => Center(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.symmetric(
+                horizontal: constraints.maxWidth < 400 ? 16 : 24,
+                vertical: 32,
+              ),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 560),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Semantics(
+                      image: true,
+                      label: 'Pelines Tequila and Mezcal',
+                      child: Image.asset(
+                        'assets/branding/pelines_logo.png',
+                        height: 80,
+                        fit: BoxFit.contain,
                       ),
-                      const SizedBox(height: PelinesSpacing.xl),
-                      Container(
-                        clipBehavior: Clip.antiAlias,
-                        decoration: BoxDecoration(
-                          color: PelinesColors.card,
-                          borderRadius: BorderRadius.circular(
-                            PelinesRadius.prominentCard,
-                          ),
-                          boxShadow: PelinesShadows.subtle,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: <Widget>[
-                            Container(
-                              height: PelinesSpacing.xxs,
-                              color: PelinesColors.brandYellow,
+                    ),
+                    const SizedBox(height: 24),
+                    Container(
+                      key: const Key('login-card'),
+                      clipBehavior: Clip.antiAlias,
+                      decoration: BoxDecoration(
+                        color: PelinesColors.card,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: PelinesShadows.subtle,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Padding(
+                            padding: EdgeInsets.all(
+                              constraints.maxWidth < 400 ? 20 : 40,
                             ),
-                            Padding(
-                              padding: const EdgeInsets.all(PelinesSpacing.xl),
-                              child: Form(
-                                key: _formKey,
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: <Widget>[
-                                    Text(
-                                      tr(context, 'Admin Dashboard'),
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .headlineMedium,
-                                      textAlign: TextAlign.center,
-                                    ),
-                                    const SizedBox(height: PelinesSpacing.xs),
-                                    Text(
-                                      tr(context, 'Administrator sign in'),
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodyMedium
-                                          ?.copyWith(
-                                            color: PelinesColors.textSecondary,
-                                          ),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                    const SizedBox(height: PelinesSpacing.xl),
-                                     _FieldLabel(tr(context, 'Email')),
-                                    const SizedBox(height: PelinesSpacing.xs),
-                                    TextFormField(
-                                      controller: _emailController,
-                                      enabled: !loading,
-                                      keyboardType: TextInputType.emailAddress,
-                                      textInputAction: TextInputAction.next,
-                                      autofillHints: const <String>[
-                                        AutofillHints.email,
-                                      ],
-                                      decoration:  InputDecoration(
-                                        hintText: tr(context, 'Enter your email address'),
+                            child: Form(
+                              key: _formKey,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Text(
+                                    tr(context, 'Sign In'),
+                                    key: const Key('login-title'),
+                                    style: PelinesTypography.pageTitle(
+                                      Theme.of(context).textTheme,
+                                    )?.copyWith(fontSize: 36),
+                                  ),
+                                  const SizedBox(height: 32),
+                                  _FieldLabel(tr(context, 'Email')),
+                                  const SizedBox(height: 8),
+                                  TextFormField(
+                                    key: const Key('login-email'),
+                                    controller: _emailController,
+                                    enabled: !loading,
+                                    keyboardType: TextInputType.emailAddress,
+                                    textInputAction: TextInputAction.next,
+                                    autofillHints: const [AutofillHints.email],
+                                    decoration: PelinesControlStyles.input(
+                                      variant: PelinesInputVariant.login,
+                                      hint: tr(
+                                        context,
+                                        'Enter your email address',
                                       ),
-                                      validator: (String? value) =>
-                                          value == null || value.trim().isEmpty
-                                          ? tr(context, 'Enter your email.')
-                                          : null,
                                     ),
-                                    const SizedBox(height: PelinesSpacing.md),
-                                     _FieldLabel(tr(context, 'Password')),
-                                    const SizedBox(height: PelinesSpacing.xs),
-                                    TextFormField(
-                                      controller: _passwordController,
-                                      enabled: !loading,
-                                      obscureText: _obscurePassword,
-                                      textInputAction: TextInputAction.done,
-                                      autofillHints: const <String>[
-                                        AutofillHints.password,
-                                      ],
-                                      onFieldSubmitted: loading
-                                          ? null
-                                          : (_) => _submit(),
-                                      decoration: InputDecoration(
-                                        hintText: tr(context, 'Enter your password'),
-                                        suffixIcon: IconButton(
-                                          onPressed: loading
-                                              ? null
-                                              : () => setState(
-                                                  () => _obscurePassword =
-                                                      !_obscurePassword,
-                                                ),
-                                          icon: Icon(
-                                            _obscurePassword
-                                                ? Icons.visibility_outlined
-                                                : Icons.visibility_off_outlined,
-                                          ),
-                                        ),
-                                      ),
-                                      validator: (String? value) =>
-                                          value == null || value.isEmpty
-                                          ? tr(context, 'Enter your password.')
-                                          : null,
-                                    ),
-                                    if (errorMessage != null) ...<Widget>[
-                                      const SizedBox(height: PelinesSpacing.md),
-                                      Container(
-                                        padding: const EdgeInsets.all(
-                                          PelinesSpacing.sm,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: PelinesColors.brandPrimarySoft,
-                                          borderRadius: BorderRadius.circular(
-                                            PelinesRadius.control,
-                                          ),
-                                          border: Border.all(
-                                            color: PelinesColors.brandPrimary
-                                                .withValues(alpha: 0.3),
-                                          ),
-                                        ),
-                                        child: Text(
-                                          errorMessage,
-                                          style: const TextStyle(
-                                            color: PelinesColors.destructive,
-                                          ),
-                                          textAlign: TextAlign.center,
-                                        ),
-                                      ),
+                                    validator: (value) =>
+                                        value == null || value.trim().isEmpty
+                                        ? tr(context, 'Enter your email.')
+                                        : null,
+                                  ),
+                                  const SizedBox(height: 20),
+                                  _FieldLabel(tr(context, 'Password')),
+                                  const SizedBox(height: 8),
+                                  TextFormField(
+                                    key: const Key('login-password'),
+                                    controller: _passwordController,
+                                    enabled: !loading,
+                                    obscureText: _obscurePassword,
+                                    textInputAction: TextInputAction.done,
+                                    autofillHints: const [
+                                      AutofillHints.password,
                                     ],
-                                    const SizedBox(height: PelinesSpacing.xl),
-                                    FilledButton(
-                                      onPressed: loading ? null : _submit,
-                                      child: loading
-                                          ? const SizedBox.square(
-                                              dimension: 20,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                              ),
-                                            )
-                                          :  Text(tr(context, 'Sign In')),
+                                    onFieldSubmitted: loading
+                                        ? null
+                                        : (_) => _submit(),
+                                    decoration:
+                                        PelinesControlStyles.input(
+                                          variant: PelinesInputVariant.login,
+                                          hint: tr(
+                                            context,
+                                            'Enter your password',
+                                          ),
+                                        ).copyWith(
+                                          suffixIcon: IconButton(
+                                            tooltip: tr(
+                                              context,
+                                              _obscurePassword
+                                                  ? 'Show password'
+                                                  : 'Hide password',
+                                            ),
+                                            onPressed: loading
+                                                ? null
+                                                : () => setState(
+                                                    () => _obscurePassword =
+                                                        !_obscurePassword,
+                                                  ),
+                                            icon: Icon(
+                                              _obscurePassword
+                                                  ? Icons.visibility_outlined
+                                                  : Icons
+                                                        .visibility_off_outlined,
+                                            ),
+                                          ),
+                                        ),
+                                    validator: (value) =>
+                                        value == null || value.isEmpty
+                                        ? tr(context, 'Enter your password.')
+                                        : null,
+                                  ),
+                                  if (errorMessage != null) ...[
+                                    const SizedBox(height: 20),
+                                    Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: PelinesColors.brandPrimarySoft,
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: PelinesColors.brandPrimary
+                                              .withValues(alpha: 0.3),
+                                        ),
+                                      ),
+                                      child: Text(
+                                        errorMessage,
+                                        style: const TextStyle(
+                                          color: PelinesColors.destructive,
+                                        ),
+                                      ),
                                     ),
                                   ],
-                                ),
+                                  const SizedBox(height: 32),
+                                  FilledButton(
+                                    key: const Key('login-submit'),
+                                    style: PelinesControlStyles.button(
+                                      PelinesButtonVariant.primary,
+                                    ),
+                                    onPressed: loading ? null : _submit,
+                                    child: PelinesButtonLabel(
+                                      busy: loading,
+                                      label: tr(context, 'Sign In'),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                          ],
-                        ),
+                          ),
+                          Container(
+                            key: const Key('login-yellow-band'),
+                            height: 24,
+                            color: PelinesColors.brandYellow,
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
-            );
-          },
+            ),
+          ),
         ),
       ),
     );
@@ -233,13 +228,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   String _messageFor(Object error) {
     return switch (error) {
-      AdminAccessDeniedException() =>
+      AdminAccessDeniedException() => tr(
+        context,
         'This account does not have administrator access.',
-      AuthRetryableFetchException() =>
+      ),
+      AuthRetryableFetchException() => tr(
+        context,
         'Could not reach Supabase. Check your connection and try again.',
-      AuthException() => 'The email or password is incorrect.',
+      ),
+      AuthException() => tr(context, 'The email or password is incorrect.'),
       ApiException() => error.message,
-      _ => 'Sign in failed. Please try again.',
+      _ => tr(context, 'Sign in failed. Please try again.'),
     };
   }
 }
