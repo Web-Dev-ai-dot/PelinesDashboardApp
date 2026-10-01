@@ -10,6 +10,8 @@ import '../models/catering_delivery.dart';
 import '../models/auto_accept.dart';
 import '../models/auto_cancellation.dart';
 import 'auto_cancellation_repository.dart';
+import 'pickup_preferences_repository.dart';
+import '../models/pickup_service_preferences.dart';
 
 class LocationSettingsConflict implements Exception {
   const LocationSettingsConflict(this.canonical);
@@ -59,7 +61,10 @@ abstract interface class LocationsRepository {
 }
 
 class ApiLocationsRepository
-    implements LocationsRepository, AutoCancellationRepository {
+    implements
+        LocationsRepository,
+        AutoCancellationRepository,
+        PickupPreferencesRepository {
   ApiLocationsRepository(this._client);
 
   final ApiClient _client;
@@ -301,6 +306,45 @@ class ApiLocationsRepository
     }
     if (rule.sameAs(original)) return canonical;
     final next = rule.mergeInto(canonical.servicePrefsJson, original, kind);
+    return _locationRequest(
+      () => _client.dio.patch<dynamic>(
+        'locations/$locationId',
+        data: <String, dynamic>{'servicePrefsJson': next},
+      ),
+    );
+  }
+
+  @override
+  Future<Location> savePickupPreferences({
+    required String locationId,
+    required DateTime originalUpdatedAt,
+    required PickupOrderKind kind,
+    required PickupServicePreferences original,
+    required PickupServicePreferences preferences,
+    required bool Function() canWrite,
+  }) async {
+    final validation = preferences.validate();
+    if (validation != null) throw ArgumentError(validation);
+    final canonical = await getLocation(locationId);
+    if (!canWrite()) {
+      throw const ApiException(
+        message: 'The selected location changed. No change was sent.',
+      );
+    }
+    if (canonical.updatedAt != originalUpdatedAt ||
+        !PickupServicePreferences.fromJson(
+          canonical.servicePrefsJson,
+          kind,
+        ).sameAs(original)) {
+      throw LocationSettingsConflict(canonical);
+    }
+    if (preferences.sameAs(original)) return canonical;
+    final next = preferences.mergeInto(
+      canonical.servicePrefsJson,
+      original,
+      kind,
+    );
+    // Local preflight only: the backend does not support atomic If-Match.
     return _locationRequest(
       () => _client.dio.patch<dynamic>(
         'locations/$locationId',

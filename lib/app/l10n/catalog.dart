@@ -1,8 +1,14 @@
 // English source messages and their Spanish UI translations. Backend values are never catalog keys.
 const spanishCatalog = <String, String>{
   'Mute': 'Silenciar',
-  "Not enforced yet": "Aún no aplicado",
-  "These settings are shown for interface review. They are not currently enforced when orders are placed.": "Estos ajustes se muestran para revisión de la interfaz. Actualmente no se aplican al realizar pedidos.",
+  "0 = No minimum": "0 = Sin compra mínima",
+  "0 = No daily limit": "0 = Sin límite diario",
+  "Save Regular": "Guardar pedidos regulares",
+  "Save Catering": "Guardar catering",
+  "These service preferences have an unsupported format. Reload before editing.": "Estas preferencias de servicio tienen un formato no compatible. Recarga antes de editar.",
+  "The service preference change could not be confirmed. Reload before retrying.": "No se pudo confirmar el cambio de preferencias de servicio. Recarga antes de reintentar.",
+  "Service preferences saved.": "Preferencias de servicio guardadas.",
+  "Service preferences could not be saved.": "No se pudieron guardar las preferencias de servicio.",
   "Accept regular orders": "Aceptar pedidos regulares",
   "Accept catering orders": "Aceptar pedidos de catering",
   "Minimum purchase": "Compra mínima",

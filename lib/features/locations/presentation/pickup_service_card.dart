@@ -12,7 +12,7 @@ import '../providers/locations_providers.dart';
 import '../providers/service_preferences_write_lock.dart';
 import 'auto_accept_screen.dart';
 import 'operations_parity_widgets.dart';
-import 'pickup_preferences_preview.dart';
+import 'pickup_preferences_editor.dart';
 
 class PickupServiceCard extends ConsumerStatefulWidget {
   const PickupServiceCard({
@@ -85,9 +85,9 @@ class _PickupServiceCardState extends ConsumerState<PickupServiceCard> {
       key: Key('pickup-$_kind-card'),
       title: tr(context, title),
       children: [
-        PickupPreferencesPreview(
-          regular: widget.kind == PickupOrderKind.regular,
-          preferences: widget.location.servicePrefsJson,
+        PickupPreferencesEditor(
+          kind: widget.kind,
+          location: widget.location,
           autoAccept: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
