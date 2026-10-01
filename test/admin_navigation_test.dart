@@ -1,4 +1,12 @@
 import 'package:flutter/material.dart';
+
+import 'dart:async';
+import 'dart:ui' show SemanticsAction;
+
+import 'package:flutter/gestures.dart';
+import 'package:flutter/services.dart';
+import 'package:pelines_admin_app/app/navigation/navigation_preferences.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'package:pelines_admin_app/app/l10n/locale_controller.dart';
@@ -8,6 +16,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pelines_admin_app/app/navigation/admin_navigation.dart';
 import 'package:pelines_admin_app/app/theme/app_theme.dart';
+import 'package:pelines_admin_app/app/theme/pelines_tokens.dart';
 import 'package:pelines_admin_app/features/auth/providers/auth_providers.dart';
 import 'package:pelines_admin_app/features/auth/providers/auth_controller.dart';
 import 'package:pelines_admin_app/features/auth/models/admin_session.dart';
@@ -19,6 +28,30 @@ import 'package:pelines_admin_app/features/locations/presentation/pelines_locati
 import 'package:pelines_admin_app/features/locations/models/location.dart';
 import 'package:pelines_admin_app/features/locations/providers/locations_providers.dart';
 import 'package:pelines_admin_app/features/locations/data/location_selection_store.dart';
+
+class _NavigationStore implements NavigationPreferencesStore {
+  bool? value;
+  @override
+  Future<bool?> readCollapsed() async => value;
+  @override
+  Future<void> writeCollapsed(bool collapsed) async {
+    value = collapsed;
+  }
+}
+
+class _DelayedNavigationStore extends _NavigationStore {
+  final read = Completer<bool?>();
+  final firstWrite = Completer<void>();
+  final writes = <bool>[];
+  @override
+  Future<bool?> readCollapsed() => read.future;
+  @override
+  Future<void> writeCollapsed(bool collapsed) async {
+    writes.add(collapsed);
+    if (writes.length == 1) await firstWrite.future;
+    value = collapsed;
+  }
+}
 
 class _LanguageStore implements LanguageStore {
   String value = 'en';
@@ -209,10 +242,14 @@ Future<void> _pump(
   _SelectionStore? selectionStore,
   _LanguageStore? languageStore,
   _Auth? auth,
+  NavigationPreferencesStore? navigationStore,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        navigationPreferencesStoreProvider.overrideWithValue(
+          navigationStore ?? _NavigationStore(),
+        ),
         languageStoreProvider.overrideWithValue(
           languageStore ?? _LanguageStore(),
         ),
@@ -258,6 +295,24 @@ Future<void> _showDestination(WidgetTester tester, String name) async {
   tester.state<ScrollableState>(scroll).position.jumpTo(0);
   await tester.pumpAndSettle();
   final button = find.byKey(Key('nav-$name'));
+  if (find.byKey(const Key('admin-rail')).evaluate().isNotEmpty &&
+      name != 'orders') {
+    final group =
+        ['upcoming', 'calendar', 'completed', 'cancelled'].contains(name)
+        ? 'orders'
+        : ['analytics', 'account'].contains(name)
+        ? name
+        : 'store';
+    if (button.evaluate().isEmpty) {
+      final header = find.byKey(Key('nav-group-$group'));
+      await tester.scrollUntilVisible(header, 150, scrollable: scroll);
+      await tester.tap(header);
+      await tester.pumpAndSettle();
+    }
+    await Scrollable.ensureVisible(tester.element(button), alignment: .5);
+    await tester.pumpAndSettle();
+    return;
+  }
   if (find.byKey(const Key('admin-rail')).evaluate().isEmpty &&
       button.evaluate().isEmpty) {
     final group =
@@ -274,6 +329,8 @@ Future<void> _showDestination(WidgetTester tester, String name) async {
         : 'store';
     final header = find.byKey(Key('nav-group-$group'));
     await tester.scrollUntilVisible(header, 150, scrollable: scroll);
+    await tester.ensureVisible(header);
+    await tester.pumpAndSettle();
     // Scrolling can rebuild an already-expanded group previously offscreen.
     if (button.evaluate().isEmpty) {
       await tester.tap(header);
@@ -292,6 +349,304 @@ Future<void> _tapDestination(WidgetTester tester, String name) async {
 }
 
 void main() {
+  test(
+    'navigation uses local SharedPreferences and restores its value',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final store = LocalNavigationPreferencesStore();
+      expect(await store.readCollapsed(), null);
+      await store.writeCollapsed(true);
+      expect(await LocalNavigationPreferencesStore().readCollapsed(), true);
+      await store.writeCollapsed(false);
+      expect(await LocalNavigationPreferencesStore().readCollapsed(), false);
+      SharedPreferences.setMockInitialValues({});
+    },
+  );
+  test(
+    'late load cannot override manual choice; rapid writes stay ordered',
+    () async {
+      final store = _DelayedNavigationStore();
+      final container = ProviderContainer(
+        overrides: [
+          navigationPreferencesStoreProvider.overrideWithValue(store),
+        ],
+      );
+      addTearDown(container.dispose);
+      expect(container.read(navigationCollapsedProvider), null);
+      final controller = container.read(navigationCollapsedProvider.notifier);
+      final first = controller.select(true);
+      final last = controller.select(false);
+      store.read.complete(true);
+      await Future<void>.delayed(Duration.zero);
+      expect(container.read(navigationCollapsedProvider), false);
+      expect(store.writes, [true]);
+      store.firstWrite.complete();
+      await Future.wait([first, last]);
+      expect(store.writes, [true, false]);
+      expect(store.value, false);
+    },
+  );
+  testWidgets(
+    'manual preference survives widths and remount; phone ignores it',
+    (tester) async {
+      final store = _NavigationStore();
+      final router = _router(initial: '/app?view=upcoming');
+      addTearDown(router.dispose);
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.binding.setSurfaceSize(const Size(1200, 1000));
+      await _pump(tester, router, navigationStore: store);
+      expect(find.byKey(const Key('admin-sidebar')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('admin-toggle-navigation')));
+      await tester.pumpAndSettle();
+      expect(store.value, true);
+      expect(
+        router.routeInformationProvider.value.uri.toString(),
+        '/app?view=upcoming',
+      );
+      await tester.binding.setSurfaceSize(const Size(768, 1000));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('admin-rail')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('admin-toggle-navigation')));
+      await tester.pumpAndSettle();
+      expect(store.value, false);
+      await tester.binding.setSurfaceSize(const Size(1200, 1000));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('admin-sidebar')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('admin-toggle-navigation')));
+      await tester.pumpAndSettle();
+      await tester.pumpWidget(const SizedBox());
+      await _pump(tester, router, navigationStore: store);
+      expect(find.byKey(const Key('admin-rail')), findsOneWidget);
+      await tester.binding.setSurfaceSize(const Size(390, 1000));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('admin-rail')), findsNothing);
+      await tester.tap(find.byKey(const Key('admin-open-drawer')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('admin-toggle-navigation')), findsNothing);
+      expect(find.byKey(const Key('nav-group-orders')), findsOneWidget);
+      expect(find.byKey(const Key('nav-upcoming')), findsOneWidget);
+      expect(store.value, true);
+    },
+  );
+  for (final width in [768.0, 1024.0, 1366.0]) {
+    for (final language in ['en', 'es']) {
+      testWidgets(
+        'five rail categories and all touch flyouts $width/$language 2x',
+        (tester) async {
+          await tester.binding.setSurfaceSize(
+            Size(width, width == 1024 ? 768 : 1024),
+          );
+          addTearDown(() => tester.binding.setSurfaceSize(null));
+          final router = _router(initial: '/app?view=upcoming');
+          addTearDown(router.dispose);
+          await _pump(
+            tester,
+            router,
+            scale: 2,
+            navigationStore: _NavigationStore()..value = true,
+            languageStore: _LanguageStore()..value = language,
+          );
+          const groups = {
+            'orders': ['upcoming', 'calendar', 'completed', 'cancelled'],
+            'analytics': ['analytics'],
+            'store': [
+              'menu',
+              'regularMenu',
+              'operations',
+              'promotions',
+              'pickup',
+              'delivery',
+              'printing',
+            ],
+            'account': ['account'],
+          };
+          final positions = <double>[];
+          final semantics = tester.ensureSemantics();
+          await tester.pump();
+          for (final id in [
+            'orders',
+            'group-orders',
+            'group-analytics',
+            'group-store',
+            'group-account',
+          ]) {
+            final finder = find.byKey(Key('nav-$id'));
+            positions.add(tester.getTopLeft(finder).dy);
+            expect(tester.getSize(finder).height, greaterThanOrEqualTo(48));
+            expect(tester.getSize(finder).width, greaterThanOrEqualTo(48));
+            expect(tester.widget<IconButton>(finder).tooltip, isNotEmpty);
+            expect(
+              tester
+                  .getSemantics(find.byKey(Key('nav-semantics-$id')))
+                  .getSemanticsData()
+                  .label,
+              contains(tester.widget<IconButton>(finder).tooltip!),
+            );
+          }
+          expect(positions, orderedEquals([...positions]..sort()));
+          semantics.dispose();
+          expect(find.byTooltip('employee@pelines.test'), findsOneWidget);
+          for (final entry in groups.entries) {
+            await tester.tap(find.byKey(Key('nav-group-${entry.key}')));
+            await tester.pumpAndSettle();
+            final header = find.byKey(Key('nav-flyout-${entry.key}'));
+            expect(header.hitTestable(), findsOneWidget);
+            final title = tester.widget<Text>(
+              find.descendant(of: header, matching: find.byType(Text)),
+            );
+            expect(
+              title.data,
+              tester
+                  .widget<IconButton>(find.byKey(Key('nav-group-${entry.key}')))
+                  .tooltip,
+            );
+            expect(title.style!.color, PelinesColors.textSecondary);
+            expect(title.style!.fontWeight, FontWeight.w600);
+            final headerSemantics = tester.ensureSemantics();
+            try {
+              await tester.pump();
+              final data = tester.getSemantics(header).getSemanticsData();
+              expect(data.flagsCollection.isHeader, isTrue);
+              expect(data.flagsCollection.isButton, isFalse);
+              expect(data.hasAction(SemanticsAction.tap), isFalse);
+            } finally {
+              headerSemantics.dispose();
+            }
+            expect(
+              find.descendant(of: header, matching: find.byType(MouseRegion)),
+              findsNothing,
+            );
+            await tester.tap(header);
+            await tester.pumpAndSettle();
+            expect(header, findsOneWidget);
+            expect(
+              router.routeInformationProvider.value.uri.toString(),
+              '/app?view=upcoming',
+            );
+            final ys = <double>[];
+            for (final id in entry.value) {
+              final item = find.byKey(Key('nav-$id'));
+              expect(item, findsOneWidget);
+              ys.add(tester.getTopLeft(item).dy);
+              expect(tester.getSize(item).height, greaterThanOrEqualTo(48));
+              await Scrollable.ensureVisible(tester.element(item));
+              await tester.pumpAndSettle();
+              expect(item.hitTestable(), findsOneWidget);
+              final rect = tester.getRect(item);
+              expect(rect.left, greaterThanOrEqualTo(76));
+              expect(rect.right, lessThanOrEqualTo(width));
+            }
+            expect(ys, orderedEquals([...ys]..sort()));
+            expect(
+              router.routeInformationProvider.value.uri.toString(),
+              '/app?view=upcoming',
+            );
+            await tester.tapAt(Offset(width - 20, 600));
+            await tester.pumpAndSettle();
+            expect(find.byKey(Key('nav-flyout-${entry.key}')), findsNothing);
+            expect(tester.takeException(), isNull);
+          }
+          await _tapDestination(tester, 'pickup');
+          expect(
+            router.routeInformationProvider.value.uri.path,
+            '/app/store/pickup-settings',
+          );
+          expect(find.byKey(const Key('nav-flyout-store')), findsNothing);
+          await _showDestination(tester, 'pickup');
+          final selected = find.byWidgetPredicate(
+            (w) => w is Semantics && w.properties.selected == true,
+          );
+          for (final id in ['group-store', 'pickup']) {
+            expect(
+              find.descendant(
+                of: selected,
+                matching: find.byKey(Key('nav-$id')),
+              ),
+              findsOneWidget,
+            );
+          }
+        },
+      );
+    }
+  }
+  testWidgets('hover, group switching, Escape and keyboard activation', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1200, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final router = _router();
+    addTearDown(router.dispose);
+    await _pump(
+      tester,
+      router,
+      navigationStore: _NavigationStore()..value = true,
+    );
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: const Offset(1000, 700));
+    await mouse.moveTo(
+      tester.getCenter(find.byKey(const Key('nav-group-orders'))),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('nav-flyout-orders')), findsOneWidget);
+    await mouse.moveTo(
+      tester.getCenter(find.byKey(const Key('nav-group-store'))),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('nav-flyout-orders')), findsNothing);
+    expect(find.byKey(const Key('nav-flyout-store')), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('nav-flyout-store')), findsNothing);
+    await mouse.removePointer();
+    final focus = find
+        .descendant(
+          of: find.byKey(const Key('nav-group-account')),
+          matching: find.byType(Focus),
+        )
+        .first;
+    tester.widget<Focus>(focus).focusNode!.requestFocus();
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('nav-flyout-account')), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(router.routeInformationProvider.value.uri.path, '/app/account');
+    expect(find.byKey(const Key('nav-flyout-account')), findsNothing);
+  });
+  testWidgets(
+    'collapsed location and logout keep current providers and guards',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(768, 1100));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final router = _router(initial: '/app/menu/catering/edit');
+      addTearDown(router.dispose);
+      final location = _SelectionStore();
+      final auth = _Auth();
+      await _pump(tester, router, selectionStore: location, auth: auth);
+      await tester.enterText(find.byType(TextField), 'Keep draft');
+      await tester.tap(find.byKey(const Key('location-selector')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Keep editing'));
+      await tester.pumpAndSettle();
+      expect(location.value, 'Troutdale');
+      await tester.tap(find.byKey(const Key('location-selector')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Discard'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ListTile, 'Tualatin'));
+      await tester.pumpAndSettle();
+      expect(location.value, 'Tualatin');
+      expect(find.byTooltip('Tualatin'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('admin-sign-out')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('logout-confirm')));
+      await tester.pumpAndSettle();
+      expect(auth.signOutCalls, 1);
+    },
+  );
   for (final lang in ['en', 'es']) {
     testWidgets('Store exact order, labels and navigation $lang', (
       tester,
@@ -767,7 +1122,8 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await _pump(tester, router, languageStore: store);
     expect(find.byTooltip('Idioma'), findsOneWidget);
-    expect(find.byTooltip('Calendario'), findsOneWidget);
+    await _showDestination(tester, 'calendar');
+    expect(find.text('Calendario'), findsOneWidget);
   });
   test(
     'Analytics is between Orders and Calendar and resolves its selected state',
@@ -807,6 +1163,7 @@ void main() {
       await _tapDestination(tester, 'analytics');
       expect(router.routeInformationProvider.value.uri.path, '/app/analytics');
       await openDrawer();
+      await _showDestination(tester, 'analytics');
       final selected = find.byWidgetPredicate(
         (w) => w is Semantics && w.properties.selected == true,
       );
@@ -864,13 +1221,13 @@ void main() {
         for (final destination in AdminDestination.values) {
           await _showDestination(tester, destination.name);
           final item = find.byKey(Key('nav-${destination.name}'));
-          final label = width < 600 && destination == AdminDestination.orders
+          final label = destination == AdminDestination.orders
               ? tr(tester.element(item), 'To Do')
-              : destination == AdminDestination.account &&
-                    find.byKey(const Key('admin-rail')).evaluate().isEmpty
+              : destination == AdminDestination.account
               ? tr(tester.element(item), 'My Profile')
               : destination.localizedLabel(tester.element(item));
-          if (find.byKey(const Key('admin-rail')).evaluate().isNotEmpty) {
+          if (find.byKey(const Key('admin-rail')).evaluate().isNotEmpty &&
+              destination == AdminDestination.orders) {
             expect(find.byTooltip(label), findsOneWidget);
           } else {
             expect(
@@ -971,11 +1328,7 @@ void main() {
       final selected = find.byWidgetPredicate(
         (widget) => widget is Semantics && widget.properties.selected == true,
       );
-      await tester.scrollUntilVisible(
-        find.byKey(const Key('nav-menu')),
-        150,
-        scrollable: find.byType(Scrollable).first,
-      );
+      await _showDestination(tester, 'menu');
       expect(
         find.descendant(
           of: selected,

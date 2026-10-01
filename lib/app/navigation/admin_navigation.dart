@@ -3,6 +3,7 @@ import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -11,6 +12,7 @@ import '../../features/locations/providers/locations_providers.dart';
 import '../../features/locations/presentation/pelines_location_selector.dart';
 import '../theme/pelines_tokens.dart';
 import '../l10n/language_toggle.dart';
+import 'navigation_preferences.dart';
 
 enum AdminDestination {
   orders('/app', 'Orders', Icons.receipt_long_outlined),
@@ -296,8 +298,6 @@ class AdminNavigationShell extends ConsumerStatefulWidget {
 class _AdminNavigationShellState extends ConsumerState<AdminNavigationShell> {
   final _scaffold = GlobalKey<ScaffoldState>();
   bool _busy = false;
-  bool _expandRail = false;
-  bool _collapseSidebar = false;
   Future<void> _changeLocation() async {
     _scaffold.currentState?.closeDrawer();
     if (_busy) return;
@@ -353,9 +353,11 @@ class _AdminNavigationShellState extends ConsumerState<AdminNavigationShell> {
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
       final compact = constraints.maxWidth < PelinesLayout.compactWidth;
-      // A full sidebar must leave at least 640 logical pixels for content.
+      // Default to a rail below 900px to leave room for tablet content. A saved
+      // manual choice overrides this default at every permanent-panel width.
       final tablet = constraints.maxWidth - 260 < 640;
-      final rail = !compact && (tablet ? !_expandRail : _collapseSidebar);
+      final rail =
+          !compact && (ref.watch(navigationCollapsedProvider) ?? tablet);
       final navWidth = rail ? 76.0 : 260.0;
       Widget navigation() => _AdminDestinationList(
         rail: rail,
@@ -370,13 +372,9 @@ class _AdminNavigationShellState extends ConsumerState<AdminNavigationShell> {
         onChangeLocation: _changeLocation,
         onToggle: compact
             ? null
-            : () => setState(() {
-                if (tablet) {
-                  _expandRail = !_expandRail;
-                } else {
-                  _collapseSidebar = !_collapseSidebar;
-                }
-              }),
+            : () => unawaited(
+                ref.read(navigationCollapsedProvider.notifier).select(!rail),
+              ),
       );
       return _NavigationScope(
         controller: widget.controller,
@@ -401,12 +399,7 @@ class _AdminNavigationShellState extends ConsumerState<AdminNavigationShell> {
             bottom: false,
             child: Row(
               children: [
-                if (!compact)
-                  SizedBox(
-                    key: Key(rail ? 'admin-rail' : 'admin-sidebar'),
-                    width: navWidth,
-                    child: navigation(),
-                  ),
+                if (!compact) SizedBox(width: navWidth, child: navigation()),
                 Expanded(
                   child: Column(
                     children: [
@@ -419,7 +412,13 @@ class _AdminNavigationShellState extends ConsumerState<AdminNavigationShell> {
                           alignment: Alignment.topCenter,
                           child: ConstrainedBox(
                             constraints: const BoxConstraints(maxWidth: 1400),
-                            child: widget.child,
+                            // Keep the nested route's BlockSemantics inside
+                            // content so it cannot hide the persistent nav.
+                            child: Semantics(
+                              container: true,
+                              explicitChildNodes: true,
+                              child: widget.child,
+                            ),
                           ),
                         ),
                       ),
@@ -579,6 +578,38 @@ class _AdminDestinationListState extends ConsumerState<_AdminDestinationList> {
     AdminDestination.printing,
   ];
   final Map<String, bool> _open = {};
+  final Map<String, FocusNode> _menuFocus = {};
+  final Map<String, FocusNode> _firstItemFocus = {};
+
+  @override
+  void initState() {
+    super.initState();
+    HardwareKeyboard.instance.addHandler(_dismissFlyout);
+  }
+
+  // Hover need not steal focus from the page. Still allow Escape to dismiss
+  // its overlay even when keyboard focus remains outside the menu.
+  bool _dismissFlyout(KeyEvent event) {
+    if (event is KeyDownEvent &&
+        event.logicalKey == LogicalKeyboardKey.escape &&
+        _menus.values.any((menu) => menu.isOpen)) {
+      _closeMenus();
+      return true;
+    }
+    return false;
+  }
+
+  @override
+  void dispose() {
+    HardwareKeyboard.instance.removeHandler(_dismissFlyout);
+    for (final node in _menuFocus.values) {
+      node.dispose();
+    }
+    for (final node in _firstItemFocus.values) {
+      node.dispose();
+    }
+    super.dispose();
+  }
 
   // A 36px painted row inside a 48px hit area; large text grows naturally.
   Widget _mobileRow({
@@ -674,98 +705,119 @@ class _AdminDestinationListState extends ConsumerState<_AdminDestinationList> {
     if (widget.selected != oldWidget.selected ||
         widget.upcoming != oldWidget.upcoming) {
       _open.clear();
+      _closeMenus();
     }
   }
 
+  final Map<String, MenuController> _menus = {};
+
+  void _closeMenus({String? except}) {
+    for (final entry in _menus.entries) {
+      if (entry.key != except && entry.value.isOpen) entry.value.close();
+    }
+  }
+
+  bool _active(String id, List<AdminDestination> children) => id == 'orders'
+      ? widget.upcoming ||
+            children
+                .where((d) => d != AdminDestination.orders)
+                .contains(widget.selected)
+      : children.contains(widget.selected);
+
+  Widget _railIcon(
+    String id,
+    String label,
+    IconData icon,
+    bool selected,
+    VoidCallback onTap, {
+    FocusNode? focusNode,
+  }) => MergeSemantics(
+    child: Semantics(
+      key: Key('nav-semantics-$id'),
+      label: label,
+      selected: selected,
+      child: IconButton(
+        focusNode: focusNode,
+        key: Key('nav-$id'),
+        tooltip: label,
+        style: IconButton.styleFrom(
+          minimumSize: const Size(48, 48),
+          backgroundColor: selected
+              ? PelinesColors.brandPrimarySoft
+              : Colors.transparent,
+          foregroundColor: selected
+              ? PelinesColors.brandPrimary
+              : PelinesColors.textPrimary,
+        ),
+        onPressed: widget.busy ? null : onTap,
+        icon: Icon(icon, size: 20),
+      ),
+    ),
+  );
+
   Widget _destination(AdminDestination destination, {bool nested = false}) {
-    final label = nested && destination == AdminDestination.account
+    final todo = destination == AdminDestination.orders;
+    final label = todo
+        ? tr(context, 'To Do')
+        : destination == AdminDestination.account
         ? tr(context, 'My Profile')
         : destination.localizedLabel(context);
-    if (widget.phone) {
-      return _mobileRow(
-        id: destination.name,
-        label: destination == AdminDestination.orders
-            ? tr(context, 'To Do')
-            : label,
-        icon: destination == AdminDestination.orders
-            ? Icons.checklist_outlined
-            : destination.icon,
-        selected:
-            widget.selected == destination &&
-            (destination != AdminDestination.orders || !widget.upcoming),
-        nested: nested,
-        onTap: () => widget.onNavigate(destination),
+    final selected =
+        widget.selected == destination && (!todo || !widget.upcoming);
+    void navigate() {
+      _closeMenus();
+      widget.onNavigate(destination);
+    }
+
+    if (widget.rail) {
+      return _railIcon(
+        destination.name,
+        label,
+        Icons.checklist_outlined,
+        selected,
+        navigate,
       );
     }
-    final selected = widget.selected == destination;
-    final color = selected
-        ? PelinesColors.brandPrimary
-        : PelinesColors.textPrimary;
-    final control = Semantics(
+    return _mobileRow(
+      id: destination.name,
+      label: label,
+      icon: todo ? Icons.checklist_outlined : destination.icon,
       selected: selected,
-      button: true,
-      label: widget.rail ? label : null,
-      child: Material(
-        color: selected && !nested
-            ? PelinesColors.brandPrimarySoft
-            : Colors.transparent,
-        borderRadius: BorderRadius.circular(PelinesRadius.pill),
-        child: InkWell(
-          key: Key('nav-${destination.name}'),
-          borderRadius: BorderRadius.circular(PelinesRadius.pill),
-          onTap: widget.busy ? null : () => widget.onNavigate(destination),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 48, minWidth: 48),
-            child: Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: widget.rail ? 0 : 12,
-                vertical: 10,
-              ),
-              child: widget.rail
-                  ? Icon(destination.icon, size: 18, color: color)
-                  : Row(
-                      children: [
-                        if (!nested)
-                          Icon(destination.icon, size: 18, color: color)
-                        else
-                          SizedBox(
-                            width: 6,
-                            child: selected
-                                ? Container(
-                                    width: 6,
-                                    height: 6,
-                                    decoration: const BoxDecoration(
-                                      color: PelinesColors.brandPrimary,
-                                      shape: BoxShape.circle,
-                                    ),
-                                  )
-                                : null,
-                          ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            label,
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: color,
-                              fontWeight: selected
-                                  ? FontWeight.w600
-                                  : FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-            ),
-          ),
-        ),
-      ),
-    );
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: widget.rail ? Tooltip(message: label, child: control) : control,
+      nested: nested,
+      onTap: navigate,
     );
   }
+
+  Widget _flyoutItem(
+    String id,
+    String label,
+    bool active,
+    VoidCallback navigate, {
+    FocusNode? focusNode,
+  }) => Semantics(
+    selected: active,
+    child: MenuItemButton(
+      focusNode: focusNode,
+      key: Key('nav-$id'),
+      onPressed: widget.busy
+          ? null
+          : () {
+              _closeMenus();
+              navigate();
+            },
+      style: MenuItemButton.styleFrom(
+        minimumSize: const Size(48, 48),
+        foregroundColor: active
+            ? PelinesColors.brandPrimary
+            : PelinesColors.textPrimary,
+        backgroundColor: active
+            ? PelinesColors.brandPrimarySoft
+            : Colors.transparent,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      ),
+      child: SizedBox(width: 232, child: Text(label, softWrap: true)),
+    ),
+  );
 
   Widget _group(
     String id,
@@ -773,109 +825,135 @@ class _AdminDestinationListState extends ConsumerState<_AdminDestinationList> {
     IconData icon,
     List<AdminDestination> children,
   ) {
-    if (widget.phone) {
-      final active = id == 'orders'
-          ? widget.upcoming ||
-                children
-                    .where((d) => d != AdminDestination.orders)
-                    .contains(widget.selected)
-          : children.contains(widget.selected);
-      final open = _open[id] ?? active;
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Semantics(
-            expanded: open,
-            child: _mobileRow(
-              id: 'group-$id',
-              label: tr(context, label),
-              icon: icon,
-              selected: active,
-              chevron: open ? Icons.expand_less : Icons.expand_more,
-              onTap: () => setState(() => _open[id] = !open),
+    final active = _active(id, children);
+    final translated = tr(context, label);
+    if (widget.rail) {
+      final controller = _menus.putIfAbsent(id, MenuController.new);
+      final focusNode = _menuFocus.putIfAbsent(
+        id,
+        () => FocusNode(debugLabel: 'navigation-$id'),
+      );
+      final firstFocus = _firstItemFocus.putIfAbsent(id, FocusNode.new);
+      return MenuAnchor(
+        controller: controller,
+        childFocusNode: focusNode,
+        useRootOverlay: true,
+        alignmentOffset: const Offset(12, 0),
+        style: const MenuStyle(
+          alignment: Alignment.topRight,
+          backgroundColor: WidgetStatePropertyAll(Colors.white),
+          surfaceTintColor: WidgetStatePropertyAll(Colors.transparent),
+          elevation: WidgetStatePropertyAll(8),
+          side: WidgetStatePropertyAll(BorderSide(color: PelinesColors.border)),
+          shape: WidgetStatePropertyAll(
+            RoundedRectangleBorder(
+              borderRadius: BorderRadius.all(Radius.circular(12)),
             ),
           ),
-          if (open)
-            Container(
-              key: Key('nav-submenu-$id'),
-              margin: const EdgeInsets.only(left: 26),
-              padding: const EdgeInsets.only(left: 8),
-              decoration: const BoxDecoration(
-                border: Border(left: BorderSide(color: PelinesColors.border)),
-              ),
-              child: Column(
-                children: [
-                  if (id == 'orders')
-                    _mobileRow(
-                      id: 'upcoming',
-                      label: tr(context, 'Upcoming'),
-                      selected: widget.upcoming,
-                      nested: true,
-                      onTap: widget.onUpcoming,
+        ),
+        onOpen: () => _closeMenus(except: id),
+        menuChildren: [
+          Semantics(
+            key: Key('nav-flyout-$id'),
+            header: true,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: SizedBox(
+                width: 232,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      translated,
+                      style: const TextStyle(
+                        color: PelinesColors.textSecondary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  for (final destination in children)
-                    if (id != 'orders' ||
-                        destination != AdminDestination.orders)
-                      _destination(destination, nested: true),
-                ],
+                    const SizedBox(height: 12),
+                    const Divider(height: 1, color: PelinesColors.border),
+                  ],
+                ),
               ),
             ),
+          ),
+          if (id == 'orders')
+            _flyoutItem(
+              'upcoming',
+              tr(context, 'Upcoming'),
+              widget.upcoming,
+              widget.onUpcoming,
+              focusNode: firstFocus,
+            ),
+          for (final destination in children)
+            if (destination != AdminDestination.orders)
+              _flyoutItem(
+                destination.name,
+                destination == AdminDestination.account
+                    ? tr(context, 'My Profile')
+                    : destination.localizedLabel(context),
+                widget.selected == destination,
+                () => widget.onNavigate(destination),
+                focusNode: id != 'orders' && destination == children.first
+                    ? firstFocus
+                    : null,
+              ),
         ],
+        builder: (context, controller, child) => MouseRegion(
+          onEnter: widget.busy ? null : (_) => controller.open(),
+          child: _railIcon('group-$id', translated, icon, active, () {
+            if (controller.isOpen) {
+              controller.close();
+            } else {
+              controller.open();
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted && controller.isOpen) firstFocus.requestFocus();
+              });
+            }
+          }, focusNode: focusNode),
+        ),
       );
     }
-    final active = children.contains(widget.selected);
     final open = _open[id] ?? active;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Semantics(
           expanded: open,
-          child: TextButton(
-            key: Key('nav-group-$id'),
-            onPressed: () => setState(() => _open[id] = !open),
-            style: TextButton.styleFrom(
-              alignment: Alignment.centerLeft,
-              foregroundColor: active
-                  ? PelinesColors.brandPrimary
-                  : PelinesColors.textPrimary,
-              backgroundColor: active
-                  ? PelinesColors.brandPrimarySoft
-                  : Colors.transparent,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            ),
-            child: Row(
-              children: [
-                Icon(icon, size: 18),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    tr(context, label),
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-                Icon(open ? Icons.expand_less : Icons.expand_more, size: 18),
-              ],
-            ),
+          child: _mobileRow(
+            id: 'group-$id',
+            label: translated,
+            icon: icon,
+            selected: active,
+            chevron: open ? Icons.expand_less : Icons.expand_more,
+            onTap: () => setState(() => _open[id] = !open),
           ),
         ),
         if (open)
           Container(
-            margin: const EdgeInsets.only(left: 20, top: 4, bottom: 4),
+            key: Key('nav-submenu-$id'),
+            margin: const EdgeInsets.only(left: 26),
             padding: const EdgeInsets.only(left: 8),
             decoration: const BoxDecoration(
               border: Border(left: BorderSide(color: PelinesColors.border)),
             ),
             child: Column(
               children: [
+                if (id == 'orders')
+                  _mobileRow(
+                    id: 'upcoming',
+                    label: tr(context, 'Upcoming'),
+                    selected: widget.upcoming,
+                    nested: true,
+                    onTap: widget.onUpcoming,
+                  ),
                 for (final destination in children)
-                  _destination(destination, nested: true),
+                  if (destination != AdminDestination.orders)
+                    _destination(destination, nested: true),
               ],
             ),
           ),
-        const SizedBox(height: 4),
       ],
     );
   }
@@ -884,6 +962,9 @@ class _AdminDestinationListState extends ConsumerState<_AdminDestinationList> {
   Widget build(BuildContext context) {
     final email = ref.watch(authControllerProvider).value?.email;
     return Material(
+      key: widget.phone
+          ? null
+          : Key(widget.rail ? 'admin-rail' : 'admin-sidebar'),
       color: PelinesColors.card,
       child: DecoratedBox(
         decoration: const BoxDecoration(
@@ -928,7 +1009,14 @@ class _AdminDestinationListState extends ConsumerState<_AdminDestinationList> {
                       context,
                       widget.rail ? 'Expand navigation' : 'Collapse navigation',
                     ),
-                    onPressed: widget.onToggle,
+                    onPressed: () {
+                      _closeMenus();
+                      widget.onToggle?.call();
+                    },
+                    constraints: const BoxConstraints(
+                      minWidth: 48,
+                      minHeight: 48,
+                    ),
                     icon: Icon(
                       widget.rail
                           ? Icons.view_sidebar_outlined
@@ -965,21 +1053,14 @@ class _AdminDestinationListState extends ConsumerState<_AdminDestinationList> {
                         compact: widget.rail,
                         phone: widget.phone,
                         busy: widget.busy,
-                        onChange: widget.onChangeLocation,
+                        onChange: () {
+                          _closeMenus();
+                          widget.onChangeLocation();
+                        },
                       ),
                     ),
-                    if (widget.rail) ...[
-                      for (final destination in orders)
-                        _destination(destination),
-                      const Divider(),
-                      _destination(AdminDestination.analytics),
-                      const Divider(),
-                      for (final destination in store)
-                        _destination(destination),
-                      const Divider(),
-                      _destination(AdminDestination.account),
-                    ] else ...[
-                      if (widget.phone) _destination(AdminDestination.orders),
+                    ...[
+                      _destination(AdminDestination.orders),
                       _group(
                         'orders',
                         'Orders',
@@ -1017,6 +1098,17 @@ class _AdminDestinationListState extends ConsumerState<_AdminDestinationList> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    if (widget.rail && email != null)
+                      Tooltip(
+                        message: email,
+                        child: Semantics(
+                          label: email,
+                          child: const SizedBox(
+                            height: 48,
+                            child: Icon(Icons.person_outline, size: 20),
+                          ),
+                        ),
+                      ),
                     if (!widget.rail && email != null)
                       Padding(
                         padding: EdgeInsets.only(bottom: widget.phone ? 4 : 12),
@@ -1047,13 +1139,23 @@ class _AdminDestinationListState extends ConsumerState<_AdminDestinationList> {
                       IconButton.filled(
                         key: const Key('admin-sign-out'),
                         tooltip: tr(context, 'Sign Out'),
-                        onPressed: widget.busy ? null : widget.onSignOut,
+                        onPressed: widget.busy
+                            ? null
+                            : () {
+                                _closeMenus();
+                                widget.onSignOut();
+                              },
                         icon: const Icon(Icons.logout, size: 18),
                       )
                     else
                       FilledButton(
                         key: const Key('admin-sign-out'),
-                        onPressed: widget.busy ? null : widget.onSignOut,
+                        onPressed: widget.busy
+                            ? null
+                            : () {
+                                _closeMenus();
+                                widget.onSignOut();
+                              },
                         child: Text(
                           tr(context, 'Sign Out'),
                           textAlign: TextAlign.center,
