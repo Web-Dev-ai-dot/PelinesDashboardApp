@@ -251,7 +251,9 @@ void main() {
     final Finder field = await _showNotes(tester);
     await tester.enterText(field, 'Unsaved');
     await tester.pump();
-    await tester.tap(find.byType(BackButton));
+    await tester.ensureVisible(find.byKey(const Key('detail-back')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('detail-back')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('unsaved-stay')), findsOneWidget);
     await tester.tap(find.byKey(const Key('unsaved-stay')));
@@ -259,7 +261,9 @@ void main() {
     expect(find.byType(OrderDetailScreen), findsOneWidget);
     expect(repository.patchCalls, 0);
 
-    await tester.tap(find.byType(BackButton));
+    await tester.ensureVisible(find.byKey(const Key('detail-back')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('detail-back')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('unsaved-discard')));
     await tester.pumpAndSettle();
@@ -274,7 +278,7 @@ void main() {
       getResult: orderDetail(),
     );
     await _pumpDetail(tester, repository);
-    await tester.tap(find.byType(BackButton));
+    await tester.tap(find.byKey(const Key('detail-back')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('unsaved-stay')), findsNothing);
     expect(find.byType(OrderDetailScreen), findsNothing);

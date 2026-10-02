@@ -15,6 +15,7 @@ import '../../../core/time/pelines_time.dart';
 import '../../locations/models/location.dart';
 import '../../locations/providers/locations_providers.dart';
 import '../models/order_models.dart';
+import '../models/pickup_order_notes.dart';
 import '../models/order_status_action.dart';
 import '../providers/order_alerts_controller.dart';
 import '../providers/orders_providers.dart';
@@ -23,6 +24,8 @@ import 'order_parity_content.dart';
 import 'order_preview_action.dart';
 import '../../../app/theme/app_theme.dart';
 import 'cancel_order_action.dart';
+import 'todo_print_action.dart';
+import 'pickup_instructions.dart';
 import 'new_order_alert.dart';
 
 class OrderDetailScreen extends ConsumerStatefulWidget {
@@ -83,55 +86,57 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
         if (!didPop) await leave();
       },
       child: Scaffold(
-        appBar: AdminAppBar(
-          leading: BackButton(onPressed: leave),
-          title: Text(displayed?.orderNumber ?? 'Order'),
-        ),
-        body: displayed != null
-            ? Column(
-                children: <Widget>[
-                  if (detail.hasError)
-                    MaterialBanner(
-                      key: const Key('detail-refresh-warning'),
-                      content: Text(
-                        tr(
-                          context,
-                          'The latest order status could not be loaded. Showing saved details.',
+        body: SafeArea(
+          child: displayed != null
+              ? Column(
+                  children: <Widget>[
+                    if (detail.hasError)
+                      MaterialBanner(
+                        key: const Key('detail-refresh-warning'),
+                        content: Text(
+                          tr(
+                            context,
+                            'The latest order status could not be loaded. Showing saved details.',
+                          ),
                         ),
+                        actions: <Widget>[
+                          TextButton(
+                            onPressed: () => ref.invalidate(
+                              orderDetailProvider(widget.orderId),
+                            ),
+                            child: Text(tr(context, 'Retry')),
+                          ),
+                        ],
                       ),
-                      actions: <Widget>[
-                        TextButton(
-                          onPressed: () => ref.invalidate(
-                            orderDetailProvider(widget.orderId),
-                          ),
-                          child: Text(tr(context, 'Retry')),
-                        ),
-                      ],
+                    Expanded(
+                      child: _DetailBody(
+                        initialOrder: displayed,
+                        onBack: leave,
+                      ),
                     ),
-                  Expanded(
-                    child: _DetailBody(initialOrder: displayed, onBack: leave),
-                  ),
-                ],
-              )
-            : detail.when(
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (Object error, StackTrace stack) {
-                  final bool missing =
-                      error is ApiException && error.statusCode == 404;
-                  return _DetailError(
-                    message: missing
-                        ? tr(context, 'Order no longer available')
-                        : error.toString(),
-                    onRetry: missing
-                        ? null
-                        : () => ref.invalidate(
-                            orderDetailProvider(widget.orderId),
-                          ),
-                  );
-                },
-                data: (OrderDetail order) =>
-                    _DetailBody(initialOrder: order, onBack: leave),
-              ),
+                  ],
+                )
+              : detail.when(
+                  loading: () =>
+                      const Center(child: CircularProgressIndicator()),
+                  error: (Object error, StackTrace stack) {
+                    final bool missing =
+                        error is ApiException && error.statusCode == 404;
+                    return _DetailError(
+                      message: missing
+                          ? tr(context, 'Order no longer available')
+                          : error.toString(),
+                      onRetry: missing
+                          ? null
+                          : () => ref.invalidate(
+                              orderDetailProvider(widget.orderId),
+                            ),
+                    );
+                  },
+                  data: (OrderDetail order) =>
+                      _DetailBody(initialOrder: order, onBack: leave),
+                ),
+        ),
       ),
     );
   }
@@ -177,6 +182,7 @@ class _DetailBody extends ConsumerWidget {
       currentLocationProvider,
     );
     final OrderDetail order = mutation.canonicalOrder ?? initialOrder;
+    final pickupNotes = PickupOrderNotes.fromOrder(order);
     final bool locationContextChanged =
         currentLocation.value?.id != order.locationId;
     ref.listen<OrderMutationState>(orderMutationProvider(initialOrder.id), (
@@ -232,8 +238,32 @@ class _DetailBody extends ConsumerWidget {
                 Text(
                   '${tr(context, 'Placed')}: ${PelinesTime.formatDateTime(order.createdAt)} · ${tr(context, 'Pacific time')}',
                 ),
+                OrderInfoField(
+                  label: tr(context, 'Origin'),
+                  value: _locationDescription(order),
+                ),
+                TodoPrintAction(
+                  key: ValueKey('detail-print-${order.id}'),
+                  order: _summary(order),
+                ),
                 const SizedBox(height: 16),
-                OrderParityBadges(order: order),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    PelinesOrderBadges.fulfillment(
+                      fulfillment: order.fulfillmentType,
+                      label: tr(
+                        context,
+                        fulfillmentLabel(order.fulfillmentType),
+                      ),
+                    ),
+                    PelinesOrderBadges.type(
+                      type: order.orderType,
+                      label: tr(context, orderTypeLabel(order.orderType)),
+                    ),
+                  ],
+                ),
                 if (!order.paymentStatus.isOperationallyPaid &&
                     !(cancellationEnabled &&
                         order.status == OrderStatus.cancelled)) ...[
@@ -295,21 +325,6 @@ class _DetailBody extends ConsumerWidget {
                         expanded: true,
                       ),
                     ],
-                    if (OrderStatusAction.forOrder(
-                          order.status,
-                          order.fulfillmentType,
-                        ) ==
-                        null)
-                      Text(
-                        tr(
-                          context,
-                          statusLabel(
-                            order.status,
-                            order.fulfillmentType,
-                            order.rawStatus,
-                          ),
-                        ),
-                      ),
                   ],
                 ),
                 _Section(
@@ -336,7 +351,12 @@ class _DetailBody extends ConsumerWidget {
                             value: order.contactEmail,
                           ),
                           OrderInfoField(
-                            label: tr(context, 'Phone'),
+                            label: tr(
+                              context,
+                              order.fulfillmentType == FulfillmentType.pickup
+                                  ? 'Pickup Contact'
+                                  : 'Contact',
+                            ),
                             value: order.contactPhone,
                           ),
                         ];
@@ -353,6 +373,46 @@ class _DetailBody extends ConsumerWidget {
                             : Column(children: fields);
                       },
                     ),
+                    Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: TextButton.icon(
+                        key: const Key('copy-order-phone'),
+                        style: TextButton.styleFrom(
+                          minimumSize: const Size(48, 48),
+                        ),
+                        onPressed: order.contactPhone.trim().isEmpty
+                            ? null
+                            : () async {
+                                try {
+                                  await Clipboard.setData(
+                                    ClipboardData(text: order.contactPhone),
+                                  );
+                                  if (!context.mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Semantics(
+                                        liveRegion: true,
+                                        child: Text(
+                                          tr(context, 'Phone copied'),
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                } on Object {
+                                  if (!context.mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        tr(context, 'Could not copy phone'),
+                                      ),
+                                    ),
+                                  );
+                                }
+                              },
+                        icon: const Icon(Icons.copy_outlined),
+                        label: Text(tr(context, 'Copy phone')),
+                      ),
+                    ),
                   ],
                 ),
                 _Section(
@@ -365,31 +425,86 @@ class _DetailBody extends ConsumerWidget {
                   ),
                   children: [
                     OrderInfoField(
-                      label: tr(context, 'Requested time'),
+                      label: tr(
+                        context,
+                        order.fulfillmentType == FulfillmentType.delivery
+                            ? 'Delivery Time'
+                            : 'Pickup Time',
+                      ),
                       value: orderScheduledLabel(context, order),
                       icon: Icons.schedule,
                     ),
-                    OrderInfoField(
-                      label: tr(context, 'Location'),
-                      value: _locationName(order),
-                      icon: Icons.location_on_outlined,
-                    ),
+                    if (order.fulfillmentType == FulfillmentType.pickup)
+                      OrderInfoField(
+                        label: tr(context, 'Pickup Location'),
+                        value: _locationDescription(order),
+                        icon: Icons.location_on_outlined,
+                      ),
                     if (order.fulfillmentType == FulfillmentType.delivery)
                       OrderInfoField(
                         label: tr(context, 'Delivery address'),
                         value: _address(order.deliveryAddress),
                         icon: Icons.local_shipping_outlined,
                       ),
+                    OrderInfoField(
+                      label: tr(
+                        context,
+                        order.fulfillmentType == FulfillmentType.pickup
+                            ? 'Pickup Contact'
+                            : 'Contact',
+                      ),
+                      value: '${order.contactName}\n${order.contactPhone}',
+                      icon: Icons.person_outline,
+                    ),
                     if (order.orderType == OrderType.catering) ...[
-                      OrderInfoField(
-                        label: tr(context, 'Event name'),
-                        value: _mapString(order.eventDetails, 'eventName'),
-                      ),
-                      OrderInfoField(
-                        label: tr(context, 'Attendees'),
-                        value: _mapValue(order.eventDetails, 'attendees'),
-                      ),
+                      if (_mapString(order.eventDetails, 'eventName') != '—')
+                        OrderInfoField(
+                          label: tr(context, 'Event name'),
+                          value: _mapString(order.eventDetails, 'eventName'),
+                        ),
+                      if (order.eventDetails?['attendees'] is num)
+                        OrderInfoField(
+                          label: tr(context, 'Attendees'),
+                          value: _mapValue(order.eventDetails, 'attendees'),
+                        ),
                     ],
+                    if (pickupNotes.includeUtensils != null)
+                      OrderInfoField(
+                        key: const Key('detail-pickup-utensils'),
+                        icon: Icons.restaurant_outlined,
+                        label: tr(context, 'Include forks, napkins, etc.'),
+                        value: tr(
+                          context,
+                          pickupNotes.includeUtensils! ? 'Yes' : 'No',
+                        ),
+                      ),
+                    if (order.fulfillmentType == FulfillmentType.pickup)
+                      Container(
+                        key: const Key('detail-pickup-instructions'),
+                        margin: const EdgeInsets.only(top: 16),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: PelinesColors.mutedSurface,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: PelinesColors.border),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(
+                              tr(context, 'Pickup Instructions').toUpperCase(),
+                              style: PelinesTypography.smallLabel,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              '“${pickupInstructions(context, order.location?['name'] is String ? order.location!['name'] as String : null)}”',
+                              style: const TextStyle(
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                   ],
                 ),
                 _Section(
@@ -409,13 +524,15 @@ class _DetailBody extends ConsumerWidget {
                         -order.discountCents,
                       ),
                     _MoneyRow(
-                      tr(context, 'Service fee'),
+                      tr(context, 'Pelines Service Fee'),
                       order.serviceFeeCents,
                     ),
-                    _MoneyRow(
-                      tr(context, 'Delivery fee'),
-                      order.deliveryFeeCents,
-                    ),
+                    if (order.fulfillmentType == FulfillmentType.delivery ||
+                        order.deliveryFeeCents != 0)
+                      _MoneyRow(
+                        tr(context, 'Delivery fee'),
+                        order.deliveryFeeCents,
+                      ),
                     _MoneyRow(tr(context, 'Tax'), order.taxCents),
                     _MoneyRow(tr(context, 'Tip'), order.tipCents),
                     const Divider(
@@ -429,22 +546,29 @@ class _DetailBody extends ConsumerWidget {
                     ),
                   ],
                 ),
-                if (order.notes?.trim().isNotEmpty == true)
-                  _Section(
-                    title: tr(context, 'Customer Notes'),
-                    accent: true,
-                    sectionKey: const Key('detail-customer-notes'),
-                    children: [
-                      Text(
-                        order.notes!,
-                        style: const TextStyle(fontStyle: FontStyle.italic),
+                _Section(
+                  title: tr(context, 'Customer Notes'),
+                  accent: pickupNotes.customerNotes?.trim().isNotEmpty == true,
+                  sectionKey: const Key('detail-customer-notes'),
+                  children: [
+                    Text(
+                      pickupNotes.customerNotes?.trim().isNotEmpty == true
+                          ? pickupNotes.customerNotes!
+                          : tr(context, 'No customer notes'),
+                      style: TextStyle(
+                        fontStyle: FontStyle.italic,
+                        color:
+                            pickupNotes.customerNotes?.trim().isNotEmpty == true
+                            ? null
+                            : PelinesColors.textSecondary,
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
+                ),
                 if (cancellationEnabled &&
                     order.status == OrderStatus.cancelled)
                   _Section(
-                    title: tr(context, 'Internal notes'),
+                    title: tr(context, 'Internal Admin Notes'),
                     children: [
                       Text(
                         order.internalNotes ?? tr(context, 'No internal notes'),
@@ -462,10 +586,12 @@ class _DetailBody extends ConsumerWidget {
                           ? order.rawPaymentStatus ?? order.paymentStatus.name
                           : order.paymentStatus.name,
                     ),
-                    if (order.cardBrand != null && order.cardLast4 != null)
-                      _Row(
-                        tr(context, 'Card'),
-                        '${order.cardBrand} ${tr(context, 'ending in')} ${order.cardLast4}',
+                    if (order.paymentStatus.isOperationallyPaid &&
+                        order.cardBrand?.trim().isNotEmpty == true &&
+                        order.cardLast4?.trim().isNotEmpty == true)
+                      Text(
+                        '${tr(context, 'Paid with')} ${order.cardBrand} ${tr(context, 'ending in')} ${order.cardLast4}',
+                        key: const Key('detail-paid-card'),
                       ),
                   ],
                 ),
@@ -493,10 +619,14 @@ class _DetailBody extends ConsumerWidget {
     );
   }
 
-  String _locationName(OrderDetail order) =>
-      _mapString(order.location, 'name') == '—'
-      ? order.locationId
-      : _mapString(order.location, 'name');
+  String _locationName(OrderDetail order) => _mapString(order.location, 'name');
+
+  String _locationDescription(OrderDetail order) {
+    final address = _mapString(order.location, 'address').trim();
+    return address.isEmpty || address == '—'
+        ? _locationName(order)
+        : '${_locationName(order)}\n$address';
+  }
 }
 
 class _InternalNotesEditor extends ConsumerStatefulWidget {
@@ -566,7 +696,7 @@ class _InternalNotesEditorState extends ConsumerState<_InternalNotesEditor> {
     final bool canSave = notes.canSave && !statusBusy;
 
     return _Section(
-      title: tr(context, 'Internal notes'),
+      title: tr(context, 'Internal Admin Notes'),
       children: <Widget>[
         Text(
           tr(context, 'Private notes for administrators only.'),
@@ -626,7 +756,7 @@ class _InternalNotesEditorState extends ConsumerState<_InternalNotesEditor> {
                 busy: notes.isBusy,
                 label: notes.isBusy
                     ? tr(context, 'Saving...')
-                    : tr(context, 'Save notes'),
+                    : tr(context, 'Save Note'),
               ),
             ),
           ],

@@ -1,5 +1,22 @@
 // English source messages and their Spanish UI translations. Backend values are never catalog keys.
 const spanishCatalog = <String, String>{
+  'Origin': 'Origen',
+  'Pickup Instructions': 'Instrucciones de recogida',
+  'No customer notes': 'Sin notas del cliente',
+  'Arrive at {location} at your pickup time, head to the front counter, and let the team know you are picking up an online order.':
+      'Llega a {location} a la hora de recogida, dirígete al mostrador e informa al equipo de que vienes a recoger un pedido en línea.',
+  'Yes': 'Sí',
+  'No': 'No',
+  'Include forks, napkins, etc.': 'Incluir tenedores, servilletas, etc.',
+  'Pickup Contact': 'Contacto de recogida',
+  'Contact': 'Contacto',
+  'Copy phone': 'Copiar teléfono',
+  'Phone copied': 'Teléfono copiado',
+  'Could not copy phone': 'No se pudo copiar el teléfono',
+  'Pelines Service Fee': 'Cargo de servicio de Pelines',
+  'Paid with': 'Pagado con',
+  'Internal Admin Notes': 'Notas internas',
+  'Save Note': 'Guardar nota',
   'Mute': 'Silenciar',
   "0 = No minimum": "0 = Sin compra mínima",
   "0 = No daily limit": "0 = Sin límite diario",
