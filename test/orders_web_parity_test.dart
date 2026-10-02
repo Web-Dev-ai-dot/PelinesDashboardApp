@@ -305,29 +305,24 @@ void main() {
     },
   );
 
-  testWidgets(
-    'To Do retains list/default filters without search or board at wide width',
-    (tester) async {
-      await _mount(
-        tester,
-        _Repository(today: true),
-        width: 1400,
-        upcoming: false,
-      );
-      expect(find.byKey(const Key('orders-date-selector')), findsNothing);
-      expect(find.byKey(const Key('orders-search')), findsNothing);
-      expect(find.byKey(const Key('orders-board')), findsNothing);
-      expect(
-        tester
-            .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Confirmed'))
-            .selected,
-        isTrue,
-      );
-      await status(tester, 'Waiting');
-      expect(find.text('ORD-pending'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    },
-  );
+  testWidgets('To Do has four status columns without date or search filters', (
+    tester,
+  ) async {
+    await _mount(
+      tester,
+      _Repository(today: true),
+      width: 1400,
+      upcoming: false,
+    );
+    expect(find.byKey(const Key('orders-date-selector')), findsNothing);
+    expect(find.byKey(const Key('orders-search')), findsNothing);
+    expect(find.byKey(const Key('orders-board')), findsNothing);
+    for (final status in ['pending', 'confirmed', 'preparing', 'ready']) {
+      expect(find.byKey(Key('todo-column-$status')), findsOneWidget);
+    }
+    expect(find.text('ORD-pending'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 
   for (final entry in [
     (OrderStatus.pending, 'Accept order', PelinesColors.successForeground),

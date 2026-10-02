@@ -950,18 +950,15 @@ void main() {
         expect(h.repo.patches, 0);
         expect(h.repo.orders['A']!.status, OrderStatus.pending);
         expect(h.repo.orders['A']!.paymentStatus, PaymentStatus.paid);
-        await tester.tap(
-          find.widgetWithText(
-            ChoiceChip,
-            language == 'en' ? 'Waiting' : 'En espera',
-          ),
-        );
+        await tester.tap(find.byKey(const Key('todo-tab-pending')));
         await tester.pumpAndSettle();
         expect(find.text('A'), findsOneWidget);
         expect(
           find.descendant(
-            of: find.byKey(const Key('waiting-count')),
-            matching: find.text('1'),
+            of: find.byKey(const Key('todo-tab-pending')),
+            matching: find.text(
+              language == 'en' ? 'Waiting · 1' : 'En espera · 1',
+            ),
           ),
           findsOneWidget,
         );
@@ -999,7 +996,7 @@ void main() {
     expect(h.repo.patches, 0);
   });
   testWidgets(
-    'Accept moves pending out of Waiting into default Confirmed and preview advances it',
+    'Accept moves pending from Waiting to Confirmed on To Do and preview advances it',
     (tester) async {
       final h = await _pump(
         tester,
@@ -1007,13 +1004,7 @@ void main() {
           body: TodayOrdersView(location: _location, onChangeLocation: () {}),
         ),
       );
-      expect(
-        tester
-            .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Confirmed'))
-            .selected,
-        isTrue,
-      );
-      await tester.tap(find.widgetWithText(ChoiceChip, 'Waiting'));
+      await tester.tap(find.byKey(const Key('todo-tab-pending')));
       await tester.pumpAndSettle();
       h.repo.orders['A'] = _detail('A');
       await h.emit(tester);
@@ -1022,22 +1013,48 @@ void main() {
       expect(h.repo.orders['A']!.status, OrderStatus.confirmed);
       expect(find.byKey(const Key('new-order-fullscreen')), findsNothing);
       expect(find.text('A'), findsOneWidget);
-      expect(find.byKey(const Key('waiting-count')), findsNothing);
+      expect(find.text('Waiting · 0'), findsOneWidget);
       expect(
-        tester
-            .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Confirmed'))
-            .selected,
-        isTrue,
+        find.descendant(
+          of: find.byKey(const Key('todo-column-confirmed')),
+          matching: find.text('A'),
+        ),
+        findsOneWidget,
       );
-      expect(find.text('Start preparing'), findsOneWidget);
+      final confirmed = find.byKey(const Key('todo-tab-confirmed'));
+      await tester.ensureVisible(confirmed);
+      await tester.tap(confirmed);
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('order-primary-action')),
+          matching: find.text('Preparing'),
+        ),
+        findsOneWidget,
+      );
+      await tester.ensureVisible(find.byKey(const Key('order-primary-action')));
       await tester.tap(find.byKey(const Key('order-primary-action')));
       await tester.pumpAndSettle();
       expect(h.repo.orders['A']!.status, OrderStatus.preparing);
-      expect(find.text('A'), findsNothing);
-      await tester.tap(find.widgetWithText(ChoiceChip, 'Preparing'));
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('todo-column-confirmed')),
+          matching: find.text('A'),
+        ),
+        findsNothing,
+      );
+      final preparing = find.byKey(const Key('todo-tab-preparing'));
+      await tester.ensureVisible(preparing);
+      await tester.tap(preparing);
       await tester.pumpAndSettle();
       expect(find.text('A'), findsOneWidget);
-      expect(find.text('Mark ready'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('order-primary-action')),
+          matching: find.text('Ready'),
+        ),
+        findsOneWidget,
+      );
       expect(h.repo.patches, 2);
     },
   );

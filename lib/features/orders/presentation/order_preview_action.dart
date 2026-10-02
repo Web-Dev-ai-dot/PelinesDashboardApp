@@ -14,10 +14,12 @@ class OrderPreviewAction extends ConsumerStatefulWidget {
     required this.order,
     this.webStyle = false,
     this.refreshOnSummaryChange = true,
+    this.showNextStatus = false,
     super.key,
   });
   final OrderSummary order;
   final bool webStyle;
+  final bool showNextStatus;
   // Detail already owns the canonical GET; list summaries still need hydration.
   final bool refreshOnSummaryChange;
   @override
@@ -56,6 +58,16 @@ class _OrderPreviewActionState extends ConsumerState<OrderPreviewAction> {
       final canonical = detail.value!;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
+          final current = ref.read(orderMutationProvider(summary.id));
+          // The board's reconciliation GET must not immediately erase a failed
+          // action message when the canonical status/payment are unchanged.
+          if (widget.showNextStatus &&
+              current.phase == OrderMutationPhase.error &&
+              current.canonicalOrder?.status == canonical.status &&
+              current.canonicalOrder?.paymentStatus ==
+                  canonical.paymentStatus) {
+            return;
+          }
           ref
               .read(orderMutationProvider(summary.id).notifier)
               .adoptRefreshedOrder(canonical);
@@ -88,6 +100,7 @@ class _OrderPreviewActionState extends ConsumerState<OrderPreviewAction> {
       return const SizedBox.shrink();
     }
     return _OrderActions(
+      showNextStatus: widget.showNextStatus,
       webStyle: widget.webStyle,
       action: action,
       mutation: mutation,
@@ -159,6 +172,7 @@ class _OrderActions extends StatelessWidget {
     required this.onPressed,
     this.confirming = false,
     this.webStyle = false,
+    this.showNextStatus = false,
   });
 
   final OrderStatusAction action;
@@ -168,6 +182,7 @@ class _OrderActions extends StatelessWidget {
   final VoidCallback onPressed;
   final bool confirming;
   final bool webStyle;
+  final bool showNextStatus;
 
   @override
   Widget build(BuildContext context) {
@@ -193,11 +208,16 @@ class _OrderActions extends StatelessWidget {
             key: const Key('order-primary-action'),
             style: webStyle
                 ? PelinesControlStyles.button(switch (action) {
-                    OrderStatusAction.acceptOrder ||
-                    OrderStatusAction.startPreparing =>
+                    OrderStatusAction.acceptOrder =>
                       PelinesButtonVariant.accept,
+                    OrderStatusAction.startPreparing =>
+                      showNextStatus
+                          ? PelinesButtonVariant.preparing
+                          : PelinesButtonVariant.accept,
                     OrderStatusAction.markReady =>
-                      PelinesButtonVariant.preparing,
+                      showNextStatus
+                          ? PelinesButtonVariant.ready
+                          : PelinesButtonVariant.preparing,
                     OrderStatusAction.completeOrder =>
                       PelinesButtonVariant.complete,
                     OrderStatusAction.cancelOrder =>
@@ -216,6 +236,14 @@ class _OrderActions extends StatelessWidget {
                             ? (mutation.action ?? action).progressLabelFor(
                                 fulfillment,
                               )
+                            : showNextStatus &&
+                                  action != OrderStatusAction.completeOrder
+                            ? switch (action.target) {
+                                OrderStatus.confirmed => 'Confirmed',
+                                OrderStatus.preparing => 'Preparing',
+                                OrderStatus.ready => 'Ready',
+                                _ => action.labelFor(fulfillment),
+                              }
                             : action.labelFor(fulfillment),
                       )
                     : busy

@@ -140,34 +140,24 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      final badge = find.byKey(const Key('waiting-count'));
+      final badge = find.byKey(const Key('todo-tab-pending'));
       expect(find.byKey(const Key('orders-date-selector')), findsNothing);
       expect(
-        find.descendant(of: badge, matching: find.text('2')),
+        find.descendant(of: badge, matching: find.text('Waiting · 2')),
         findsOneWidget,
       );
-      expect(find.text('accepted'), findsOneWidget);
-      expect(find.text('pending-one'), findsNothing);
-      await tester.tap(find.widgetWithText(ChoiceChip, 'Waiting'));
-      await tester.pumpAndSettle();
       expect(find.text('pending-one'), findsOneWidget);
-      expect(find.text('accepted'), findsNothing);
+      expect(find.text('accepted'), findsOneWidget);
       repository.orders.removeWhere((order) => order.id == 'pending-one');
       await container.read(todayOrdersProvider.notifier).refresh();
       await tester.pumpAndSettle();
       expect(
-        find.descendant(of: badge, matching: find.text('1')),
+        find.descendant(of: badge, matching: find.text('Waiting · 1')),
         findsOneWidget,
       );
       final calls = repository.calls;
-      for (final label in [
-        'Confirmed',
-        'Preparing',
-        'Ready',
-        'All',
-        'Waiting',
-      ]) {
-        final chip = find.widgetWithText(ChoiceChip, label);
+      for (final status in ['confirmed', 'preparing', 'ready', 'pending']) {
+        final chip = find.byKey(Key('todo-tab-$status'));
         await tester.ensureVisible(chip);
         await tester.tap(chip);
         await tester.pumpAndSettle();

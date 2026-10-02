@@ -10,17 +10,28 @@ import '../../../app/theme/pelines_tokens.dart';
 import '../../../core/time/pelines_time.dart';
 import '../models/order_models.dart';
 import '../providers/order_alerts_controller.dart';
+import '../providers/orders_providers.dart';
+import 'order_parity_content.dart';
+import 'todo_print_action.dart';
 import 'order_preview_action.dart';
 import 'order_ui_helpers.dart';
 
 /// Operational preview only: shared detail/calendar/fullscreen visuals remain
 /// independent. All mutations stay in OrderPreviewAction's existing controller.
 class OrderPreviewCard extends ConsumerWidget {
-  const OrderPreviewCard({required this.order, super.key});
+  const OrderPreviewCard({
+    required this.order,
+    this.statusBoard = false,
+    super.key,
+  });
   final OrderSummary order;
+  final bool statusBoard;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final detail = statusBoard
+        ? ref.watch(orderDetailProvider(order.id))
+        : null;
     void view() {
       ref.read(orderAlertsProvider.notifier).acknowledge(order.id);
       context.push('/app/orders/${order.id}');
@@ -128,6 +139,23 @@ class OrderPreviewCard extends ConsumerWidget {
                   style: PelinesTypography.smallLabel,
                 ),
                 const SizedBox(height: 6),
+                if (statusBoard) ...[
+                  if (detail!.hasError)
+                    TextButton(
+                      onPressed: () =>
+                          ref.invalidate(orderDetailProvider(order.id)),
+                      child: Text(tr(context, 'Refresh order status')),
+                    )
+                  else if (detail.value == null)
+                    const LinearProgressIndicator()
+                  else
+                    for (final item in detail.value!.items)
+                      OrderParityItem(item: item),
+                  Text(
+                    tr(context, 'Total'),
+                    style: PelinesTypography.smallLabel,
+                  ),
+                ],
                 Align(
                   alignment: AlignmentDirectional.centerEnd,
                   child: Text(
@@ -147,9 +175,14 @@ class OrderPreviewCard extends ConsumerWidget {
                     key: ValueKey(order.id),
                     order: order,
                     webStyle: true,
+                    showNextStatus: statusBoard,
                   ),
                 ),
                 const SizedBox(height: 8),
+                if (statusBoard) ...[
+                  TodoPrintAction(order: order),
+                  const SizedBox(height: 8),
+                ],
                 PelinesButton(
                   label: tr(context, 'View'),
                   variant: PelinesButtonVariant.secondary,

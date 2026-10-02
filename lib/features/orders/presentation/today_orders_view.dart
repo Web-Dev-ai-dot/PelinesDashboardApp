@@ -14,7 +14,7 @@ import '../models/orders_date_filter.dart';
 
 import '../providers/orders_providers.dart';
 import 'upcoming_orders_view.dart';
-import 'order_preview_card.dart';
+import 'todo_status_board.dart';
 
 class TodayOrdersView extends ConsumerStatefulWidget {
   const TodayOrdersView({
@@ -41,7 +41,6 @@ class TodayOrdersViewState extends ConsumerState<TodayOrdersView> {
       ? widget.initialDateFilter
       : OrdersDateFilter.today;
   DateTime? _chosenDate;
-  final _scroll = ScrollController();
 
   @override
   void didUpdateWidget(covariant TodayOrdersView oldWidget) {
@@ -54,12 +53,6 @@ class TodayOrdersViewState extends ConsumerState<TodayOrdersView> {
           ? widget.initialDateFilter
           : OrdersDateFilter.today;
     }
-  }
-
-  @override
-  void dispose() {
-    _scroll.dispose();
-    super.dispose();
   }
 
   Future<void> _selectDate(OrdersDateFilter value) async {
@@ -155,7 +148,8 @@ class TodayOrdersViewState extends ConsumerState<TodayOrdersView> {
         continue;
       }
       ref.listen(orderMutationProvider(order.id), (previous, next) {
-        if (_filter == OrderStatus.pending &&
+        if (widget.webOrders &&
+            _filter == OrderStatus.pending &&
             next.phase == OrderMutationPhase.success &&
             next.action == OrderStatusAction.acceptOrder &&
             next.canonicalOrder?.status == OrderStatus.confirmed) {
@@ -208,77 +202,24 @@ class TodayOrdersViewState extends ConsumerState<TodayOrdersView> {
               onPressed: widget.onChangeLocation,
             ),
           ),
-        _Filters(
-          selected: _filter,
-          waitingCount:
-              asyncOrders.value?.orders
-                  .where(
-                    (order) =>
-                        order.status == OrderStatus.pending &&
-                        order.locationId == widget.location.id &&
-                        order.paymentStatus.isOperationallyPaid,
-                  )
-                  .length ??
-              0,
-          onSelected: (OrderStatus? value) => setState(() => _filter = value),
-        ),
         Expanded(
           child: asyncOrders.when(
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (Object error, StackTrace stack) =>
                 _ErrorState(message: error.toString(), onRetry: _retry),
             data: (TodayOrdersState state) {
-              final List<OrderSummary> visible = _filter == null
-                  ? state.orders
-                  : state.orders
-                        .where((OrderSummary order) => order.status == _filter)
-                        .toList();
               return RefreshIndicator(
                 onRefresh: refresh,
-                child: CustomScrollView(
-                  controller: _scroll,
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  slivers: <Widget>[
+                child: Column(
+                  children: [
                     if (state.isRefreshing)
-                      const SliverToBoxAdapter(
-                        child: LinearProgressIndicator(minHeight: 2),
-                      ),
+                      const LinearProgressIndicator(minHeight: 2),
                     if (state.refreshError != null)
-                      SliverToBoxAdapter(
-                        child: MaterialBanner(
-                          content: Text(
-                            '${state.refreshError} Showing previous data.',
-                          ),
-                          actions: <Widget>[
-                            TextButton(
-                              onPressed: refresh,
-                              child: Text(tr(context, 'Retry')),
-                            ),
-                          ],
-                        ),
+                      TextButton(
+                        onPressed: refresh,
+                        child: Text('${state.refreshError}'),
                       ),
-                    if (visible.isEmpty)
-                      const SliverFillRemaining(
-                        hasScrollBody: false,
-                        child: _EmptyState(),
-                      )
-                    else
-                      SliverPadding(
-                        padding: const EdgeInsets.fromLTRB(
-                          PelinesSpacing.md,
-                          PelinesSpacing.xs,
-                          PelinesSpacing.md,
-                          PelinesSpacing.xl,
-                        ),
-                        sliver: SliverList.builder(
-                          itemCount: visible.length,
-                          itemBuilder: (BuildContext context, int index) =>
-                              OrderPreviewCard(
-                                key: ValueKey(visible[index].id),
-                                order: visible[index],
-                              ),
-                        ),
-                      ),
+                    Expanded(child: TodoStatusBoard(orders: state.orders)),
                   ],
                 ),
               );
@@ -358,39 +299,6 @@ class _Filters extends StatelessWidget {
                 ],
               ),
             ),
-          ),
-        ],
-      ),
-    ),
-  );
-}
-
-class _EmptyState extends StatelessWidget {
-  const _EmptyState();
-  @override
-  Widget build(BuildContext context) => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(PelinesSpacing.xl),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          const Icon(
-            Icons.receipt_long_outlined,
-            size: 48,
-            color: PelinesColors.textSecondary,
-          ),
-          const SizedBox(height: PelinesSpacing.md),
-          Text(
-            tr(context, 'No active orders'),
-            style: Theme.of(context).textTheme.headlineSmall,
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: PelinesSpacing.xs),
-          Text(
-            tr(context, 'No active orders match the selected date and status.'),
-            style: Theme.of(context).textTheme.bodyMedium
-                ?.copyWith(color: PelinesColors.textSecondary),
-            textAlign: TextAlign.center,
           ),
         ],
       ),

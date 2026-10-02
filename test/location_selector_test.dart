@@ -220,19 +220,17 @@ void main() {
           // To Do is Today-only; date selection belongs to Orders / Upcoming.
           expect(find.byKey(const Key('orders-date-selector')), findsNothing);
           final labels = language == 'es'
-              ? ['En espera', 'Confirmado', 'En preparación', 'Listo', 'Todos']
-              : ['Waiting', 'Confirmed', 'Preparing', 'Ready', 'All'];
+              ? ['En espera', 'Confirmado', 'En preparación', 'Listo']
+              : ['Waiting', 'Confirmed', 'Preparing', 'Ready'];
           for (final label in labels) {
-            expect(find.widgetWithText(ChoiceChip, label), findsOneWidget);
+            expect(
+              find.widgetWithText(OutlinedButton, '$label · 0'),
+              findsOneWidget,
+            );
           }
-          expect(
-            tester
-                .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, labels[1]))
-                .selected,
-            isTrue,
-          );
-          // This location has no orders, so there is no pending-count badge.
-          expect(find.byKey(const Key('waiting-count')), findsNothing);
+          for (final status in ['pending', 'confirmed', 'preparing', 'ready']) {
+            expect(find.byKey(Key('todo-column-$status')), findsOneWidget);
+          }
           await tester.tap(find.byKey(const Key('orders-header-refresh')));
           expect(
             (container.read(
