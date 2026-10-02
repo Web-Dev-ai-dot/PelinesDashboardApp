@@ -182,10 +182,41 @@ class _OrderAlertShellState extends ConsumerState<OrderAlertShell>
     final route = RawDialogRoute<void>(
       barrierDismissible: false,
       barrierColor: Colors.black54,
-      transitionDuration: Duration.zero,
-      pageBuilder: (_, _, _) => UncontrolledProviderScope(
+      transitionDuration: const Duration(milliseconds: 250),
+      transitionBuilder: (_, animation, _, child) => SlideTransition(
+        position: Tween(begin: const Offset(0, 1), end: Offset.zero).animate(
+          CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+        ),
+        child: child,
+      ),
+      pageBuilder: (sheetContext, _, _) => UncontrolledProviderScope(
         container: container,
-        child: NewOrderAlertQueue(location: location, onEmpty: _closeAlert),
+        child: SafeArea(
+          bottom: false,
+          child: Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
+            ),
+            child: Align(
+              alignment: Alignment.bottomCenter,
+              child: FractionallySizedBox(
+                heightFactor: .9,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 760),
+                  child: ClipRRect(
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(24),
+                    ),
+                    child: NewOrderAlertQueue(
+                      location: location,
+                      onEmpty: _closeAlert,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
     _alertRoute = route;

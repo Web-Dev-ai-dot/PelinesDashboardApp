@@ -34,6 +34,48 @@ class FullscreenAlertVisibility extends Notifier<bool> {
   }
 }
 
+/// Presentation only. At short heights (including an open keyboard), the whole
+/// sheet scrolls; otherwise the header and decision actions remain in view.
+class _AlertSheetLayout extends StatelessWidget {
+  const _AlertSheetLayout({
+    required this.header,
+    required this.content,
+    required this.actions,
+  });
+  final Widget header, content, actions;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    key: const Key('new-order-bottom-sheet'),
+    color: PelinesColors.card,
+    child: SafeArea(
+      top: false,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxHeight <
+              300 * MediaQuery.textScalerOf(context).scale(1)) {
+            return SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [header, content, const Divider(height: 1), actions],
+              ),
+            );
+          }
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              header,
+              Expanded(child: SingleChildScrollView(child: content)),
+              const Divider(height: 1),
+              actions,
+            ],
+          );
+        },
+      ),
+    ),
+  );
+}
+
 /// Pins the current ID even when a new snapshot removes it from unseenIds.
 /// Only the explicit completion callback advances the presentation queue.
 class NewOrderAlertQueue extends ConsumerStatefulWidget {
@@ -292,221 +334,191 @@ class _NewOrderDecisionState extends ConsumerState<_NewOrderDecision> {
         !_completed && !busy && (missing || (safe && !needsDecision));
     final canDefer =
         !_completed && !busy && !_requiresRefresh && (safe || missing);
-    return Scaffold(
-      key: const Key('new-order-fullscreen'),
-      backgroundColor: PelinesColors.page,
-      body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+    return _AlertSheetLayout(
+      header: Padding(
+        padding: const EdgeInsets.all(PelinesSpacing.md),
+        child: Row(
           children: [
-            Padding(
-              padding: const EdgeInsets.all(PelinesSpacing.md),
-              child: Row(
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(
-                    Icons.notifications_active_outlined,
-                    color: PelinesColors.brandPrimary,
-                  ),
-                  const SizedBox(width: PelinesSpacing.sm),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          tr(context, 'New Order'),
-                          style: PelinesTypography.sectionTitle(
-                            Theme.of(context).textTheme,
-                          ),
-                        ),
-                        Text('1 ${tr(context, 'of')} ${widget.count}'),
-                      ],
+                  Text(
+                    tr(context, 'New order received'),
+                    style: PelinesTypography.sectionTitle(
+                      Theme.of(context).textTheme,
                     ),
                   ),
-                  IconButton(
-                    key: const Key('alert-mute'),
-                    tooltip: tr(context, 'Mute'),
-                    constraints: const BoxConstraints(
-                      minWidth: 48,
-                      minHeight: 48,
-                    ),
-                    icon: const Icon(Icons.volume_off_outlined, size: 20),
-                    onPressed: _feedback.mute,
-                  ),
-                  IconButton(
-                    key: const Key('alert-defer'),
-                    tooltip: tr(context, 'Decide later'),
-                    constraints: const BoxConstraints(
-                      minWidth: 48,
-                      minHeight: 48,
-                    ),
-                    icon: const Icon(Icons.close, size: 20),
-                    onPressed: canDefer
-                        ? () {
-                            // Acknowledge this local alert only. Never resolve
-                            // an order or hide an in-flight/uncertain mutation.
-                            final current = ref.read(
-                              orderMutationProvider(widget.orderId),
-                            );
-                            if (_completed ||
-                                _acting ||
-                                _loading ||
-                                _requiresRefresh ||
-                                current.isBusy ||
-                                current.phase == OrderMutationPhase.error ||
-                                ref
-                                    .read(orderNotesProvider(widget.orderId))
-                                    .isBusy) {
-                              return;
-                            }
-                            unawaited(_finish());
-                          }
-                        : null,
-                  ),
+                  Text('1 ${tr(context, 'of')} ${widget.count}'),
                 ],
               ),
             ),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(PelinesSpacing.md),
-                child: PelinesPageBody(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (_loading || mutation.isBusy)
-                        const LinearProgressIndicator(),
-                      if (mutation.isBusy)
-                        Text(tr(context, 'Verifying order update…')),
-                      if (order != null) ...[
-                        NewOrderParityContent(
-                          order: order,
-                          locationName: widget.location.name,
-                        ),
-                        if (!order.paymentStatus.isOperationallyPaid)
-                          Text(
-                            tr(
-                              context,
-                              'Payment is not operationally paid. This order cannot be processed.',
-                            ),
-                          ),
-                        if (order.locationId != widget.location.id)
-                          Text(
-                            tr(
-                              context,
-                              'Location context changed. Refresh to verify this order.',
-                            ),
-                          ),
-                      ],
-                      if (_error != null)
-                        Text(
-                          missing
-                              ? tr(context, 'Order no longer available')
-                              : tr(
-                                  context,
-                                  'Unable to verify the current order. Refresh to try again.',
-                                ),
-                        ),
-                      if (_requiresRefresh)
-                        Text(
-                          tr(
-                            context,
-                            'Refresh to verify the final order state.',
-                          ),
-                        ),
-                      if (mutation.message != null)
-                        Text(
-                          mutation.message!,
-                          key: const Key('alert-mutation-message'),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
+            IconButton(
+              key: const Key('alert-mute'),
+              tooltip: tr(context, 'Mute'),
+              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+              icon: const Icon(Icons.volume_off_outlined, size: 20),
+              onPressed: _feedback.mute,
             ),
-            const Divider(height: 1),
-            Padding(
-              padding: const EdgeInsets.all(PelinesSpacing.md),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final buttons = <Widget>[
-                    if (needsDecision)
-                      FilledButton(
-                        key: const Key('alert-accept'),
-                        style:
-                            PelinesControlStyles.button(
-                              PelinesButtonVariant.accept,
-                            ).copyWith(
-                              minimumSize: const WidgetStatePropertyAll(
-                                Size(48, 56),
-                              ),
-                            ),
-                        onPressed: busy || _completed
-                            ? null
-                            : () => _accept(order),
-                        child: PelinesButtonLabel(
-                          busy: busy,
-                          label: busy
-                              ? tr(context, 'Accepting?')
-                              : tr(context, 'Accept'),
-                        ),
-                      ),
-                    if (canAcknowledge)
-                      FilledButton(
-                        key: const Key('alert-acknowledge'),
-                        style: FilledButton.styleFrom(
-                          minimumSize: const Size.fromHeight(56),
-                        ),
-                        onPressed: _finish,
-                        child: Text(tr(context, 'Acknowledge')),
-                      ),
-                    if (canCancel)
-                      CancelOrderAction(
-                        order: order,
-                        busy: busy || _completed,
-                        expanded: true,
-                        onConfirmationOpened: _feedback.beginConfirmation,
-                        onConfirmationClosed: (confirmed) {
-                          if (_feedback.orderId == widget.orderId &&
-                              _feedback.locationId == widget.location.id) {
-                            _feedback.endConfirmation(confirmed: confirmed);
-                          }
-                        },
-                      ),
-                    TextButton(
-                      key: const Key('alert-refresh'),
-                      style: TextButton.styleFrom(
-                        minimumSize: const Size.fromHeight(56),
-                      ),
-                      onPressed: busy ? null : _refresh,
-                      child: Text(tr(context, 'Refresh')),
-                    ),
-                  ];
-                  final wide =
-                      constraints.maxWidth >=
-                      600 * MediaQuery.textScalerOf(context).scale(1);
-                  return wide
-                      ? Row(
-                          children: [
-                            for (var i = 0; i < buttons.length; i++) ...[
-                              if (i > 0)
-                                const SizedBox(width: PelinesSpacing.sm),
-                              Expanded(flex: i == 0 ? 2 : 1, child: buttons[i]),
-                            ],
-                          ],
-                        )
-                      : Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            for (var i = 0; i < buttons.length; i++) ...[
-                              if (i > 0)
-                                const SizedBox(height: PelinesSpacing.xs),
-                              buttons[i],
-                            ],
-                          ],
-                        );
-                },
-              ),
+            IconButton(
+              key: const Key('alert-defer'),
+              tooltip: tr(context, 'Decide later'),
+              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+              icon: const Icon(Icons.close, size: 20),
+              onPressed: canDefer
+                  ? () {
+                      // Acknowledge this local alert only. Never resolve
+                      // an order or hide an in-flight/uncertain mutation.
+                      final current = ref.read(
+                        orderMutationProvider(widget.orderId),
+                      );
+                      if (_completed ||
+                          _acting ||
+                          _loading ||
+                          _requiresRefresh ||
+                          current.isBusy ||
+                          current.phase == OrderMutationPhase.error ||
+                          ref.read(orderNotesProvider(widget.orderId)).isBusy) {
+                        return;
+                      }
+                      unawaited(_finish());
+                    }
+                  : null,
             ),
           ],
+        ),
+      ),
+      content: Padding(
+        padding: const EdgeInsets.all(PelinesSpacing.md),
+        child: PelinesPageBody(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (_loading || mutation.isBusy) const LinearProgressIndicator(),
+              if (mutation.isBusy) Text(tr(context, 'Verifying order update…')),
+              if (order != null) ...[
+                Text(
+                  '${tr(context, 'Order')} ${order.orderNumber} · ${tr(context, 'respond to accept or decline')}',
+                  style: const TextStyle(color: PelinesColors.textSecondary),
+                ),
+                const SizedBox(height: 16),
+                NewOrderParityContent(
+                  order: order,
+                  locationName: widget.location.name,
+                  locationAddress: widget.location.address,
+                ),
+                if (!order.paymentStatus.isOperationallyPaid)
+                  Text(
+                    tr(
+                      context,
+                      'Payment is not operationally paid. This order cannot be processed.',
+                    ),
+                  ),
+                if (order.locationId != widget.location.id)
+                  Text(
+                    tr(
+                      context,
+                      'Location context changed. Refresh to verify this order.',
+                    ),
+                  ),
+              ],
+              if (_error != null)
+                Text(
+                  missing
+                      ? tr(context, 'Order no longer available')
+                      : tr(
+                          context,
+                          'Unable to verify the current order. Refresh to try again.',
+                        ),
+                ),
+              if (_requiresRefresh)
+                Text(tr(context, 'Refresh to verify the final order state.')),
+              if (mutation.message != null)
+                Text(
+                  mutation.message!,
+                  key: const Key('alert-mutation-message'),
+                ),
+            ],
+          ),
+        ),
+      ),
+      actions: Padding(
+        padding: const EdgeInsets.all(PelinesSpacing.md),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final buttons = <Widget>[
+              if (needsDecision)
+                FilledButton(
+                  key: const Key('alert-accept'),
+                  style:
+                      PelinesControlStyles.button(
+                        PelinesButtonVariant.accept,
+                      ).copyWith(
+                        minimumSize: const WidgetStatePropertyAll(Size(48, 56)),
+                      ),
+                  onPressed: busy || _completed ? null : () => _accept(order),
+                  child: PelinesButtonLabel(
+                    busy: busy,
+                    label: busy
+                        ? tr(context, 'Accepting?')
+                        : AdminLocalizations.of(context)
+                              .text('Accept order', key: 'alert.Accept order'),
+                  ),
+                ),
+              if (canAcknowledge)
+                FilledButton(
+                  key: const Key('alert-acknowledge'),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(56),
+                  ),
+                  onPressed: _finish,
+                  child: Text(tr(context, 'Acknowledge')),
+                ),
+              if (canCancel)
+                CancelOrderAction(
+                  order: order,
+                  busy: busy || _completed,
+                  expanded: true,
+                  sheetStyle: true,
+                  onConfirmationOpened: _feedback.beginConfirmation,
+                  onConfirmationClosed: (confirmed) {
+                    if (_feedback.orderId == widget.orderId &&
+                        _feedback.locationId == widget.location.id) {
+                      _feedback.endConfirmation(confirmed: confirmed);
+                    }
+                  },
+                ),
+              TextButton(
+                key: const Key('alert-refresh'),
+                style: TextButton.styleFrom(
+                  minimumSize: const Size.fromHeight(56),
+                ),
+                onPressed: busy ? null : _refresh,
+                child: Text(tr(context, 'Refresh')),
+              ),
+            ];
+            final wide =
+                constraints.maxWidth >=
+                600 * MediaQuery.textScalerOf(context).scale(1);
+            return wide
+                ? Row(
+                    children: [
+                      for (var i = 0; i < buttons.length; i++) ...[
+                        if (i > 0) const SizedBox(width: PelinesSpacing.sm),
+                        Expanded(flex: i == 0 ? 2 : 1, child: buttons[i]),
+                      ],
+                    ],
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (var i = 0; i < buttons.length; i++) ...[
+                        if (i > 0) const SizedBox(height: PelinesSpacing.xs),
+                        buttons[i],
+                      ],
+                    ],
+                  );
+          },
         ),
       ),
     );

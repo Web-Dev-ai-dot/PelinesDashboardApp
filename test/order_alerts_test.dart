@@ -396,10 +396,10 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const Key('new-order-fullscreen')), findsOneWidget);
+      expect(find.byKey(const Key('new-order-bottom-sheet')), findsOneWidget);
       expect(find.text('1 of 2'), findsOneWidget);
       final context = tester.element(
-        find.byKey(const Key('new-order-fullscreen')),
+        find.byKey(const Key('new-order-bottom-sheet')),
       );
       final container = ProviderScope.containerOf(context);
       expect(container.read(orderAlertsProvider).value!.unseenIds, ['B', 'C']);
@@ -411,7 +411,7 @@ void main() {
       expect(container.read(orderAlertsProvider).value!.unseenIds, ['C']);
       await tester.tap(find.byKey(const Key('alert-acknowledge')));
       await tester.pumpAndSettle();
-      expect(find.byKey(const Key('new-order-fullscreen')), findsNothing);
+      expect(find.byKey(const Key('new-order-bottom-sheet')), findsNothing);
       expect(find.text('Promotions'), findsOneWidget);
     },
   );

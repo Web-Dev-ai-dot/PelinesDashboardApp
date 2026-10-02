@@ -13,6 +13,7 @@ class CancelOrderAction extends ConsumerStatefulWidget {
     required this.order,
     required this.busy,
     this.expanded = false,
+    this.sheetStyle = false,
     this.onConfirmationOpened,
     this.onConfirmationClosed,
     super.key,
@@ -20,6 +21,7 @@ class CancelOrderAction extends ConsumerStatefulWidget {
   final OrderDetail order;
   final bool busy;
   final bool expanded;
+  final bool sheetStyle;
   final VoidCallback? onConfirmationOpened;
   final ValueChanged<bool>? onConfirmationClosed;
 
@@ -34,11 +36,21 @@ class CancelOrderActionState extends ConsumerState<CancelOrderAction> {
   Widget build(BuildContext context) => widget.expanded
       ? OutlinedButton(
           key: const Key('cancel-order-action'),
-          style: PelinesControlStyles.button(
-            PelinesButtonVariant.cancel,
-          ).copyWith(minimumSize: const WidgetStatePropertyAll(Size(48, 56))),
+          style: widget.sheetStyle
+              ? OutlinedButton.styleFrom(
+                  minimumSize: const Size(48, 56),
+                  foregroundColor: PelinesColors.destructive,
+                  side: const BorderSide(color: PelinesColors.destructive),
+                )
+              : PelinesControlStyles.button(PelinesButtonVariant.cancel)
+                    .copyWith(
+                      minimumSize: const WidgetStatePropertyAll(Size(48, 56)),
+                    ),
           onPressed: widget.busy || _confirming ? null : _confirm,
-          child: Text(tr(context, 'Cancel'), textAlign: TextAlign.center),
+          child: Text(
+            tr(context, widget.sheetStyle ? 'Cancel order' : 'Cancel'),
+            textAlign: TextAlign.center,
+          ),
         )
       : Align(
           alignment: Alignment.centerRight,

@@ -36,6 +36,7 @@ OrderDetail _detail(
   PaymentStatus payment = PaymentStatus.paid,
   bool longAddress = false,
   bool rich = false,
+  int itemCount = 1,
   DateTime? scheduled,
   String type = 'online',
   String fulfillment = 'delivery',
@@ -67,22 +68,23 @@ OrderDetail _detail(
     'tipCents': 300,
     'totalCents': 3000,
     'items': [
-      {
-        'id': 'item-1',
-        'productName': 'Tacos de camarón',
-        'quantity': 2,
-        'unitPriceCents': 1200,
-        'lineTotalCents': 2400,
-        'notes': 'Salsa aparte',
-        'modifiers': [
-          {
-            'id': 'm-1',
-            'groupName': 'Salsa',
-            'optionName': 'Verde',
-            'priceDeltaCents': 50,
-          },
-        ],
-      },
+      for (var i = 0; i < itemCount; i++)
+        {
+          'id': 'item-$i',
+          'productName': i == 0 ? 'Tacos de camarón' : 'Item $i',
+          'quantity': 2,
+          'unitPriceCents': 1200,
+          'lineTotalCents': 2400,
+          'notes': 'Salsa aparte',
+          'modifiers': [
+            {
+              'id': 'm-1',
+              'groupName': 'Salsa',
+              'optionName': 'Verde',
+              'priceDeltaCents': 50,
+            },
+          ],
+        },
     ],
   },
   'deliveryAddress': {
@@ -347,6 +349,160 @@ Future<_Harness> _pump(
 
 void main() {
   setUpAll(PelinesTime.initialize);
+  for (final width in [320.0, 390.0, 768.0, 1366.0]) {
+    for (final language in ['en', 'es']) {
+      testWidgets(
+        'bottom sheet modal, content and safe areas $width/$language 2x',
+        (tester) async {
+          tester.view.physicalSize = Size(width, 900);
+          tester.view.devicePixelRatio = 1;
+          tester.view.padding = const FakeViewPadding(top: 24, bottom: 20);
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          addTearDown(tester.view.resetPadding);
+          final h = await _pump(
+            tester,
+            scale: 2,
+            language: language,
+            cancel: true,
+          );
+          final delivery = language == 'es';
+          h.repo.orders['A'] = _detail(
+            'A',
+            rich: true,
+            itemCount: 20,
+            fulfillment: delivery ? 'delivery' : 'pickup',
+            type: delivery ? 'catering' : 'online',
+            scheduled: DateTime.now().add(const Duration(days: 7)),
+          );
+          await h.emit(tester);
+          final sheet = find.byKey(const Key('new-order-bottom-sheet'));
+          final rect = tester.getRect(sheet);
+          expect(rect.top, greaterThan(24));
+          expect(rect.bottom, closeTo(900, 1));
+          expect(rect.width, closeTo(width.clamp(0, 760), 1));
+          expect(rect.center.dx, closeTo(width / 2, 1));
+          expect(find.byKey(const Key('underlying-draft')), findsOneWidget);
+          final route = ModalRoute.of(tester.element(sheet))!;
+          expect(route.barrierDismissible, isFalse);
+          expect(route.barrierColor, Colors.black54);
+          expect(route.opaque, isFalse);
+          expect(route.transitionDuration, const Duration(milliseconds: 250));
+          final clip = tester.widget<ClipRRect>(
+            find.ancestor(of: sheet, matching: find.byType(ClipRRect)).first,
+          );
+          expect(
+            clip.borderRadius,
+            const BorderRadius.vertical(top: Radius.circular(24)),
+          );
+          await tester.tapAt(Offset(width / 2, rect.top / 2));
+          await tester.drag(
+            find.byKey(const Key('alert-order-number')),
+            const Offset(0, 220),
+          );
+          await tester.binding.handlePopRoute();
+          await tester.pumpAndSettle();
+          expect(sheet, findsOneWidget);
+          expect(h.unseen, ['A']);
+          expect(h.repo.patches, 0);
+          expect(find.text(delivery ? 'CLIENTE' : 'CLIENT'), findsOneWidget);
+          expect(
+            find.text(delivery ? 'UBICACIÓN DE ENTREGA' : 'PICKUP LOCATION'),
+            findsOneWidget,
+          );
+          expect(
+            find.text(delivery ? 'HORA DE ENTREGA' : 'PICKUP TIME'),
+            findsOneWidget,
+          );
+          expect(
+            find.text(delivery ? 'TIPO DE ORDEN' : 'ORDER TYPE'),
+            findsOneWidget,
+          );
+          expect(find.text(delivery ? 'CATERING' : 'REGULAR'), findsOneWidget);
+          expect(find.text('María Customer'), findsOneWidget);
+          expect(find.textContaining('respond'), findsOneWidget);
+          expect(
+            find.textContaining(
+              delivery ? 'Hora del Pacífico' : 'Pacific time',
+            ),
+            findsOneWidget,
+          );
+          expect(find.text('2× Item 19'), findsOneWidget);
+          expect(find.textContaining('Salsa: Verde'), findsNWidgets(20));
+          expect(find.text('Customer note: no onions'), findsOneWidget);
+          expect(
+            find.text(
+              delivery ? 'Valor total de la orden' : 'Total Order Value',
+            ),
+            findsOneWidget,
+          );
+          expect(find.text(r'$30.00'), findsOneWidget);
+          final total = find.byKey(const Key('alert-total'));
+          await tester.ensureVisible(total);
+          await tester.pumpAndSettle();
+          expect(total.hitTestable(), findsOneWidget);
+          for (final key in [
+            'alert-accept',
+            'cancel-order-action',
+            'alert-mute',
+            'alert-defer',
+          ]) {
+            final action = find.byKey(Key(key));
+            await tester.ensureVisible(action);
+            await tester.pumpAndSettle();
+            expect(action.hitTestable(), findsOneWidget);
+            expect(
+              tester.getSize(action).shortestSide,
+              greaterThanOrEqualTo(48),
+            );
+          }
+          expect(
+            find.text(delivery ? 'Aceptar orden' : 'Accept order'),
+            findsOneWidget,
+          );
+          expect(
+            find.text(delivery ? 'Cancelar orden' : 'Cancel order'),
+            findsOneWidget,
+          );
+          await tester.tap(find.byKey(const Key('alert-defer')));
+          await tester.pumpAndSettle();
+          expect(sheet, findsNothing);
+          expect(h.repo.patches, 0);
+          expect(h.repo.orders['A']!.status, OrderStatus.pending);
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  }
+  testWidgets(
+    'short phone with keyboard scrolls actions without overflow or dismiss',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 640);
+      tester.view.devicePixelRatio = 1;
+      tester.view.viewInsets = const FakeViewPadding(bottom: 280);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetViewInsets);
+      final h = await _pump(tester, scale: 2, language: 'es', cancel: true);
+      h.repo.orders['A'] = _detail('A', rich: true, itemCount: 20);
+      await h.emit(tester);
+      final sheet = find.byKey(const Key('new-order-bottom-sheet'));
+      expect(tester.getRect(sheet).bottom, lessThanOrEqualTo(360));
+      for (final key in [
+        'alert-accept',
+        'cancel-order-action',
+        'alert-mute',
+        'alert-defer',
+      ]) {
+        await tester.ensureVisible(find.byKey(Key(key)));
+        await tester.pumpAndSettle();
+        expect(find.byKey(Key(key)).hitTestable(), findsOneWidget);
+      }
+      expect(h.unseen, ['A']);
+      expect(h.repo.patches, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
   testWidgets(
     '10.4 Mute keeps fullscreen and unseen with zero PATCH, even on audio failure',
     (tester) async {
@@ -362,7 +518,7 @@ void main() {
       expect(h.sound.plays, 1);
       expect(h.repo.patches, 0);
       expect(h.unseen, ['A']);
-      expect(find.byKey(const Key('new-order-fullscreen')), findsOneWidget);
+      expect(find.byKey(const Key('new-order-bottom-sheet')), findsOneWidget);
     },
   );
 
@@ -467,7 +623,7 @@ void main() {
       final plays = h.sound.plays;
       await tester.pump(const Duration(seconds: 10));
       expect(h.sound.plays, plays);
-      expect(find.byKey(const Key('new-order-fullscreen')), findsOneWidget);
+      expect(find.byKey(const Key('new-order-bottom-sheet')), findsOneWidget);
       expect(h.unseen, ['A', 'B']);
       await tester.tap(find.byKey(const Key('alert-defer')));
       await tester.pumpAndSettle();
@@ -504,7 +660,7 @@ void main() {
         expect(h.sound.stops, greaterThan(stops));
         await tester.pump(const Duration(seconds: 10));
         expect(h.sound.plays, 1);
-        expect(find.byKey(const Key('new-order-fullscreen')), findsOneWidget);
+        expect(find.byKey(const Key('new-order-bottom-sheet')), findsOneWidget);
       },
     );
   }
@@ -557,7 +713,7 @@ void main() {
         tester,
       ); // Even a late snapshot must not reopen after logout.
       expect(h.sound.plays, 1);
-      expect(find.byKey(const Key('new-order-fullscreen')), findsNothing);
+      expect(find.byKey(const Key('new-order-bottom-sheet')), findsNothing);
     });
   }
 
@@ -667,7 +823,9 @@ void main() {
         );
         await h.emit(tester);
         expect(
-          find.text(language == 'es' ? 'Nueva orden' : 'New Order'),
+          find.text(
+            language == 'es' ? 'Nueva orden recibida' : 'New order received',
+          ),
           findsOneWidget,
         );
         expect(find.text('María Customer'), findsOneWidget);
@@ -681,19 +839,25 @@ void main() {
         );
         final accept = find.byKey(const Key('alert-accept'));
         final cancel = find.byKey(const Key('cancel-order-action'));
+        await tester.ensureVisible(accept);
+        await tester.pumpAndSettle();
         expect(accept.hitTestable(), findsOneWidget);
+        await tester.ensureVisible(cancel);
+        await tester.pumpAndSettle();
         expect(cancel.hitTestable(), findsOneWidget);
         expect(tester.getSize(accept).height, greaterThanOrEqualTo(48));
         await tester.ensureVisible(find.byKey(const Key('alert-total')));
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
+        await tester.ensureVisible(find.byKey(const Key('alert-defer')));
+        await tester.pumpAndSettle();
         await tester.tap(find.byKey(const Key('alert-defer')));
         await tester.pumpAndSettle();
         await h.emit(tester);
         expect(h.repo.patches, 0);
         expect(h.repo.orders['A']!.status, OrderStatus.pending);
         expect(h.unseen, isEmpty);
-        expect(find.byKey(const Key('new-order-fullscreen')), findsNothing);
+        expect(find.byKey(const Key('new-order-bottom-sheet')), findsNothing);
       });
     }
   }
@@ -734,7 +898,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(h.repo.listCalls, initialCalls + 2);
       expect(h.unseen, ['future']);
-      expect(find.byKey(const Key('new-order-fullscreen')), findsOneWidget);
+      expect(find.byKey(const Key('new-order-bottom-sheet')), findsOneWidget);
       await tester.tap(find.byKey(const Key('alert-defer')));
       await tester.pumpAndSettle();
       expect(h.repo.patches, 0);
@@ -761,7 +925,7 @@ void main() {
       await tester.pump(const Duration(seconds: 15));
       await tester.pumpAndSettle();
       expect(h.unseen, isEmpty);
-      expect(find.byKey(const Key('new-order-fullscreen')), findsNothing);
+      expect(find.byKey(const Key('new-order-bottom-sheet')), findsNothing);
     },
   );
   testWidgets(
@@ -805,7 +969,10 @@ void main() {
           );
           await h.emit(tester);
           expect(h.unseen, ['A']);
-          expect(find.byKey(const Key('new-order-fullscreen')), findsOneWidget);
+          expect(
+            find.byKey(const Key('new-order-bottom-sheet')),
+            findsOneWidget,
+          );
           expect(
             h.container.read(todayOrdersProvider).requireValue.orders.length,
             future ? 0 : 1,
@@ -816,7 +983,7 @@ void main() {
           expect(h.unseen, isEmpty);
           expect(h.repo.patches, 0);
           expect(h.repo.orders['A']!.status, OrderStatus.pending);
-          expect(find.byKey(const Key('new-order-fullscreen')), findsNothing);
+          expect(find.byKey(const Key('new-order-bottom-sheet')), findsNothing);
         });
       }
     }
@@ -945,7 +1112,7 @@ void main() {
         expect(tester.getSize(close).shortestSide, greaterThanOrEqualTo(48));
         await tester.tap(close);
         await tester.pumpAndSettle();
-        expect(find.byKey(const Key('new-order-fullscreen')), findsNothing);
+        expect(find.byKey(const Key('new-order-bottom-sheet')), findsNothing);
         expect(h.unseen, isEmpty);
         expect(h.repo.patches, 0);
         expect(h.repo.orders['A']!.status, OrderStatus.pending);
@@ -964,7 +1131,7 @@ void main() {
         );
         await tester.pump(const Duration(seconds: 15));
         await tester.pumpAndSettle();
-        expect(find.byKey(const Key('new-order-fullscreen')), findsNothing);
+        expect(find.byKey(const Key('new-order-bottom-sheet')), findsNothing);
         expect(h.repo.patches, 0);
         expect(find.text('A'), findsOneWidget);
       },
@@ -984,7 +1151,7 @@ void main() {
     await tester.pump(const Duration(seconds: 2));
     await tester.pumpAndSettle();
     expect(find.text('B'), findsOneWidget);
-    expect(find.byKey(const Key('new-order-fullscreen')), findsOneWidget);
+    expect(find.byKey(const Key('new-order-bottom-sheet')), findsOneWidget);
     expect(
       h.repo.orders.values.every(
         (order) =>
@@ -1011,7 +1178,7 @@ void main() {
       await tester.tap(find.byKey(const Key('alert-accept')));
       await tester.pumpAndSettle();
       expect(h.repo.orders['A']!.status, OrderStatus.confirmed);
-      expect(find.byKey(const Key('new-order-fullscreen')), findsNothing);
+      expect(find.byKey(const Key('new-order-bottom-sheet')), findsNothing);
       expect(find.text('A'), findsOneWidget);
       expect(find.text('Waiting · 0'), findsOneWidget);
       expect(
@@ -1149,14 +1316,14 @@ void main() {
     await tester.tap(find.byKey(const Key('alert-refresh')));
     await tester.pumpAndSettle();
     expect(h.unseen, ['A']);
-    expect(find.byKey(const Key('new-order-fullscreen')), findsOneWidget);
+    expect(find.byKey(const Key('new-order-bottom-sheet')), findsOneWidget);
     expect(
       h.container.read(orderNotesProvider('A')).draft,
       'Preserve these internal notes',
     );
     await tester.tap(find.byKey(const Key('alert-accept')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const Key('new-order-fullscreen')), findsNothing);
+    expect(find.byKey(const Key('new-order-bottom-sheet')), findsNothing);
     expect(
       h.container.read(orderNotesProvider('A')).draft,
       'Preserve these internal notes',
@@ -1227,13 +1394,13 @@ void main() {
       await tester.pumpAndSettle();
       h.repo.orders['A'] = _detail('A', status: OrderStatus.confirmed);
       await h.emit(tester);
-      expect(find.byKey(const Key('new-order-fullscreen')), findsOneWidget);
+      expect(find.byKey(const Key('new-order-bottom-sheet')), findsOneWidget);
       expect(find.text('Existing dialog').hitTestable(), findsNothing);
       expect(h.unseen, ['A']);
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
       expect(h.unseen, ['A']);
-      expect(find.byKey(const Key('new-order-fullscreen')), findsOneWidget);
+      expect(find.byKey(const Key('new-order-bottom-sheet')), findsOneWidget);
       expect(find.byKey(const Key('alert-accept')), findsNothing);
       await tester.tap(find.byKey(const Key('alert-acknowledge')));
       await tester.pumpAndSettle();
@@ -1274,7 +1441,7 @@ void main() {
       expect(h.repo.patches, 1);
       expect(h.repo.gets, greaterThanOrEqualTo(3));
       expect(h.unseen, isEmpty);
-      expect(find.byKey(const Key('new-order-fullscreen')), findsNothing);
+      expect(find.byKey(const Key('new-order-bottom-sheet')), findsNothing);
     },
   );
 
@@ -1334,7 +1501,7 @@ void main() {
         }
         h.repo.orders['B'] = _detail('B');
         await h.emit(tester);
-        expect(find.byKey(const Key('new-order-fullscreen')), findsOneWidget);
+        expect(find.byKey(const Key('new-order-bottom-sheet')), findsOneWidget);
         expect(find.text('1 of 2'), findsOneWidget);
         expect(find.byKey(const Key('alert-accept')), findsNothing);
         expect(h.repo.patches, 0);
