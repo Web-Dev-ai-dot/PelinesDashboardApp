@@ -23,7 +23,6 @@ import 'package:pelines_admin_app/features/auth/models/admin_session.dart';
 import 'package:pelines_admin_app/features/account/models/profile.dart';
 import 'package:pelines_admin_app/features/account/presentation/admin_home_screen.dart';
 import 'package:pelines_admin_app/features/orders/providers/orders_providers.dart';
-import 'package:pelines_admin_app/features/orders/models/orders_date_filter.dart';
 import 'package:pelines_admin_app/features/locations/presentation/pelines_location_selector.dart';
 import 'package:pelines_admin_app/features/locations/models/location.dart';
 import 'package:pelines_admin_app/features/locations/providers/locations_providers.dart';
@@ -938,7 +937,7 @@ void main() {
     final router = _router(realOrders: true);
     addTearDown(router.dispose);
     await _pump(tester, router);
-    final date = find.byKey(const Key('orders-date-selector'));
+    final date = find.byKey(const Key('upcoming-filters'));
     expect(date, findsNothing);
     await tester.tap(find.byKey(const Key('admin-open-drawer')));
     await tester.pumpAndSettle();
@@ -948,10 +947,7 @@ void main() {
       '/app?view=upcoming',
     );
     expect(find.byType(AdminHomeScreen), findsOneWidget);
-    expect(
-      tester.widget<PopupMenuButton<OrdersDateFilter>>(date).initialValue,
-      OrdersDateFilter.upcoming,
-    );
+    expect(date, findsOneWidget);
     await tester.tap(find.byKey(const Key('admin-open-drawer')));
     await tester.pumpAndSettle();
     await _tapDestination(tester, 'orders');
@@ -984,7 +980,7 @@ void main() {
         );
         expect(find.byKey(const Key('orders-header-refresh')), findsOneWidget);
         expect(find.byKey(const Key('orders-search')), findsOneWidget);
-        expect(find.byKey(const Key('orders-date-selector')), findsOneWidget);
+        expect(find.byKey(const Key('upcoming-filters')), findsOneWidget);
         expect(tester.takeException(), isNull);
       });
     }

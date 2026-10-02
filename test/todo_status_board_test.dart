@@ -23,6 +23,7 @@ import 'package:pelines_admin_app/features/orders/presentation/order_preview_car
 import 'package:pelines_admin_app/features/orders/providers/orders_providers.dart';
 
 import 'order_test_data.dart';
+import 'upcoming_sheet_helpers.dart';
 
 import 'package:pelines_admin_app/features/orders/models/orders_date_filter.dart';
 
@@ -442,6 +443,15 @@ void main() {
         }
         expect(repo.patches, 3);
         expect(repo.rows['pending']!['scheduledFor'], scheduled);
+        if (upcoming) {
+          await upcomingType(tester, 'online');
+          await upcomingTap(tester, 'upcoming-filters');
+          final day = pacificDate(DateTime.parse(scheduled as String));
+          await upcomingDate(tester, 'from', day);
+          await upcomingDate(tester, 'to', day);
+          await upcomingTap(tester, 'upcoming-status-ready');
+          await upcomingTap(tester, 'upcoming-sheet-apply');
+        }
         await tab(tester, 'ready');
         final view = find.descendant(
           of: card('pending'),
@@ -469,6 +479,28 @@ void main() {
             '  CUSTOMER pending  ',
           );
           expect(find.byKey(const Key('upcoming-sort')), findsOneWidget);
+          await upcomingTap(tester, 'upcoming-sort');
+          expect(
+            tester
+                .widget<RadioGroup<OrderType?>>(
+                  find.byType(RadioGroup<OrderType?>),
+                )
+                .groupValue,
+            OrderType.online,
+          );
+          await upcomingDismiss(tester);
+          await upcomingTap(tester, 'upcoming-filters');
+          expect(
+            tester
+                .widget<RadioGroup<OrderStatus?>>(
+                  find.byType(RadioGroup<OrderStatus?>),
+                )
+                .groupValue,
+            OrderStatus.ready,
+          );
+          expect(find.textContaining('Tomorrow'), findsNothing);
+          expect(find.textContaining('No end date'), findsNothing);
+          await upcomingDismiss(tester);
         }
         expect(tester.takeException(), isNull);
       },

@@ -13,6 +13,7 @@ import 'package:pelines_admin_app/features/orders/presentation/today_orders_view
 import 'package:pelines_admin_app/features/orders/providers/orders_providers.dart';
 
 import 'order_test_data.dart';
+import 'upcoming_sheet_helpers.dart';
 
 OrderSummary _order(
   String id,
@@ -86,12 +87,14 @@ class _Repository implements OrdersRepository {
 }
 
 Future<void> _date(WidgetTester tester, String label) async {
-  await tester.ensureVisible(find.byKey(const Key('orders-date-selector')));
-  await tester.pumpAndSettle();
-  await tester.tap(find.byKey(const Key('orders-date-selector')));
-  await tester.pumpAndSettle();
-  await tester.tap(find.widgetWithText(PopupMenuItem<OrdersDateFilter>, label));
-  await tester.pumpAndSettle();
+  await upcomingTap(tester, 'upcoming-filters');
+  await upcomingTap(tester, 'upcoming-filter-reset');
+  if (label == 'Tomorrow') {
+    await upcomingTap(tester, 'upcoming-to');
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+  }
+  await upcomingTap(tester, 'upcoming-sheet-apply');
 }
 
 void main() {
@@ -202,7 +205,7 @@ void main() {
     for (final value in ['Tomorrow', 'Upcoming']) {
       await _date(tester, value);
       expect(
-        tester.getSize(find.byKey(const Key('orders-date-selector'))).height,
+        tester.getSize(find.byKey(const Key('upcoming-filters'))).height,
         greaterThanOrEqualTo(48),
       );
       expect(tester.takeException(), isNull);
@@ -380,26 +383,20 @@ void main() {
       await tester.pumpAndSettle();
       final all = container.read(calendarOrdersProvider).requireValue.orders;
       expect(all.any((o) => o.id == 'completed' || o.id == 'unpaid'), isFalse);
-      await _date(tester, 'Choose date…');
-      expect(find.byType(DatePickerDialog), findsOneWidget);
+      await upcomingTap(tester, 'upcoming-filters');
+      await upcomingTap(tester, 'upcoming-from');
+      final picker = tester.widget<DatePickerDialog>(
+        find.byType(DatePickerDialog),
+      );
+      final today = pacificDate(PelinesTime.now());
+      expect(
+        picker.firstDate,
+        DateTime(today.year, today.month, today.day + 1),
+      );
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
-      expect(find.text('Upcoming'), findsOneWidget);
-      await _date(tester, 'Choose date…');
-      await tester.tap(find.text('OK'));
-      await tester.pumpAndSettle();
-      expect(find.byType(DatePickerDialog), findsNothing);
-      expect(
-        tester
-            .widget<PopupMenuButton<OrdersDateFilter>>(
-              find.byKey(const Key('orders-date-selector')),
-            )
-            .initialValue,
-        OrdersDateFilter.chooseDate,
-      );
-      // Choosing today cannot widen Upcoming into Today.
+      await upcomingDismiss(tester);
       expect(find.text('waiting-today'), findsNothing);
-      await _date(tester, 'Upcoming');
       expect(repository.calls, loadedCalls);
       expect(tester.takeException(), isNull);
     },

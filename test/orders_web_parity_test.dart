@@ -18,6 +18,7 @@ import 'package:pelines_admin_app/features/orders/presentation/order_preview_car
 import 'package:pelines_admin_app/features/orders/providers/orders_providers.dart';
 
 import 'order_test_data.dart';
+import 'upcoming_sheet_helpers.dart';
 
 final location = Location(
   id: 'location-id',
@@ -149,6 +150,84 @@ Future<void> _mount(
 
 void main() {
   testWidgets(
+    'Search type date status compose; refresh and unchanged Apply preserve controls',
+    (tester) async {
+      final repo = _Repository();
+      await _mount(tester, repo, width: 1400);
+      expect(find.byType(DropdownButton<OrderType>), findsNothing);
+      expect(find.byKey(const Key('orders-date-selector')), findsNothing);
+      expect(find.byType(RadioListTile<OrderStatus?>), findsNothing);
+      await tester.enterText(find.byType(TextField), ' celebration confirmed ');
+      await tester.pumpAndSettle();
+      await upcomingType(tester, 'catering');
+      final calls = repo.listCalls;
+      await upcomingTap(tester, 'upcoming-filters');
+      await upcomingDate(
+        tester,
+        'from',
+        DateTime.now().add(const Duration(days: 1)),
+      );
+      await upcomingDate(
+        tester,
+        'to',
+        DateTime.now().add(const Duration(days: 4)),
+      );
+      await upcomingTap(tester, 'upcoming-status-confirmed');
+      await upcomingTap(tester, 'upcoming-sheet-apply');
+      expect(find.text('Confirmed · 1'), findsOneWidget);
+      expect(find.text('Waiting · 0'), findsOneWidget);
+      for (final state in ['pending', 'confirmed', 'preparing', 'ready']) {
+        expect(find.byKey(Key('todo-column-$state')), findsOneWidget);
+      }
+      await upcomingTap(tester, 'upcoming-filters');
+      await upcomingTap(tester, 'upcoming-sheet-apply');
+      expect(repo.listCalls, calls);
+      await tester
+          .widget<RefreshIndicator>(find.byType(RefreshIndicator))
+          .onRefresh();
+      await tester.pumpAndSettle();
+      expect(repo.listCalls, calls + 1);
+      expect(find.text('Confirmed · 1'), findsOneWidget);
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        ' celebration confirmed ',
+      );
+      await upcomingTap(tester, 'upcoming-sort');
+      expect(
+        tester
+            .widget<RadioGroup<OrderType?>>(find.byType(RadioGroup<OrderType?>))
+            .groupValue,
+        OrderType.catering,
+      );
+      await upcomingDismiss(tester);
+      await upcomingTap(tester, 'upcoming-filters');
+      expect(
+        tester
+            .widget<RadioGroup<OrderStatus?>>(
+              find.byType(RadioGroup<OrderStatus?>),
+            )
+            .groupValue,
+        OrderStatus.confirmed,
+      );
+      await upcomingTap(tester, 'upcoming-status-delivered');
+      await upcomingTap(tester, 'upcoming-sheet-apply');
+      expect(find.byType(OrderPreviewCard), findsNothing);
+      for (final label in ['Waiting', 'Confirmed', 'Preparing', 'Ready']) {
+        expect(find.text('$label · 0'), findsOneWidget);
+      }
+      await upcomingTap(tester, 'upcoming-filters');
+      await upcomingTap(tester, 'upcoming-filter-reset');
+      await upcomingTap(tester, 'upcoming-sheet-apply');
+      expect(find.text('Confirmed · 1'), findsOneWidget);
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        ' celebration confirmed ',
+      );
+      expect(repo.listCalls, calls + 1);
+    },
+  );
+
+  testWidgets(
     'Upcoming scope, filtered counts, sorting, reset and real channel compose',
     (tester) async {
       final repo = _Repository();
@@ -221,57 +300,15 @@ void main() {
       for (final s in ['pending', 'confirmed', 'preparing', 'ready']) {
         expect(find.byKey(Key('todo-column-$s')), findsOneWidget);
       }
-      await tester.ensureVisible(find.byType(DropdownButton<OrderType>));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byType(DropdownButton<OrderType>));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Regular').last);
-      await tester.pumpAndSettle();
-      await tester.ensureVisible(find.byKey(const Key('orders-date-selector')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('orders-date-selector')));
-      await tester.pumpAndSettle();
-      expect(
-        find.widgetWithText(PopupMenuItem<OrdersDateFilter>, 'Today'),
-        findsNothing,
-      );
-      expect(
-        find.widgetWithText(PopupMenuItem<OrdersDateFilter>, 'All dates'),
-        findsNothing,
-      );
-      await tester.tap(
-        find.widgetWithText(PopupMenuItem<OrdersDateFilter>, 'Tomorrow'),
-      );
-      await tester.pumpAndSettle();
+      await upcomingType(tester, 'online');
       expect(find.byType(OrderPreviewCard), findsNothing);
-      await tester.ensureVisible(find.byKey(const Key('upcoming-reset')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('upcoming-reset')));
+      await upcomingType(tester, 'all');
+      expect(find.byType(OrderPreviewCard), findsOneWidget);
+      await tester.enterText(find.byType(TextField), '');
       await tester.pumpAndSettle();
       expect(find.text('Waiting · 2'), findsOneWidget);
-      expect(
-        tester.widget<TextField>(find.byType(TextField)).controller!.text,
-        isEmpty,
-      );
-      expect(find.byType(ChoiceChip), findsNothing);
       expect(repo.listCalls, calls);
       expect(repo.patches, 0);
-      expect(
-        tester
-            .widget<DropdownButton<OrderType>>(
-              find.byType(DropdownButton<OrderType>),
-            )
-            .value,
-        isNull,
-      );
-      expect(
-        tester
-            .widget<PopupMenuButton<OrdersDateFilter>>(
-              find.byKey(const Key('orders-date-selector')),
-            )
-            .initialValue,
-        OrdersDateFilter.upcoming,
-      );
     },
   );
   testWidgets('wide board groups only real states and scrolls to Ready', (
@@ -341,16 +378,9 @@ void main() {
         scale: scale,
         language: language,
       );
-      expect(
-        tester
-            .widget<PopupMenuButton<OrdersDateFilter>>(
-              find.byKey(const Key('orders-date-selector')),
-            )
-            .initialValue,
-        OrdersDateFilter.upcoming,
-      );
+      expect(find.byKey(const Key('upcoming-filters')), findsOneWidget);
       expect(find.byType(ChoiceChip), findsNothing);
-      expect(find.byType(PelinesFilterBar), findsOneWidget);
+      expect(find.byType(PelinesFilterBar), findsNothing);
       await tester.scrollUntilVisible(
         find.byKey(const Key('todo-board-scroll')),
         250,
@@ -419,16 +449,9 @@ void main() {
       await tester.enterText(find.byType(TextField), 'Celebration confirmed');
       await tester.pumpAndSettle();
       expect(find.byType(OrderPreviewCard), findsOneWidget);
-      final type = find.byType(DropdownButton<OrderType>);
-      await tester.tap(type);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Regular').last);
-      await tester.pumpAndSettle();
+      await upcomingType(tester, 'online');
       expect(find.byType(OrderPreviewCard), findsNothing);
-      await tester.tap(type);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Catering').last);
-      await tester.pumpAndSettle();
+      await upcomingType(tester, 'catering');
       expect(find.byType(OrderPreviewCard), findsOneWidget);
       expect(repository.listCalls, calls);
       expect(repository.patches, 0);

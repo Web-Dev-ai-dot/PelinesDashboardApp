@@ -7,6 +7,10 @@ import '../../../app/l10n/admin_localizations.dart';
 import '../../../app/theme/app_theme.dart';
 import '../../../app/theme/pelines_components.dart';
 import '../models/order_models.dart';
+import '../models/orders_date_filter.dart';
+import '../models/upcoming_filters.dart';
+import '../../../core/time/pelines_time.dart';
+import 'upcoming_control_sheets.dart';
 import '../providers/orders_providers.dart';
 import 'order_ui_helpers.dart';
 import 'todo_status_board.dart';
@@ -16,18 +20,15 @@ import 'todo_status_board.dart';
 class UpcomingOrdersView extends StatefulWidget {
   const UpcomingOrdersView({
     required this.orders,
-    required this.dateControl,
-    required this.dateContext,
+    this.initialDateFilter = OrdersDateFilter.upcoming,
     required this.onRefresh,
     required this.onRetry,
-    required this.onReset,
     super.key,
   });
   final AsyncValue<TodayOrdersState> orders;
-  final Widget dateControl;
-  final String? dateContext;
+  final OrdersDateFilter initialDateFilter;
   final Future<void> Function() onRefresh;
-  final VoidCallback onRetry, onReset;
+  final VoidCallback onRetry;
   @override
   State<UpcomingOrdersView> createState() => _UpcomingOrdersViewState();
 }
@@ -35,6 +36,43 @@ class UpcomingOrdersView extends StatefulWidget {
 class _UpcomingOrdersViewState extends State<UpcomingOrdersView> {
   final _search = TextEditingController();
   OrderType? _type;
+  late UpcomingFilters _filters = _initialFilters();
+
+  UpcomingFilters _initialFilters() {
+    if (widget.initialDateFilter == OrdersDateFilter.tomorrow) {
+      final today = pacificDate(PelinesTime.now());
+      final tomorrow = DateTime.utc(today.year, today.month, today.day + 1);
+      return UpcomingFilters(from: tomorrow, to: tomorrow);
+    }
+    return const UpcomingFilters();
+  }
+
+  @override
+  void didUpdateWidget(covariant UpcomingOrdersView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialDateFilter != widget.initialDateFilter) {
+      _filters = _initialFilters();
+    }
+  }
+
+  Future<void> _sort() async {
+    final result = await showUpcomingSort(context, _type);
+    if (result != null && mounted && result.type != _type) {
+      setState(() => _type = result.type);
+    }
+  }
+
+  Future<void> _filter() async {
+    final result = await showUpcomingFilters(context, _filters);
+    if (result != null &&
+        mounted &&
+        (result.from != _filters.from ||
+            result.to != _filters.to ||
+            result.status != _filters.status)) {
+      setState(() => _filters = result);
+    }
+  }
+
   @override
   void dispose() {
     _search.dispose();
@@ -54,72 +92,47 @@ class _UpcomingOrdersViewState extends State<UpcomingOrdersView> {
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
               sliver: SliverToBoxAdapter(
-                child: PelinesFilterBar(
-                  search: PelinesInput(
-                    key: const Key('orders-search'),
-                    controller: _search,
-                    variant: PelinesInputVariant.search,
-                    label: tr(context, 'Search customer, event or order #'),
-                    onChanged: (_) => setState(() {}),
-                  ),
-                  filters: [
-                    widget.dateControl,
-                    PelinesSelect<OrderType>(
-                      key: const Key('orders-type-filter'),
-                      value: _type,
-                      label: tr(context, 'Order type'),
-                      items: [
-                        DropdownMenuItem(
-                          value: null,
-                          child: Text(tr(context, 'All types')),
-                        ),
-                        for (final type in OrderType.values)
-                          DropdownMenuItem(
-                            value: type,
-                            child: Text(tr(context, orderTypeLabel(type))),
-                          ),
-                      ],
-                      onChanged: (value) => setState(() => _type = value),
-                    ),
-                    TextButton.icon(
-                      key: const Key('upcoming-reset'),
-                      onPressed: () {
-                        setState(() {
-                          _search.clear();
-                          _type = null;
-                        });
-                        widget.onReset();
-                      },
-                      icon: const Icon(Icons.filter_alt_off_outlined),
-                      label: Text(tr(context, 'Clear filters')),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              sliver: SliverToBoxAdapter(
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Existing Upcoming has only this operational comparator.
-                    Tooltip(
-                      message: tr(
-                        context,
-                        'Scheduled orders first, earliest first.',
-                      ),
-                      child: Text(
-                        tr(context, 'Sort by: Fulfillment time'),
-                        key: const Key('upcoming-sort'),
-                      ),
+                    PelinesInput(
+                      key: const Key('orders-search'),
+                      controller: _search,
+                      variant: PelinesInputVariant.search,
+                      label: tr(context, 'Search customer, event or order #'),
+                      onChanged: (_) => setState(() {}),
                     ),
-                    if (widget.dateContext != null)
-                      Text(
-                        widget.dateContext!,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 8,
+                      children: [
+                        OutlinedButton.icon(
+                          key: const Key('upcoming-sort'),
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size(48, 48),
+                          ),
+                          onPressed: _sort,
+                          icon: Icon(
+                            _type == null
+                                ? Icons.sort
+                                : Icons.check_circle_outline,
+                          ),
+                          label: Text(tr(context, 'Sort by')),
+                        ),
+                        OutlinedButton.icon(
+                          key: const Key('upcoming-filters'),
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size(48, 48),
+                          ),
+                          onPressed: _filter,
+                          icon: Icon(
+                            _filters.isDefault ? Icons.tune : Icons.filter_alt,
+                          ),
+                          label: Text(tr(context, 'Filters')),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -152,6 +165,7 @@ class _UpcomingOrdersViewState extends State<UpcomingOrdersView> {
                         .where(
                           (order) =>
                               (_type == null || order.orderType == _type) &&
+                              _filters.matches(order) &&
                               (query.isEmpty ||
                                   [
                                     order.orderNumber,
