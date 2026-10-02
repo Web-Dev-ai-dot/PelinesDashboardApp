@@ -23,19 +23,23 @@ class OrderPreviewCard extends ConsumerWidget {
     required this.order,
     this.statusBoard = false,
     this.showChannel = false,
+    this.planning = false,
     super.key,
   });
   final OrderSummary order;
   final bool statusBoard;
   final bool showChannel;
+  final bool planning;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final detail = statusBoard
+    final detail = statusBoard || planning
         ? ref.watch(orderDetailProvider(order.id))
         : null;
     void view() {
-      ref.read(orderAlertsProvider.notifier).acknowledge(order.id);
+      if (!planning) {
+        ref.read(orderAlertsProvider.notifier).acknowledge(order.id);
+      }
       context.push('/app/orders/${order.id}');
     }
 
@@ -158,7 +162,7 @@ class OrderPreviewCard extends ConsumerWidget {
                   style: PelinesTypography.smallLabel,
                 ),
                 const SizedBox(height: 6),
-                if (statusBoard) ...[
+                if (statusBoard || planning) ...[
                   if (detail!.hasError)
                     TextButton(
                       onPressed: () =>
@@ -186,24 +190,25 @@ class OrderPreviewCard extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 16),
-                GestureDetector(
-                  // Consume taps on a disabled action instead of opening detail.
-                  onTap: () {},
-                  excludeFromSemantics: true,
-                  child: OrderPreviewAction(
-                    key: ValueKey(order.id),
-                    order: order,
-                    webStyle: true,
-                    showNextStatus: statusBoard,
+                if (!planning)
+                  GestureDetector(
+                    // Consume taps on a disabled action instead of opening detail.
+                    onTap: () {},
+                    excludeFromSemantics: true,
+                    child: OrderPreviewAction(
+                      key: ValueKey(order.id),
+                      order: order,
+                      webStyle: true,
+                      showNextStatus: statusBoard,
+                    ),
                   ),
-                ),
                 const SizedBox(height: 8),
-                if (statusBoard) ...[
+                if (statusBoard && !planning) ...[
                   TodoPrintAction(order: order),
                   const SizedBox(height: 8),
                 ],
                 PelinesButton(
-                  label: tr(context, 'View'),
+                  label: tr(context, planning ? 'View Order Details' : 'View'),
                   variant: PelinesButtonVariant.secondary,
                   onPressed: view,
                 ),

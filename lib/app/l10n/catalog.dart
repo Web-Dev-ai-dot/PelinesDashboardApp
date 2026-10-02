@@ -1,5 +1,11 @@
 // English source messages and their Spanish UI translations. Backend values are never catalog keys.
 const spanishCatalog = <String, String>{
+  'View upcoming orders by week or month to plan kitchen production and pickup flow.': 'Consulta las próximas órdenes por semana o mes para planificar la producción en cocina y las recogidas.',
+  'Week': 'Semana',
+  'order': 'orden',
+  'View Order Details': 'Ver detalles de la orden',
+  'Previous week': 'Semana anterior',
+  'Next week': 'Semana siguiente',
   'Sort by': 'Ordenar por',
   'Sort': 'Ordenar',
   'Date range': 'Rango de fechas',

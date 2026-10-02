@@ -12,6 +12,11 @@ import 'package:pelines_admin_app/features/orders/presentation/orders_calendar_s
 import 'package:pelines_admin_app/features/orders/providers/orders_providers.dart';
 
 import 'order_test_data.dart';
+import 'calendar_test_helpers.dart';
+
+import 'package:pelines_admin_app/features/orders/presentation/calendar_month_grid.dart';
+
+import 'upcoming_sheet_helpers.dart';
 
 void main() {
   for (final width in [390.0, 768.0]) {
@@ -37,13 +42,9 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      for (final field
-          in find.byType(DropdownButtonFormField<int>).evaluate()) {
-        expect(
-          tester.getSize(find.byWidget(field.widget)).height,
-          greaterThanOrEqualTo(48),
-        );
-      }
+      await upcomingTap(tester, 'calendar-view-Month');
+      expect(find.byType(DropdownButtonFormField<int>), findsNWidgets(2));
+      expect(find.byType(CalendarMonthGrid), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   }
@@ -65,7 +66,7 @@ void main() {
   );
 
   testWidgets(
-    'Calendar month/year controls synchronize swipe and direct jumps',
+    'Calendar Month Year dropdowns alone update grid and clamp selected day',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(768, 1000));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -79,51 +80,47 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      Future<void> select(String label, String text) async {
-        final field = find.byWidgetPredicate(
-          (w) =>
-              w is DropdownButtonFormField<int> &&
-              w.decoration.labelText == label,
-        );
-        await tester.ensureVisible(field);
-        await tester.tap(field);
-        await tester.pumpAndSettle();
-        await Scrollable.ensureVisible(
-          tester.element(find.text(text).last),
-          alignment: 0.5,
-        );
-        await tester.pumpAndSettle();
-        await tester.tap(find.text(text).last);
-        await tester.pumpAndSettle();
-      }
-
-      CalendarDatePicker picker() =>
-          tester.widget<CalendarDatePicker>(find.byType(CalendarDatePicker));
-      await select('Year', '2024');
-      await select('Month', 'January');
-      await tester.tap(find.text('31').hitTestable());
-      await tester.pumpAndSettle();
-      await select('Month', 'February');
-      expect(picker().initialDate, DateTime(2024, 2, 29));
-      await select('Year', '2025');
-      expect(picker().initialDate, DateTime(2025, 2, 28));
-      await select('Month', 'December');
-      final beforeSwipeKey = picker().key;
-      await tester.drag(find.byType(PageView), const Offset(-600, 0));
-      await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('calendar-Month-1')), findsOneWidget);
-      expect(find.byKey(const ValueKey('calendar-Year-2026')), findsOneWidget);
-      expect(picker().key, beforeSwipeKey);
-      await select('Month', 'March');
-      expect(picker().initialDate, DateTime(2026, 3, 28));
-      expect(picker().key, isNot(beforeSwipeKey));
-      await select('Month', 'January');
-      await tester.drag(find.byType(PageView), const Offset(600, 0));
-      await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('calendar-Month-12')), findsOneWidget);
-      expect(find.byKey(const ValueKey('calendar-Year-2025')), findsOneWidget);
-      await select('Year', '2024');
-      expect(picker().initialDate, DateTime(2024, 12, 28));
+      await upcomingTap(tester, 'calendar-view-Month');
+      final picker = find.byType(CalendarMonthGrid);
+      expect(picker, findsOneWidget);
+      expect(find.byType(DropdownButtonFormField<int>), findsNWidgets(2));
+      final loc = MaterialLocalizations.of(tester.element(picker));
+      expect(find.byType(CalendarDatePicker), findsNothing);
+      expect(find.byTooltip(loc.nextMonthTooltip), findsNothing);
+      expect(find.byTooltip(loc.previousMonthTooltip), findsNothing);
+      await calendarPeriod(tester, 'Year', 2024);
+      await calendarPeriod(tester, 'Month', 1);
+      expect(
+        find.byKey(const ValueKey('calendar-grid-2024-1')),
+        findsOneWidget,
+      );
+      await upcomingTap(tester, 'calendar-day-31');
+      expect(
+        tester.widget<CalendarMonthGrid>(picker).selectedDay,
+        DateTime(2024, 1, 31),
+      );
+      await calendarPeriod(tester, 'Month', 2);
+      expect(
+        tester.widget<CalendarMonthGrid>(picker).selectedDay,
+        DateTime(2024, 2, 29),
+      );
+      expect(find.byKey(const ValueKey('calendar-day-30')), findsNothing);
+      await calendarPeriod(tester, 'Year', 2025);
+      expect(
+        tester.widget<CalendarMonthGrid>(picker).selectedDay,
+        DateTime(2025, 2, 28),
+      );
+      expect(
+        find.byKey(const ValueKey('calendar-grid-2025-2')),
+        findsOneWidget,
+      );
+      await upcomingTap(tester, 'calendar-day-15');
+      final selected = DateTime(2025, 2, 15);
+      expect(tester.widget<CalendarMonthGrid>(picker).selectedDay, selected);
+      await upcomingTap(tester, 'calendar-view-Today');
+      await upcomingTap(tester, 'calendar-view-Week');
+      await upcomingTap(tester, 'calendar-view-Month');
+      expect(tester.widget<CalendarMonthGrid>(picker).selectedDay, selected);
       expect(tester.takeException(), isNull);
     },
   );
@@ -306,15 +303,54 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    final orderCard = find.textContaining('calendar-order');
+    await tester.enterText(find.byType(TextField), 'calendar-order');
+    await tester.pumpAndSettle();
+    await upcomingTap(tester, 'calendar-sort');
+    await upcomingTap(tester, 'upcoming-type-online');
+    await upcomingTap(tester, 'upcoming-sheet-apply');
+    await upcomingTap(tester, 'calendar-filter-button');
+    await upcomingTap(tester, 'upcoming-status-pending');
+    await upcomingTap(tester, 'upcoming-sheet-apply');
+    final orderCard = find.text('View Order Details');
     await tester.ensureVisible(orderCard);
     await tester.pumpAndSettle();
+    final scroll = Scrollable.of(tester.element(orderCard)).position;
+    final offset = scroll.pixels;
     await tester.tap(orderCard);
     await tester.pumpAndSettle();
     expect(find.text('detail calendar-uuid'), findsOneWidget);
     router.pop();
     await tester.pumpAndSettle();
-    expect(find.text('Orders Calendar'), findsOneWidget);
+    expect(find.text('Calendar'), findsOneWidget);
+    expect(scroll.pixels, offset);
+    expect(
+      tester
+          .widget<ChoiceChip>(find.byKey(const Key('calendar-view-Today')))
+          .selected,
+      isTrue,
+    );
+    expect(
+      tester.widget<EditableText>(find.byType(EditableText)).controller.text,
+      'calendar-order',
+    );
+    await upcomingTap(tester, 'calendar-sort');
+    expect(
+      tester
+          .widget<RadioGroup<OrderType?>>(find.byType(RadioGroup<OrderType?>))
+          .groupValue,
+      OrderType.online,
+    );
+    await upcomingDismiss(tester);
+    await upcomingTap(tester, 'calendar-filter-button');
+    expect(
+      tester
+          .widget<RadioGroup<OrderStatus?>>(
+            find.byType(RadioGroup<OrderStatus?>),
+          )
+          .groupValue,
+      OrderStatus.pending,
+    );
+    await upcomingDismiss(tester);
   });
 }
 

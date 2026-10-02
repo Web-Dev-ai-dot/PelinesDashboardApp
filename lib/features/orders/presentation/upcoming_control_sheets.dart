@@ -39,6 +39,13 @@ Future<UpcomingFilters?> showUpcomingFilters(
   UpcomingFilters applied,
 ) => _show(context, _FiltersSheet(applied: applied));
 
+// Calendar already selects dates in its Today/Week/Month views and admits only
+// active statuses. Reuse draft/Apply/Reset without Upcoming's future range.
+Future<UpcomingFilters?> showCalendarFilters(
+  BuildContext context,
+  UpcomingFilters applied,
+) => _show(context, _FiltersSheet(applied: applied, calendar: true));
+
 class _Sheet extends StatelessWidget {
   const _Sheet({
     required this.title,
@@ -153,8 +160,9 @@ class _SortSheetState extends State<_SortSheet> {
 }
 
 class _FiltersSheet extends StatefulWidget {
-  const _FiltersSheet({required this.applied});
+  const _FiltersSheet({required this.applied, this.calendar = false});
   final UpcomingFilters applied;
+  final bool calendar;
   @override
   State<_FiltersSheet> createState() => _FiltersSheetState();
 }
@@ -209,40 +217,44 @@ class _FiltersSheetState extends State<_FiltersSheet> {
         Navigator.pop(context, result);
       },
       children: [
-        Semantics(
-          header: true,
-          child: Text(
-            tr(context, 'Date range'),
-            style: Theme.of(context).textTheme.titleMedium,
+        if (!widget.calendar) ...[
+          Semantics(
+            header: true,
+            child: Text(
+              tr(context, 'Date range'),
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
           ),
-        ),
-        const SizedBox(height: 8),
-        for (final from in [true, false])
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: OutlinedButton.icon(
-              key: Key(from ? 'upcoming-from' : 'upcoming-to'),
-              style: OutlinedButton.styleFrom(minimumSize: const Size(48, 48)),
-              onPressed: () => _pick(from),
-              icon: const Icon(Icons.calendar_today_outlined),
-              label: Text(
-                '${tr(context, from ? 'From' : 'To')}: ${(from ? _from : _to) == null ? tr(context, from ? 'Tomorrow' : 'No end date') : format.format((from ? _from : _to)!)}',
+          const SizedBox(height: 8),
+          for (final from in [true, false])
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: OutlinedButton.icon(
+                key: Key(from ? 'upcoming-from' : 'upcoming-to'),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(48, 48),
+                ),
+                onPressed: () => _pick(from),
+                icon: const Icon(Icons.calendar_today_outlined),
+                label: Text(
+                  '${tr(context, from ? 'From' : 'To')}: ${(from ? _from : _to) == null ? tr(context, from ? 'Tomorrow' : 'No end date') : format.format((from ? _from : _to)!)}',
+                ),
               ),
             ),
+          Text(
+            tr(context, 'From tomorrow · Pacific time · Available orders only'),
+            style: Theme.of(context).textTheme.bodySmall,
           ),
-        Text(
-          tr(context, 'From tomorrow · Pacific time · Available orders only'),
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-        if (_invalid)
-          Semantics(
-            liveRegion: true,
-            child: Text(
-              tr(context, 'From must be on or before To.'),
-              style: const TextStyle(color: PelinesColors.brandPrimary),
+          if (_invalid)
+            Semantics(
+              liveRegion: true,
+              child: Text(
+                tr(context, 'From must be on or before To.'),
+                style: const TextStyle(color: PelinesColors.brandPrimary),
+              ),
             ),
-          ),
-        const SizedBox(height: 16),
+          const SizedBox(height: 16),
+        ],
         Semantics(
           header: true,
           child: Text(
@@ -263,7 +275,8 @@ class _FiltersSheetState extends State<_FiltersSheet> {
                 OrderStatus.ready: 'Ready',
                 // Both fulfillment types persist delivered. Upcoming's active
                 // provider excludes terminal orders, so this selection is empty.
-                OrderStatus.delivered: 'Picked up / Delivered',
+                if (!widget.calendar)
+                  OrderStatus.delivered: 'Picked up / Delivered',
               }.entries)
                 RadioListTile<OrderStatus?>(
                   key: Key('upcoming-status-${entry.key?.name ?? 'all'}'),
