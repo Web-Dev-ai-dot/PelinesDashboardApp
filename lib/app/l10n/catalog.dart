@@ -1,5 +1,10 @@
 // English source messages and their Spanish UI translations. Backend values are never catalog keys.
 const spanishCatalog = <String, String>{
+  'Filters': 'Filtros',
+  'Counter': 'Mostrador',
+  'Search customer, event or order #': 'Buscar cliente, evento o número de orden',
+  'Sort by: Fulfillment time': 'Ordenar por: hora de recogida o entrega',
+  'Scheduled orders first, earliest first.': 'Pedidos programados primero, de más temprano a más tarde.',
   'Origin': 'Origen',
   'Pickup Instructions': 'Instrucciones de recogida',
   'No customer notes': 'Sin notas del cliente',

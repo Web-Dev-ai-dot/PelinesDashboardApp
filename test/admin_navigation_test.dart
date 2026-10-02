@@ -960,6 +960,35 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  for (final width in [320.0, 768.0]) {
+    for (final language in ['en', 'es']) {
+      testWidgets('Upcoming title and controls at $width/2x/$language', (
+        tester,
+      ) async {
+        await tester.binding.setSurfaceSize(Size(width, 1000));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        final router = _router(realOrders: true, initial: '/app?view=upcoming');
+        addTearDown(router.dispose);
+        await _pump(
+          tester,
+          router,
+          scale: 2,
+          languageStore: _LanguageStore()..value = language,
+        );
+        expect(
+          find.descendant(
+            of: find.byType(AdminAppBar),
+            matching: find.text(language == 'es' ? 'Próximas' : 'Upcoming'),
+          ),
+          findsOneWidget,
+        );
+        expect(find.byKey(const Key('orders-header-refresh')), findsOneWidget);
+        expect(find.byKey(const Key('orders-search')), findsOneWidget);
+        expect(find.byKey(const Key('orders-date-selector')), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
   testWidgets('Upcoming shortcut honors an existing draft guard', (
     tester,
   ) async {

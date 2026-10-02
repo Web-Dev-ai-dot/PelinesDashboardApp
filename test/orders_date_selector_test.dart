@@ -86,6 +86,8 @@ class _Repository implements OrdersRepository {
 }
 
 Future<void> _date(WidgetTester tester, String label) async {
+  await tester.ensureVisible(find.byKey(const Key('orders-date-selector')));
+  await tester.pumpAndSettle();
   await tester.tap(find.byKey(const Key('orders-date-selector')));
   await tester.pumpAndSettle();
   await tester.tap(find.widgetWithText(PopupMenuItem<OrdersDateFilter>, label));
@@ -197,7 +199,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    for (final value in ['Tomorrow', 'Upcoming', 'All dates', 'Today']) {
+    for (final value in ['Tomorrow', 'Upcoming']) {
       await _date(tester, value);
       expect(
         tester.getSize(find.byKey(const Key('orders-date-selector'))).height,
@@ -274,7 +276,7 @@ void main() {
   });
 
   testWidgets(
-    'Confirmed initial, ordered filters, dates reuse Calendar, detail and refresh preserve state',
+    'Upcoming All initial, ordered filters, dates reuse Calendar, detail and refresh preserve state',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(1024, 800));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -284,7 +286,7 @@ void main() {
       final repository = _Repository([
         _order('waiting-today', at(0)),
         for (var i = 0; i < 15; i++)
-          _order('confirmed-$i', at(0), status: OrderStatus.confirmed),
+          _order('confirmed-$i', at(1), status: OrderStatus.confirmed),
         _order('waiting-tomorrow', at(1)),
         _order('waiting-later', at(3)),
         _order('waiting-past', at(-1)),
@@ -328,23 +330,15 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(
-        tester
-            .widgetList<ChoiceChip>(find.byType(ChoiceChip))
-            .map((c) => c.label is Text ? (c.label as Text).data : 'Waiting'),
-        ['Waiting', 'Confirmed', 'Preparing', 'Ready', 'All'],
-      );
-      expect(
-        tester
-            .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Confirmed'))
-            .selected,
-        isTrue,
-      );
+      expect(find.byType(ChoiceChip), findsNothing);
+
       expect(find.textContaining(RegExp(r'^confirmed-')), findsWidgets);
-      expect(repository.calls, 1);
-      await tester.tap(find.widgetWithText(ChoiceChip, 'Confirmed'));
+      expect(repository.calls, 2);
       await tester.pumpAndSettle();
-      await tester.drag(find.byType(CustomScrollView), const Offset(0, -450));
+      await tester.ensureVisible(find.byKey(const Key('todo-tab-confirmed')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('todo-tab-confirmed')));
+      await tester.pumpAndSettle();
       await tester.pumpAndSettle();
       final scroll = tester
           .state<ScrollableState>(
@@ -367,22 +361,14 @@ void main() {
       router.pop();
       await tester.pumpAndSettle();
       expect(scroll.pixels, offset);
-      expect(
-        tester
-            .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Confirmed'))
-            .selected,
-        isTrue,
-      );
+
       await container.read(todayOrdersProvider.notifier).refresh();
       await tester.pumpAndSettle();
       expect(scroll.pixels, offset);
-      expect(
-        tester
-            .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Confirmed'))
-            .selected,
-        isTrue,
-      );
-      await tester.tap(find.widgetWithText(ChoiceChip, 'Waiting'));
+
+      await tester.ensureVisible(find.byKey(const Key('todo-tab-pending')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('todo-tab-pending')));
       await tester.pumpAndSettle();
       await _date(tester, 'Tomorrow');
       expect(find.text('waiting-tomorrow'), findsOneWidget);
@@ -390,10 +376,7 @@ void main() {
       await _date(tester, 'Upcoming');
       expect(find.text('waiting-tomorrow'), findsOneWidget);
       expect(find.text('waiting-later'), findsOneWidget);
-      await _date(tester, 'All dates');
-      expect(find.textContaining('not a complete history'), findsOneWidget);
       expect(repository.calls, loadedCalls);
-      await tester.tap(find.widgetWithText(ChoiceChip, 'All'));
       await tester.pumpAndSettle();
       final all = container.read(calendarOrdersProvider).requireValue.orders;
       expect(all.any((o) => o.id == 'completed' || o.id == 'unpaid'), isFalse);
@@ -401,7 +384,7 @@ void main() {
       expect(find.byType(DatePickerDialog), findsOneWidget);
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
-      expect(find.text('All dates'), findsOneWidget);
+      expect(find.text('Upcoming'), findsOneWidget);
       await _date(tester, 'Choose date…');
       await tester.tap(find.text('OK'));
       await tester.pumpAndSettle();
@@ -414,7 +397,9 @@ void main() {
             .initialValue,
         OrdersDateFilter.chooseDate,
       );
-      await _date(tester, 'Today');
+      // Choosing today cannot widen Upcoming into Today.
+      expect(find.text('waiting-today'), findsNothing);
+      await _date(tester, 'Upcoming');
       expect(repository.calls, loadedCalls);
       expect(tester.takeException(), isNull);
     },

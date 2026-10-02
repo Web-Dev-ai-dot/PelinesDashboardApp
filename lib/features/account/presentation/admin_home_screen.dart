@@ -30,22 +30,8 @@ class _AdminHomeScreenState extends ConsumerState<AdminHomeScreen> {
 
     return Scaffold(
       appBar: AdminAppBar(
-        actions: [
-          if (widget.upcoming)
-            Padding(
-              padding: const EdgeInsets.only(right: 16),
-              child: OutlinedButton.icon(
-                key: const Key('orders-header-refresh'),
-                onPressed: currentLocation.value == null
-                    ? null
-                    : () => _ordersKey.currentState?.refresh(),
-                icon: const Icon(Icons.refresh, size: 18),
-                label: Text(tr(context, 'Refresh')),
-              ),
-            ),
-        ],
         title: Text(
-          tr(context, widget.upcoming ? 'Orders' : 'To Do'),
+          tr(context, widget.upcoming ? 'Upcoming' : 'To Do'),
           style: PelinesTypography.pageTitle(Theme.of(context).textTheme),
         ),
       ),
@@ -101,22 +87,21 @@ class _HomeContent extends ConsumerWidget {
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
               child: PelinesLocationContext(location: location),
             ),
-            if (!upcoming)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                child: Align(
-                  alignment: AlignmentDirectional.centerStart,
-                  child: OutlinedButton.icon(
-                    key: const Key('orders-header-refresh'),
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(48, 48),
-                    ),
-                    onPressed: () => ordersKey.currentState?.refresh(),
-                    icon: const Icon(Icons.refresh),
-                    label: Text(tr(context, 'Refresh')),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: OutlinedButton.icon(
+                  key: const Key('orders-header-refresh'),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(48, 48),
                   ),
+                  onPressed: () => ordersKey.currentState?.refresh(),
+                  icon: const Icon(Icons.refresh),
+                  label: Text(tr(context, 'Refresh')),
                 ),
               ),
+            ),
             // Keep Orders' existing bounded viewport; long context scrolls above it
             // instead of squeezing its filters and list at large text scales.
             SizedBox(

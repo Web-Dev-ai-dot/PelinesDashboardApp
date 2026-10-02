@@ -21,10 +21,15 @@ String todoStatusLabel(OrderStatus status) => switch (status) {
   _ => '',
 };
 
-/// One loaded Today snapshot, four persistent columns. Tabs only scroll.
+/// One loaded operational snapshot, four persistent columns. Tabs only scroll.
 class TodoStatusBoard extends StatefulWidget {
-  const TodoStatusBoard({required this.orders, super.key});
+  const TodoStatusBoard({
+    required this.orders,
+    this.showChannel = false,
+    super.key,
+  });
   final List<OrderSummary> orders;
+  final bool showChannel;
 
   @override
   State<TodoStatusBoard> createState() => _TodoStatusBoardState();
@@ -154,6 +159,7 @@ class _TodoStatusBoardState extends State<TodoStatusBoard> {
                                 key: ValueKey(order.id),
                                 order: order,
                                 statusBoard: true,
+                                showChannel: widget.showChannel,
                               ),
                           ],
                         ),

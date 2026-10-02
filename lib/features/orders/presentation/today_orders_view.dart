@@ -9,7 +9,6 @@ import '../../../core/time/pelines_time.dart';
 import '../../locations/presentation/pelines_location_selector.dart';
 import '../../locations/models/location.dart';
 import '../models/order_models.dart';
-import '../models/order_status_action.dart';
 import '../models/orders_date_filter.dart';
 
 import '../providers/orders_providers.dart';
@@ -36,9 +35,10 @@ class TodayOrdersView extends ConsumerStatefulWidget {
 }
 
 class TodayOrdersViewState extends ConsumerState<TodayOrdersView> {
-  OrderStatus? _filter = OrderStatus.confirmed;
   late OrdersDateFilter _date = widget.webOrders
-      ? widget.initialDateFilter
+      ? (widget.initialDateFilter == OrdersDateFilter.today
+            ? OrdersDateFilter.upcoming
+            : widget.initialDateFilter)
       : OrdersDateFilter.today;
   DateTime? _chosenDate;
 
@@ -50,7 +50,9 @@ class TodayOrdersViewState extends ConsumerState<TodayOrdersView> {
     if (oldWidget.initialDateFilter != widget.initialDateFilter ||
         oldWidget.webOrders != widget.webOrders) {
       _date = widget.webOrders
-          ? widget.initialDateFilter
+          ? (widget.initialDateFilter == OrdersDateFilter.today
+                ? OrdersDateFilter.upcoming
+                : widget.initialDateFilter)
           : OrdersDateFilter.today;
     }
   }
@@ -71,12 +73,12 @@ class TodayOrdersViewState extends ConsumerState<TodayOrdersView> {
     if (mounted) setState(() => _date = value);
   }
 
-  Future<void> refresh() => _date == OrdersDateFilter.today
+  Future<void> refresh() => !widget.webOrders
       ? ref.read(todayOrdersProvider.notifier).refresh()
       : ref.read(calendarOrdersProvider.notifier).refresh();
 
   void _retry() {
-    if (_date == OrdersDateFilter.today) {
+    if (!widget.webOrders) {
       ref.invalidate(todayOrdersProvider);
     } else {
       ref.invalidate(calendarOrdersProvider);
@@ -90,7 +92,14 @@ class TodayOrdersViewState extends ConsumerState<TodayOrdersView> {
       initialValue: _date,
       onSelected: _selectDate,
       itemBuilder: (_) => [
-        for (final value in OrdersDateFilter.values)
+        for (final value
+            in widget.webOrders
+                ? [
+                    OrdersDateFilter.upcoming,
+                    OrdersDateFilter.tomorrow,
+                    OrdersDateFilter.chooseDate,
+                  ]
+                : OrdersDateFilter.values)
           PopupMenuItem(value: value, child: Text(tr(context, value.label))),
       ],
       child: Container(
@@ -125,12 +134,16 @@ class TodayOrdersViewState extends ConsumerState<TodayOrdersView> {
   @override
   Widget build(BuildContext context) {
     final today = ref.watch(todayOrdersProvider);
-    final AsyncValue<TodayOrdersState> asyncOrders =
-        _date == OrdersDateFilter.today
+    final AsyncValue<TodayOrdersState> asyncOrders = !widget.webOrders
         ? today
         : ref.watch(calendarOrdersProvider).whenData((state) {
             final orders = filterOrdersByDate(
-              state.orders,
+              filterOrdersByDate(
+                state.orders
+                    .where((o) => o.locationId == widget.location.id)
+                    .toList(),
+                OrdersDateFilter.upcoming,
+              ),
               _date,
               chosenDate: _chosenDate,
             )..sort(compareOperationalOrders);
@@ -140,27 +153,25 @@ class TodayOrdersViewState extends ConsumerState<TodayOrdersView> {
               refreshError: state.refreshError,
             );
           });
-    // Change the view only after an explicit Accept has reconciled successfully.
-    // Polling and remote status changes never reset the selected filter.
+    // Refresh Upcoming after the shared mutation's canonical reconciliation.
+    // Never switch filters or navigate on Accept.
     for (final order in asyncOrders.value?.orders ?? <OrderSummary>[]) {
-      if (order.status != OrderStatus.pending ||
-          order.locationId != widget.location.id) {
+      if (!widget.webOrders || order.locationId != widget.location.id) {
         continue;
       }
       ref.listen(orderMutationProvider(order.id), (previous, next) {
-        if (widget.webOrders &&
-            _filter == OrderStatus.pending &&
-            next.phase == OrderMutationPhase.success &&
-            next.action == OrderStatusAction.acceptOrder &&
-            next.canonicalOrder?.status == OrderStatus.confirmed) {
-          setState(() => _filter = OrderStatus.confirmed);
+        if (next.action != null &&
+            next.canonicalOrder != null &&
+            previous?.phase != next.phase &&
+            (next.phase == OrderMutationPhase.success ||
+                next.phase == OrderMutationPhase.error)) {
+          ref.read(calendarOrdersProvider.notifier).refresh();
         }
       });
     }
     if (widget.webOrders) {
       return UpcomingOrdersView(
         orders: asyncOrders,
-        status: _filter,
         dateControl: _dateControl(context, compact: true),
         dateContext: _date == OrdersDateFilter.today
             ? null
@@ -170,22 +181,12 @@ class TodayOrdersViewState extends ConsumerState<TodayOrdersView> {
                     ? 'From tomorrow · Pacific time · Available orders only'
                     : 'Pacific time · Available orders only; not a complete history',
               ),
-        statusFilters: _Filters(
-          selected: _filter,
-          waitingCount:
-              asyncOrders.value?.orders
-                  .where(
-                    (order) =>
-                        order.status == OrderStatus.pending &&
-                        order.locationId == widget.location.id &&
-                        order.paymentStatus.isOperationallyPaid,
-                  )
-                  .length ??
-              0,
-          onSelected: (value) => setState(() => _filter = value),
-        ),
         onRefresh: refresh,
         onRetry: _retry,
+        onReset: () => setState(() {
+          _date = OrdersDateFilter.upcoming;
+          _chosenDate = null;
+        }),
       );
     }
     return Column(
@@ -229,81 +230,6 @@ class TodayOrdersViewState extends ConsumerState<TodayOrdersView> {
       ],
     );
   }
-}
-
-class _Filters extends StatelessWidget {
-  const _Filters({
-    required this.selected,
-    required this.onSelected,
-    required this.waitingCount,
-  });
-  final int waitingCount;
-  final OrderStatus? selected;
-  final ValueChanged<OrderStatus?> onSelected;
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(
-      horizontal: PelinesSpacing.md,
-      vertical: PelinesSpacing.xs,
-    ),
-    child: LayoutBuilder(
-      builder: (context, constraints) => Row(
-        children: <Widget>[
-          ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: constraints.maxWidth * .65),
-            child: ChoiceChip(
-              label: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Flexible(child: Text(tr(context, 'Waiting'))),
-                  if (waitingCount > 0) ...[
-                    const SizedBox(width: PelinesSpacing.xs),
-                    Semantics(
-                      label: '$waitingCount pending orders',
-                      child: Badge(
-                        key: const Key('waiting-count'),
-                        label: Text('$waitingCount'),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-              selected: selected == OrderStatus.pending,
-              onSelected: (_) => onSelected(OrderStatus.pending),
-            ),
-          ),
-          Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: <Widget>[
-                  for (final (OrderStatus status, String label)
-                      in <(OrderStatus, String)>[
-                        (OrderStatus.confirmed, tr(context, 'Confirmed')),
-                        (OrderStatus.preparing, tr(context, 'Preparing')),
-                        (OrderStatus.ready, tr(context, 'Ready')),
-                      ]) ...<Widget>[
-                    const SizedBox(width: PelinesSpacing.xs),
-                    ChoiceChip(
-                      label: Text(label),
-                      selected: selected == status,
-                      onSelected: (_) => onSelected(status),
-                    ),
-                  ],
-                  const SizedBox(width: PelinesSpacing.xs),
-                  ChoiceChip(
-                    label: Text(tr(context, 'All')),
-                    selected: selected == null,
-                    onSelected: (_) => onSelected(null),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
 }
 
 class _ErrorState extends StatelessWidget {

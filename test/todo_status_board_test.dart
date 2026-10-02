@@ -24,6 +24,8 @@ import 'package:pelines_admin_app/features/orders/providers/orders_providers.dar
 
 import 'order_test_data.dart';
 
+import 'package:pelines_admin_app/features/orders/models/orders_date_filter.dart';
+
 final location = Location(
   id: 'location-id',
   name: 'Troutdale',
@@ -150,6 +152,7 @@ Future<void> _mount(
   Widget? child,
   GoRouter? router,
   _PrintService? printer,
+  bool upcoming = false,
 }) async {
   await tester.binding.setSurfaceSize(Size(width, 1000));
   addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -192,6 +195,10 @@ Future<void> _mount(
                     body:
                         child ??
                         TodayOrdersView(
+                          webOrders: upcoming,
+                          initialDateFilter: upcoming
+                              ? OrdersDateFilter.upcoming
+                              : OrdersDateFilter.today,
                           location: location,
                           onChangeLocation: () {},
                           showLocationSelector: false,
@@ -218,43 +225,48 @@ Finder action(String id) => find.descendant(
 Future<void> tab(WidgetTester tester, String status) async {
   final target = find.byKey(Key('todo-tab-$status'));
   await tester.ensureVisible(target);
+  await tester.pumpAndSettle();
   await tester.tap(target);
   await tester.pumpAndSettle();
 }
 
 void main() {
-  for (final (result, label) in [
-    (PrintJobStatus.submitted, 'Submitted (not physical confirmation)'),
-    (PrintJobStatus.confirmed, 'Confirmed (simulated)'),
-    (PrintJobStatus.unknown, 'Unknown'),
-    (PrintJobStatus.failedBeforeSend, 'Failed before send'),
-  ]) {
-    testWidgets('Print uses canonical order and preserves $result semantics', (
-      tester,
-    ) async {
-      final repo = _Repository(today: true);
-      final printer = _PrintService(result);
-      await _mount(tester, repo, printer: printer);
-      final pending = find.byKey(const Key('todo-print-pending'));
-      expect(tester.widget<OutlinedButton>(pending).onPressed, isNull);
-      await tab(tester, 'confirmed');
-      final print = find.byKey(const Key('todo-print-confirmed'));
-      await tester.ensureVisible(print);
-      await tester.tap(print);
-      await tester.pumpAndSettle();
-      expect(printer.calls, 1);
-      expect(printer.received!.id, 'confirmed');
-      expect(printer.received!.paymentStatus, PaymentStatus.paid);
-      expect(find.text(label), findsOneWidget);
-      if (result == PrintJobStatus.confirmed) {
-        expect(
-          find.text('Simulation only. No physical ticket.'),
-          findsOneWidget,
-        );
-      }
-      expect(tester.widget<OutlinedButton>(print).onPressed, isNull);
-      expect(repo.patches, 0);
-    });
+  for (final upcoming in [false, true]) {
+    for (final (result, label) in [
+      (PrintJobStatus.submitted, 'Submitted (not physical confirmation)'),
+      (PrintJobStatus.confirmed, 'Confirmed (simulated)'),
+      (PrintJobStatus.unknown, 'Unknown'),
+      (PrintJobStatus.failedBeforeSend, 'Failed before send'),
+    ]) {
+      testWidgets(
+        'Print uses canonical order and preserves $result semantics, upcoming=$upcoming',
+        (tester) async {
+          final repo = _Repository(today: !upcoming);
+          final printer = _PrintService(result);
+          await _mount(tester, repo, printer: printer, upcoming: upcoming);
+          final pending = find.byKey(const Key('todo-print-pending'));
+          expect(tester.widget<OutlinedButton>(pending).onPressed, isNull);
+          await tab(tester, 'confirmed');
+          final print = find.byKey(const Key('todo-print-confirmed'));
+          await tester.ensureVisible(print);
+          await tester.pumpAndSettle();
+          await tester.tap(print);
+          await tester.pumpAndSettle();
+          expect(printer.calls, 1);
+          expect(printer.received!.id, 'confirmed');
+          expect(printer.received!.paymentStatus, PaymentStatus.paid);
+          expect(find.text(label), findsOneWidget);
+          if (result == PrintJobStatus.confirmed) {
+            expect(
+              find.text('Simulation only. No physical ticket.'),
+              findsOneWidget,
+            );
+          }
+          expect(tester.widget<OutlinedButton>(print).onPressed, isNull);
+          expect(repo.patches, 0);
+        },
+      );
+    }
   }
   testWidgets('Print unavailable reports error without claiming success', (
     tester,
@@ -363,81 +375,105 @@ void main() {
     }
   }
 
-  testWidgets(
-    'real mutations reconcile across columns without leaving To Do; View returns with context',
-    (tester) async {
-      final repo = _Repository(today: true)
-        ..rows.removeWhere((key, _) => key != 'pending');
-      final router = GoRouter(
-        initialLocation: '/app',
-        routes: [
-          GoRoute(
-            path: '/app',
-            builder: (_, _) => Scaffold(
-              body: TodayOrdersView(
-                location: location,
-                onChangeLocation: () {},
-                showLocationSelector: false,
+  for (final upcoming in [false, true]) {
+    testWidgets(
+      'real mutations reconcile across columns; View returns with context, upcoming=$upcoming',
+      (tester) async {
+        final repo = _Repository(today: !upcoming)
+          ..rows.removeWhere((key, _) => key != 'pending');
+        final router = GoRouter(
+          initialLocation: '/app',
+          routes: [
+            GoRoute(
+              path: '/app',
+              builder: (_, _) => Scaffold(
+                body: TodayOrdersView(
+                  webOrders: upcoming,
+                  initialDateFilter: upcoming
+                      ? OrdersDateFilter.upcoming
+                      : OrdersDateFilter.today,
+                  location: location,
+                  onChangeLocation: () {},
+                  showLocationSelector: false,
+                ),
               ),
             ),
-          ),
-          GoRoute(
-            path: '/app/orders/:id',
-            builder: (_, state) =>
-                OrderDetailScreen(orderId: state.pathParameters['id']!),
-          ),
-        ],
-      );
-      addTearDown(router.dispose);
-      await _mount(tester, repo, router: router);
-      for (final (source, target, label) in [
-        ('pending', 'confirmed', 'Confirmed'),
-        ('confirmed', 'preparing', 'Preparing'),
-        ('preparing', 'ready', 'Ready'),
-      ]) {
-        await tab(tester, source);
-        final button = action('pending');
-        await tester.ensureVisible(button);
-        expect(
-          find.descendant(of: button, matching: find.text(label)),
-          findsOneWidget,
+            GoRoute(
+              path: '/app/orders/:id',
+              builder: (_, state) =>
+                  OrderDetailScreen(orderId: state.pathParameters['id']!),
+            ),
+          ],
         );
-        await tester.tap(button);
+        addTearDown(router.dispose);
+        await _mount(tester, repo, router: router);
+        final scheduled = repo.rows['pending']!['scheduledFor'];
+        if (upcoming) {
+          await tester.enterText(
+            find.byType(TextField),
+            '  CUSTOMER pending  ',
+          );
+          await tester.pumpAndSettle();
+        }
+        for (final (source, target, label) in [
+          ('pending', 'confirmed', 'Confirmed'),
+          ('confirmed', 'preparing', 'Preparing'),
+          ('preparing', 'ready', 'Ready'),
+        ]) {
+          await tab(tester, source);
+          final button = action('pending');
+          await tester.ensureVisible(button);
+          await tester.pumpAndSettle();
+          expect(
+            find.descendant(of: button, matching: find.text(label)),
+            findsOneWidget,
+          );
+          await tester.tap(button);
+          await tester.pumpAndSettle();
+          expect(router.routeInformationProvider.value.uri.toString(), '/app');
+          expect(
+            find.descendant(of: column(source), matching: card('pending')),
+            findsNothing,
+          );
+          expect(
+            find.descendant(of: column(target), matching: card('pending')),
+            findsOneWidget,
+          );
+        }
+        expect(repo.patches, 3);
+        expect(repo.rows['pending']!['scheduledFor'], scheduled);
+        await tab(tester, 'ready');
+        final view = find.descendant(
+          of: card('pending'),
+          matching: find.text('View'),
+        );
+        await tester.ensureVisible(view);
         await tester.pumpAndSettle();
-        expect(router.routeInformationProvider.value.uri.toString(), '/app');
-        expect(
-          find.descendant(of: column(source), matching: card('pending')),
-          findsNothing,
-        );
-        expect(
-          find.descendant(of: column(target), matching: card('pending')),
-          findsOneWidget,
-        );
-      }
-      expect(repo.patches, 3);
-      await tab(tester, 'ready');
-      final view = find.descendant(
-        of: card('pending'),
-        matching: find.text('View'),
-      );
-      await tester.ensureVisible(view);
-      final scroll = tester
-          .widget<SingleChildScrollView>(
-            find.byKey(const Key('todo-board-scroll')),
-          )
-          .controller!;
-      final offset = scroll.offset;
-      await tester.tap(view);
-      await tester.pumpAndSettle();
-      expect(find.byType(OrderDetailScreen), findsOneWidget);
-      expect(router.canPop(), isTrue);
-      router.pop();
-      await tester.pumpAndSettle();
-      expect(router.routeInformationProvider.value.uri.path, '/app');
-      expect(scroll.offset, offset);
-      expect(tester.takeException(), isNull);
-    },
-  );
+        final scroll = tester
+            .widget<SingleChildScrollView>(
+              find.byKey(const Key('todo-board-scroll')),
+            )
+            .controller!;
+        final offset = scroll.offset;
+        await tester.tap(view);
+        await tester.pumpAndSettle();
+        expect(find.byType(OrderDetailScreen), findsOneWidget);
+        expect(router.canPop(), isTrue);
+        router.pop();
+        await tester.pumpAndSettle();
+        expect(router.routeInformationProvider.value.uri.path, '/app');
+        expect(scroll.offset, offset);
+        if (upcoming) {
+          expect(
+            tester.widget<TextField>(find.byType(TextField)).controller!.text,
+            '  CUSTOMER pending  ',
+          );
+          expect(find.byKey(const Key('upcoming-sort')), findsOneWidget);
+        }
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 
   testWidgets(
     'busy prevents double submit and does not move before reconciliation',

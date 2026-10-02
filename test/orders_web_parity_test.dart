@@ -147,26 +147,148 @@ Future<void> _mount(
   await tester.pumpAndSettle();
 }
 
-Future<void> status(WidgetTester tester, String label) async {
-  final chip = find.widgetWithText(ChoiceChip, label);
-  await tester.ensureVisible(chip);
-  await tester.pumpAndSettle();
-  await tester.tap(chip);
-  await tester.pumpAndSettle();
-}
-
 void main() {
+  testWidgets(
+    'Upcoming scope, filtered counts, sorting, reset and real channel compose',
+    (tester) async {
+      final repo = _Repository();
+      repo.rows['pending']!['source'] = 'ios';
+      repo.rows['today'] = {
+        ...repo.rows['pending']!,
+        'id': 'today',
+        'orderNumber': 'TODAY',
+        'scheduledFor': DateTime.now().toUtc().toIso8601String(),
+      };
+      repo.rows['past'] = {
+        ...repo.rows['pending']!,
+        'id': 'past',
+        'orderNumber': 'PAST',
+        'scheduledFor': DateTime.now()
+            .subtract(const Duration(days: 2))
+            .toUtc()
+            .toIso8601String(),
+      };
+      repo.rows['unpaid'] = {
+        ...repo.rows['pending']!,
+        'id': 'unpaid',
+        'paymentStatus': 'unpaid',
+      };
+      repo.rows['foreign'] = {
+        ...repo.rows['pending']!,
+        'id': 'foreign',
+        'locationId': 'another',
+      };
+      repo.rows['later'] = {
+        ...repo.rows['pending']!,
+        'id': 'later',
+        'orderNumber': 'LATER',
+        'scheduledFor': DateTime.now()
+            .add(const Duration(days: 5))
+            .toUtc()
+            .toIso8601String(),
+      };
+      await _mount(tester, repo, width: 1400);
+      expect(find.text('TODAY'), findsNothing);
+      expect(find.text('PAST'), findsNothing);
+      expect(find.text('Waiting · 2'), findsOneWidget);
+      expect(find.text('iOS'), findsWidgets);
+      expect(find.text('Web'), findsNothing);
+      final pendingColumn = find.byKey(const Key('todo-column-pending'));
+      expect(
+        tester
+            .widgetList<OrderPreviewCard>(
+              find.descendant(
+                of: pendingColumn,
+                matching: find.byType(OrderPreviewCard),
+              ),
+            )
+            .map((c) => c.order.id),
+        ['pending', 'later'],
+      );
+      final calls = repo.listCalls;
+      for (final query in [
+        '  customer confirmed  ',
+        'CELEBRATION CONFIRMED',
+        'ORD-CONFIRMED',
+      ]) {
+        await tester.enterText(find.byType(TextField), query);
+        await tester.pumpAndSettle();
+        expect(find.byType(OrderPreviewCard), findsOneWidget);
+        expect(find.text('Confirmed · 1'), findsOneWidget);
+        expect(find.text('Waiting · 0'), findsOneWidget);
+      }
+      expect(find.byType(ChoiceChip), findsNothing);
+      for (final s in ['pending', 'confirmed', 'preparing', 'ready']) {
+        expect(find.byKey(Key('todo-column-$s')), findsOneWidget);
+      }
+      await tester.ensureVisible(find.byType(DropdownButton<OrderType>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(DropdownButton<OrderType>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Regular').last);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('orders-date-selector')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('orders-date-selector')));
+      await tester.pumpAndSettle();
+      expect(
+        find.widgetWithText(PopupMenuItem<OrdersDateFilter>, 'Today'),
+        findsNothing,
+      );
+      expect(
+        find.widgetWithText(PopupMenuItem<OrdersDateFilter>, 'All dates'),
+        findsNothing,
+      );
+      await tester.tap(
+        find.widgetWithText(PopupMenuItem<OrdersDateFilter>, 'Tomorrow'),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(OrderPreviewCard), findsNothing);
+      await tester.ensureVisible(find.byKey(const Key('upcoming-reset')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('upcoming-reset')));
+      await tester.pumpAndSettle();
+      expect(find.text('Waiting · 2'), findsOneWidget);
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        isEmpty,
+      );
+      expect(find.byType(ChoiceChip), findsNothing);
+      expect(repo.listCalls, calls);
+      expect(repo.patches, 0);
+      expect(
+        tester
+            .widget<DropdownButton<OrderType>>(
+              find.byType(DropdownButton<OrderType>),
+            )
+            .value,
+        isNull,
+      );
+      expect(
+        tester
+            .widget<PopupMenuButton<OrdersDateFilter>>(
+              find.byKey(const Key('orders-date-selector')),
+            )
+            .initialValue,
+        OrdersDateFilter.upcoming,
+      );
+    },
+  );
   testWidgets('wide board groups only real states and scrolls to Ready', (
     tester,
   ) async {
     await _mount(tester, _Repository(), width: 1100);
-    await status(tester, 'All');
-    expect(find.byKey(const Key('orders-column-pending')), findsOneWidget);
-    final board = find.byKey(const Key('orders-board'));
+    expect(find.byKey(const Key('todo-column-pending')), findsOneWidget);
+    final board = find.byKey(const Key('todo-board-scroll'));
     await tester.ensureVisible(board);
-    await tester.drag(board, const Offset(-850, 0));
+    final readyTab = find.byKey(const Key('todo-tab-ready'));
+    await tester.ensureVisible(readyTab);
     await tester.pumpAndSettle();
-    expect(find.byKey(const Key('orders-column-ready')), findsOneWidget);
+    await tester.tap(readyTab);
+    await tester.pumpAndSettle();
+    expect(find.text('ORD-ready').hitTestable(), findsOneWidget);
+    expect(find.byType(OrderPreviewCard), findsNWidgets(4));
+    expect(find.byKey(const Key('todo-column-ready')), findsOneWidget);
     expect(find.text('ORD-ready'), findsOneWidget);
     expect(find.byKey(const Key('orders-column-picked_up')), findsNothing);
     expect(tester.takeException(), isNull);
@@ -227,26 +349,35 @@ void main() {
             .initialValue,
         OrdersDateFilter.upcoming,
       );
-      expect(
-        tester
-            .widget<ChoiceChip>(
-              find.widgetWithText(
-                ChoiceChip,
-                language == 'es' ? 'Confirmado' : 'Confirmed',
-              ),
-            )
-            .selected,
-        isTrue,
-      );
+      expect(find.byType(ChoiceChip), findsNothing);
       expect(find.byType(PelinesFilterBar), findsOneWidget);
-      expect(find.byKey(const Key('waiting-count')), findsOneWidget);
-      expect(
-        find.byKey(const Key('orders-board')),
-        width >= 1000 * scale ? findsOneWidget : findsNothing,
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('todo-board-scroll')),
+        250,
+        scrollable: find
+            .descendant(
+              of: find.byType(CustomScrollView),
+              matching: find.byType(Scrollable),
+            )
+            .first,
       );
-      if (width < 1000 * scale) {
-        final count = width >= 720 * scale ? 2 : 1;
-        expect(find.byKey(Key('upcoming-cards-$count')), findsOneWidget);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('todo-board-scroll')), findsOneWidget);
+      for (final status in ['pending', 'confirmed', 'preparing', 'ready']) {
+        final column = find.byKey(Key('todo-column-$status'));
+        expect(column, findsOneWidget);
+        expect(find.byKey(Key('todo-tab-$status')), findsOneWidget);
+        final header = find.descendant(
+          of: column,
+          matching: find.byWidgetPredicate(
+            (w) => w is Semantics && w.properties.header == true,
+          ),
+        );
+        expect(header, findsOneWidget);
+        expect(
+          find.descendant(of: header, matching: find.textContaining(' · 1')),
+          findsOneWidget,
+        );
       }
       final card = find.byType(OrderPreviewCard).first;
       await tester.ensureVisible(card);

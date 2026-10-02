@@ -22,10 +22,12 @@ class OrderPreviewCard extends ConsumerWidget {
   const OrderPreviewCard({
     required this.order,
     this.statusBoard = false,
+    this.showChannel = false,
     super.key,
   });
   final OrderSummary order;
   final bool statusBoard;
+  final bool showChannel;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -106,6 +108,23 @@ class OrderPreviewCard extends ConsumerWidget {
                         fulfillmentLabel(order.fulfillmentType),
                       ),
                     ),
+                    if (showChannel &&
+                        const {
+                          'web',
+                          'ios',
+                          'android',
+                          'counter',
+                        }.contains(detail?.value?.source))
+                      PelinesStateBadge(
+                        label: switch (detail!.value!.source) {
+                          'ios' => 'iOS',
+                          'android' => 'Android',
+                          'counter' => tr(context, 'Counter'),
+                          _ => 'Web',
+                        },
+                        foreground: PelinesColors.textSecondary,
+                        background: PelinesColors.mutedSurface,
+                      ),
                     if (!order.paymentStatus.isOperationallyPaid)
                       PelinesOrderBadges.payment(
                         payment: order.paymentStatus,
