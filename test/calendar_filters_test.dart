@@ -15,6 +15,7 @@ import 'order_test_data.dart';
 import 'calendar_test_helpers.dart';
 
 import 'package:pelines_admin_app/features/orders/presentation/calendar_month_grid.dart';
+import 'package:pelines_admin_app/features/orders/presentation/calendar_week_selector.dart';
 
 import 'upcoming_sheet_helpers.dart';
 
@@ -160,32 +161,51 @@ void main() {
       _order('earlier', scheduled: '2026-09-05T06:30:00Z'),
     ];
     final Map<String, List<OrderSummary>> grouped =
-        groupScheduledOrdersByPacificDay(orders);
+        groupCalendarOrdersByPacificDay(orders);
     expect(grouped['2026-09-04']?.single.orderNumber, 'earlier');
     expect(grouped['2026-09-05']?.single.orderNumber, 'later');
   });
 
-  test('Pacific grouping handles DST and keeps unscheduled separate', () {
-    final OrderSummary beforeDst = _order(
-      'before-dst',
-      scheduled: '2026-03-08T07:30:00Z',
-    );
-    final OrderSummary afterDst = _order(
-      'after-dst',
-      scheduled: '2026-03-08T10:30:00Z',
-    );
-    final OrderSummary unscheduled = _order('needs-time');
-    final grouped = groupScheduledOrdersByPacificDay(<OrderSummary>[
-      beforeDst,
-      afterDst,
-      unscheduled,
-    ]);
-    expect(grouped['2026-03-07']?.single, beforeDst);
-    expect(grouped['2026-03-08']?.single, afterDst);
-    expect(
-      unscheduledCalendarOrders(<OrderSummary>[beforeDst, unscheduled]),
-      <OrderSummary>[unscheduled],
-    );
+  test(
+    'Pacific grouping integrates ASAP by createdAt without losing orders',
+    () {
+      final OrderSummary beforeDst = _order(
+        'before-dst',
+        scheduled: '2026-03-08T07:30:00Z',
+      );
+      final OrderSummary afterDst = _order(
+        'after-dst',
+        scheduled: '2026-03-08T10:30:00Z',
+      );
+      final OrderSummary unscheduled = _order(
+        'asap',
+        created: '2026-03-08T10:15:00Z',
+      );
+      final grouped = groupCalendarOrdersByPacificDay(<OrderSummary>[
+        beforeDst,
+        afterDst,
+        unscheduled,
+      ]);
+      expect(grouped['2026-03-07']?.single, beforeDst);
+      expect(grouped['2026-03-08'], [unscheduled, afterDst]);
+      expect(grouped.values.expand((day) => day).length, 3);
+    },
+  );
+
+  test('ASAP uses Pacific dates across midnight and both DST changes', () {
+    final orders = [
+      _order('spring-before', created: '2026-03-08T07:59:00Z'),
+      _order('spring-after', created: '2026-03-08T10:01:00Z'),
+      _order('fall-before', created: '2026-11-01T06:59:00Z'),
+      _order('fall-first', created: '2026-11-01T08:30:00Z'),
+      _order('fall-second', created: '2026-11-01T09:30:00Z'),
+    ];
+    final grouped = groupCalendarOrdersByPacificDay(orders);
+    expect(grouped['2026-03-07'], [orders[0]]);
+    expect(grouped['2026-03-08'], [orders[1]]);
+    expect(grouped['2026-10-31'], [orders[2]]);
+    expect(grouped['2026-11-01'], [orders[3], orders[4]]);
+    expect(grouped.values.expand((day) => day).toSet(), orders.toSet());
   });
 
   test('history date boundaries use Pacific and filters compose with AND', () {
@@ -274,84 +294,108 @@ void main() {
     },
   );
 
-  testWidgets('calendar card opens detail UUID and Back restores calendar', (
-    tester,
-  ) async {
-    final GoRouter router = GoRouter(
-      initialLocation: '/app/orders/calendar',
-      routes: <RouteBase>[
-        GoRoute(
-          path: '/app/orders/calendar',
-          builder: (_, _) => const OrdersCalendarScreen(),
-        ),
-        GoRoute(
-          path: '/app/orders/:id',
-          builder: (_, state) =>
-              Scaffold(body: Text('detail ${state.pathParameters['id']}')),
-        ),
-      ],
-    );
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          currentLocationProvider.overrideWith(_CurrentLocation.new),
-          ordersRepositoryProvider.overrideWithValue(
-            _Repository(scheduled: DateTime.now().toUtc().toIso8601String()),
+  for (final view in ['Today', 'Week']) {
+    testWidgets('calendar card opens detail UUID and Back restores $view', (
+      tester,
+    ) async {
+      final GoRouter router = GoRouter(
+        initialLocation: '/app/orders/calendar',
+        routes: <RouteBase>[
+          GoRoute(
+            path: '/app/orders/calendar',
+            builder: (_, _) => const OrdersCalendarScreen(),
+          ),
+          GoRoute(
+            path: '/app/orders/:id',
+            builder: (_, state) =>
+                Scaffold(body: Text('detail ${state.pathParameters['id']}')),
           ),
         ],
-        child: MaterialApp.router(routerConfig: router),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField), 'calendar-order');
-    await tester.pumpAndSettle();
-    await upcomingTap(tester, 'calendar-sort');
-    await upcomingTap(tester, 'upcoming-type-online');
-    await upcomingTap(tester, 'upcoming-sheet-apply');
-    await upcomingTap(tester, 'calendar-filter-button');
-    await upcomingTap(tester, 'upcoming-status-pending');
-    await upcomingTap(tester, 'upcoming-sheet-apply');
-    final orderCard = find.text('View Order Details');
-    await tester.ensureVisible(orderCard);
-    await tester.pumpAndSettle();
-    final scroll = Scrollable.of(tester.element(orderCard)).position;
-    final offset = scroll.pixels;
-    await tester.tap(orderCard);
-    await tester.pumpAndSettle();
-    expect(find.text('detail calendar-uuid'), findsOneWidget);
-    router.pop();
-    await tester.pumpAndSettle();
-    expect(find.text('Calendar'), findsOneWidget);
-    expect(scroll.pixels, offset);
-    expect(
-      tester
-          .widget<ChoiceChip>(find.byKey(const Key('calendar-view-Today')))
-          .selected,
-      isTrue,
-    );
-    expect(
-      tester.widget<EditableText>(find.byType(EditableText)).controller.text,
-      'calendar-order',
-    );
-    await upcomingTap(tester, 'calendar-sort');
-    expect(
-      tester
-          .widget<RadioGroup<OrderType?>>(find.byType(RadioGroup<OrderType?>))
-          .groupValue,
-      OrderType.online,
-    );
-    await upcomingDismiss(tester);
-    await upcomingTap(tester, 'calendar-filter-button');
-    expect(
-      tester
-          .widget<RadioGroup<OrderStatus?>>(
-            find.byType(RadioGroup<OrderStatus?>),
-          )
-          .groupValue,
-      OrderStatus.pending,
-    );
-    await upcomingDismiss(tester);
-  });
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            currentLocationProvider.overrideWith(_CurrentLocation.new),
+            ordersRepositoryProvider.overrideWithValue(
+              _Repository(
+                scheduled: DateTime.now()
+                    .toUtc()
+                    .add(Duration(days: view == 'Week' ? 7 : 0))
+                    .toIso8601String(),
+              ),
+            ),
+          ],
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await upcomingTap(tester, 'calendar-view-$view');
+      if (view == 'Week') {
+        await upcomingTap(tester, 'calendar-next-week');
+      }
+      final weekDay = view == 'Week'
+          ? tester
+                .widget<CalendarWeekSelector>(find.byType(CalendarWeekSelector))
+                .selectedDay
+          : null;
+      await tester.enterText(find.byType(TextField), 'calendar-order');
+      await tester.pumpAndSettle();
+      await upcomingTap(tester, 'calendar-sort');
+      await upcomingTap(tester, 'upcoming-type-online');
+      await upcomingTap(tester, 'upcoming-sheet-apply');
+      await upcomingTap(tester, 'calendar-filter-button');
+      await upcomingTap(tester, 'upcoming-status-pending');
+      await upcomingTap(tester, 'upcoming-sheet-apply');
+      final orderCard = find.text('View Order Details');
+      await tester.ensureVisible(orderCard);
+      await tester.pumpAndSettle();
+      final scroll = Scrollable.of(tester.element(orderCard)).position;
+      final offset = scroll.pixels;
+      await tester.tap(orderCard);
+      await tester.pumpAndSettle();
+      expect(find.text('detail calendar-uuid'), findsOneWidget);
+      router.pop();
+      await tester.pumpAndSettle();
+      expect(find.text('Calendar'), findsOneWidget);
+      expect(scroll.pixels, offset);
+      expect(
+        tester
+            .widget<ChoiceChip>(find.byKey(Key('calendar-view-$view')))
+            .selected,
+        isTrue,
+      );
+      expect(
+        tester.widget<EditableText>(find.byType(EditableText)).controller.text,
+        'calendar-order',
+      );
+      if (weekDay != null) {
+        expect(
+          tester
+              .widget<CalendarWeekSelector>(find.byType(CalendarWeekSelector))
+              .selectedDay,
+          weekDay,
+        );
+      }
+      await upcomingTap(tester, 'calendar-sort');
+      expect(
+        tester
+            .widget<RadioGroup<OrderType?>>(find.byType(RadioGroup<OrderType?>))
+            .groupValue,
+        OrderType.online,
+      );
+      await upcomingDismiss(tester);
+      await upcomingTap(tester, 'calendar-filter-button');
+      expect(
+        tester
+            .widget<RadioGroup<OrderStatus?>>(
+              find.byType(RadioGroup<OrderStatus?>),
+            )
+            .groupValue,
+        OrderStatus.pending,
+      );
+      await upcomingDismiss(tester);
+    });
+  }
 }
 
 OrderSummary _order(

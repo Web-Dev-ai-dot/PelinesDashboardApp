@@ -894,36 +894,28 @@ List<OrderSummary> calendarRelevantOrders(List<OrderSummary> orders) {
   );
 }
 
-Map<String, List<OrderSummary>> groupScheduledOrdersByPacificDay(
+Map<String, List<OrderSummary>> groupCalendarOrdersByPacificDay(
   List<OrderSummary> orders,
 ) {
   final Map<String, List<OrderSummary>> grouped =
       <String, List<OrderSummary>>{};
   for (final OrderSummary order in orders) {
-    final DateTime? scheduled = order.scheduledFor;
-    if (scheduled == null) continue;
+    // Same operational date as the other Orders views: scheduledFor, or
+    // required createdAt for ASAP. Never assign an undated order to today.
     grouped
-        .putIfAbsent(PelinesTime.dayKey(scheduled), () => <OrderSummary>[])
+        .putIfAbsent(
+          PelinesTime.dayKey(order.operationalAt),
+          () => <OrderSummary>[],
+        )
         .add(order);
   }
   for (final List<OrderSummary> day in grouped.values) {
     day.sort((OrderSummary a, OrderSummary b) {
-      final int time = a.scheduledFor!.compareTo(b.scheduledFor!);
+      final int time = a.operationalAt.compareTo(b.operationalAt);
       return time != 0 ? time : a.orderNumber.compareTo(b.orderNumber);
     });
   }
   return grouped;
-}
-
-List<OrderSummary> unscheduledCalendarOrders(List<OrderSummary> orders) {
-  final List<OrderSummary> result = orders
-      .where((OrderSummary order) => order.scheduledFor == null)
-      .toList();
-  result.sort((OrderSummary a, OrderSummary b) {
-    final int created = b.createdAt.compareTo(a.createdAt);
-    return created != 0 ? created : a.orderNumber.compareTo(b.orderNumber);
-  });
-  return List<OrderSummary>.unmodifiable(result);
 }
 
 int compareCompletedOrders(OrderSummary a, OrderSummary b) {

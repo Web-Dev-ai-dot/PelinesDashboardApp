@@ -4,6 +4,7 @@ const spanishCatalog = <String, String>{
   'Week': 'Semana',
   'order': 'orden',
   'View Order Details': 'Ver detalles de la orden',
+  'Has orders': 'Tiene órdenes',
   'Previous week': 'Semana anterior',
   'Next week': 'Semana siguiente',
   'Sort by': 'Ordenar por',

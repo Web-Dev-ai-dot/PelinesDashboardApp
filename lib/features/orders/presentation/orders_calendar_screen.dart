@@ -11,7 +11,7 @@ import '../../locations/models/location.dart';
 import '../../locations/providers/locations_providers.dart';
 import '../models/order_models.dart';
 import '../models/orders_date_filter.dart';
-import '../models/calendar_planning.dart';
+import 'calendar_week_selector.dart';
 import '../providers/orders_providers.dart';
 import 'order_preview_card.dart';
 import 'calendar_month_grid.dart';
@@ -153,15 +153,13 @@ class _OrdersCalendarScreenState extends ConsumerState<OrdersCalendarScreen> {
   Widget _calendarBody(Location location, HistoricalOrdersState state) {
     final today = pacificDate(PelinesTime.now());
     final day = _view == 'Today' ? today : _selectedDay;
-    final days = _view == 'Week' ? calendarWeek(day) : [day];
     final locale = Localizations.localeOf(context).toLanguageTag();
     final fullDate = DateFormat.yMMMMEEEEd(locale);
-    final originalGrouped = groupScheduledOrdersByPacificDay(state.orders);
+    final originalGrouped = groupCalendarOrdersByPacificDay(state.orders);
     final filtered = state.orders.where(_matches).toList();
     final Map<String, List<OrderSummary>> grouped =
-        groupScheduledOrdersByPacificDay(filtered);
-    final selected = [for (final date in days) ...?grouped[_localDayKey(date)]];
-    final List<OrderSummary> unscheduled = unscheduledCalendarOrders(filtered);
+        groupCalendarOrdersByPacificDay(filtered);
+    final selected = grouped[_localDayKey(day)] ?? const <OrderSummary>[];
     final calendar = PelinesCard(
       key: const Key('calendar-month-panel'),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
@@ -192,9 +190,7 @@ class _OrdersCalendarScreenState extends ConsumerState<OrdersCalendarScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                _view == 'Week'
-                    ? '${fullDate.format(days.first)} – ${fullDate.format(days.last)}'
-                    : fullDate.format(day),
+                fullDate.format(day),
                 key: const Key('calendar-selected-date'),
                 style: PelinesTypography.sectionTitle(
                   Theme.of(context).textTheme,
@@ -211,18 +207,15 @@ class _OrdersCalendarScreenState extends ConsumerState<OrdersCalendarScreen> {
             ],
           ),
         ),
-        if ((selected.isEmpty &&
-                days.any(
-                  (d) => originalGrouped[_localDayKey(d)]?.isNotEmpty ?? false,
-                )) ||
-            (originalGrouped.isEmpty &&
-                unscheduled.isEmpty &&
-                unscheduledCalendarOrders(state.orders).isNotEmpty))
+        if (selected.isEmpty &&
+            (originalGrouped[_localDayKey(day)]?.isNotEmpty ?? false))
           _CalendarMessage(
+            compact: _view == 'Week',
             message: tr(context, 'No orders match these filters'),
           )
         else if (originalGrouped.isEmpty)
           _CalendarMessage(
+            compact: _view == 'Week',
             message: tr(
               context,
               'No scheduled orders found for this location.',
@@ -230,24 +223,12 @@ class _OrdersCalendarScreenState extends ConsumerState<OrdersCalendarScreen> {
           )
         else if (selected.isEmpty)
           _CalendarMessage(
+            compact: _view == 'Week',
             message: tr(context, 'No orders scheduled for this day.'),
           )
         else
           for (final order in selected)
             OrderPreviewCard(order: order, planning: true, showChannel: true),
-        if (unscheduled.isNotEmpty) ...[
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 20),
-            child: Text(
-              tr(context, 'Needs pickup time'),
-              style: PelinesTypography.sectionTitle(
-                Theme.of(context).textTheme,
-              ),
-            ),
-          ),
-          for (final order in unscheduled)
-            OrderPreviewCard(order: order, planning: true, showChannel: true),
-        ],
       ],
     );
     return RefreshIndicator(
@@ -307,32 +288,12 @@ class _OrdersCalendarScreenState extends ConsumerState<OrdersCalendarScreen> {
                 ),
                 const SizedBox(height: 16),
                 if (_view == 'Week')
-                  Wrap(
-                    spacing: 12,
-                    children: [
-                      IconButton(
-                        tooltip: tr(context, 'Previous week'),
-                        icon: const Icon(Icons.chevron_left),
-                        onPressed: () => setState(
-                          () => _selectedDay = DateTime(
-                            day.year,
-                            day.month,
-                            day.day - 7,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: tr(context, 'Next week'),
-                        icon: const Icon(Icons.chevron_right),
-                        onPressed: () => setState(
-                          () => _selectedDay = DateTime(
-                            day.year,
-                            day.month,
-                            day.day + 7,
-                          ),
-                        ),
-                      ),
-                    ],
+                  CalendarWeekSelector(
+                    selectedDay: day,
+                    hasOrders: (date) =>
+                        originalGrouped[_localDayKey(date)]?.isNotEmpty ??
+                        false,
+                    onChanged: (date) => setState(() => _selectedDay = date),
                   ),
                 if (_view != 'Month')
                   agenda
@@ -385,21 +346,27 @@ String _localDayKey(DateTime value) =>
     '${value.day.toString().padLeft(2, '0')}';
 
 class _CalendarMessage extends StatelessWidget {
-  const _CalendarMessage({required this.message, this.action});
+  const _CalendarMessage({
+    required this.message,
+    this.action,
+    this.compact = false,
+  });
   final String message;
   final VoidCallback? action;
+  final bool compact;
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.all(PelinesSpacing.xl),
+    padding: EdgeInsets.all(compact ? 16 : PelinesSpacing.xl),
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
-        const Icon(
-          Icons.calendar_month_outlined,
-          size: 48,
-          color: PelinesColors.textSecondary,
-        ),
-        const SizedBox(height: PelinesSpacing.sm),
+        if (!compact)
+          const Icon(
+            Icons.calendar_month_outlined,
+            size: 48,
+            color: PelinesColors.textSecondary,
+          ),
+        if (!compact) const SizedBox(height: PelinesSpacing.sm),
         Text(message, textAlign: TextAlign.center),
         if (action != null) ...<Widget>[
           const SizedBox(height: 12),

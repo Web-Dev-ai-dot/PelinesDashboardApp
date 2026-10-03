@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/intl.dart';
 import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'package:pelines_admin_app/app/theme/app_theme.dart';
+import 'package:pelines_admin_app/app/theme/pelines_tokens.dart';
 import 'package:pelines_admin_app/core/time/pelines_time.dart';
 import 'package:pelines_admin_app/features/locations/models/location.dart';
 import 'package:pelines_admin_app/features/locations/providers/locations_providers.dart';
@@ -20,6 +21,7 @@ import 'order_test_data.dart';
 import 'calendar_test_helpers.dart';
 
 import 'package:pelines_admin_app/features/orders/presentation/calendar_month_grid.dart';
+import 'package:pelines_admin_app/features/orders/presentation/calendar_week_selector.dart';
 
 import 'upcoming_sheet_helpers.dart';
 
@@ -73,6 +75,7 @@ class _Repo implements OrdersRepository {
           'contactName': entry.$2,
           'orderType': entry.$3,
           'eventDetails': {'eventName': entry.$5},
+          'createdAt': now.toIso8601String(),
           'scheduledFor': entry.$1 == 'asap'
               ? null
               : now.add(Duration(days: entry.$6)).toIso8601String(),
@@ -162,6 +165,145 @@ Future<void> _select(WidgetTester tester, String key, String value) async {
 
 void main() {
   testWidgets(
+    'Week selects one day; canonical dots survive composed filters and drafts',
+    (tester) async {
+      final repo = _Repo();
+      await _mount(tester, repo);
+      await upcomingTap(tester, 'calendar-view-Week');
+      CalendarWeekSelector selector() => tester.widget<CalendarWeekSelector>(
+        find.byType(CalendarWeekSelector),
+      );
+      final initial = selector().selectedDay;
+      expect(find.text('4 orders'), findsOneWidget);
+      expect(find.text('ORD-five'), findsNothing);
+      expect(find.byType(OrderPreviewCard), findsNWidgets(4));
+      expect(find.byType(OrderPreviewAction), findsNothing);
+      expect(find.text('Print ticket'), findsNothing);
+      expect(find.textContaining('Guacamole'), findsWidgets);
+      for (var weekday = 1; weekday <= 7; weekday++) {
+        expect(
+          find.byKey(ValueKey('calendar-week-day-$weekday')),
+          findsOneWidget,
+        );
+      }
+      expect(selector().hasOrders(initial), isTrue);
+      await _search(tester, 'Smith');
+      await _select(tester, 'calendar-type', 'catering');
+      await _select(tester, 'calendar-status', 'confirmed');
+      expect(find.text('1 order'), findsOneWidget);
+      await upcomingTap(tester, 'calendar-filter-button');
+      await upcomingTap(tester, 'upcoming-filter-reset');
+      await upcomingDismiss(tester);
+      expect(find.text('1 order'), findsOneWidget);
+      await upcomingTap(tester, 'calendar-sort');
+      await upcomingTap(tester, 'upcoming-type-online');
+      await upcomingDismiss(tester);
+      expect(find.text('1 order'), findsOneWidget);
+      await upcomingTap(tester, 'calendar-next-week');
+      expect(selector().selectedDay, shiftCalendarWeek(initial, 1));
+      expect(selector().selectedDay.weekday, initial.weekday);
+      expect(find.text('0 orders'), findsOneWidget);
+      await upcomingTap(tester, 'calendar-previous-week');
+      expect(find.text('1 order'), findsOneWidget);
+      final tomorrow = DateTime.utc(
+        initial.year,
+        initial.month,
+        initial.day + 1,
+      );
+      if (tomorrow.weekday == DateTime.monday) {
+        await upcomingTap(tester, 'calendar-next-week');
+      }
+      await upcomingTap(tester, 'calendar-week-day-${tomorrow.weekday}');
+      expect(selector().selectedDay, tomorrow);
+      expect(find.text('ORD-five'), findsOneWidget);
+      expect(find.text('ORD-one'), findsNothing);
+      expect(
+        find.text(DateFormat.yMMMMEEEEd('en').format(tomorrow)),
+        findsOneWidget,
+      );
+      await _search(tester, 'absent');
+      expect(find.text('0 orders'), findsOneWidget);
+      expect(
+        find.byKey(ValueKey('calendar-week-dot-${tomorrow.weekday}')),
+        findsOneWidget,
+      );
+      expect(find.text('No orders match these filters'), findsOneWidget);
+      expect(repo.calls, 1);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  test(
+    'Week shifts preserve weekday across Pacific DST and year boundaries',
+    () {
+      for (final date in [
+        DateTime.utc(2026, 3, 8),
+        DateTime.utc(2026, 11, 1),
+        DateTime.utc(2026, 12, 31),
+      ]) {
+        final next = shiftCalendarWeek(date, 1);
+        expect(next.weekday, date.weekday);
+        expect(shiftCalendarWeek(next, -1), date);
+        expect(calendarWeek(date), contains(date));
+      }
+    },
+  );
+
+  for (final width in [320.0, 390.0, 768.0, 1400.0]) {
+    for (final lang in ['en', 'es']) {
+      testWidgets('Week selector responsive localized $width $lang 2x', (
+        tester,
+      ) async {
+        await _mount(tester, _Repo(), width: width, scale: 2, lang: lang);
+        await upcomingTap(tester, 'calendar-view-Week');
+        expect(
+          find.text(lang == 'en' ? '4 orders' : '4 órdenes'),
+          findsOneWidget,
+        );
+        await _search(tester, 'Wedding');
+        expect(find.text(lang == 'en' ? '1 order' : '1 orden'), findsOneWidget);
+        await _search(tester, 'absent');
+        expect(
+          find.text(lang == 'en' ? '0 orders' : '0 órdenes'),
+          findsOneWidget,
+        );
+        await _search(tester, '');
+        final selector = tester.widget<CalendarWeekSelector>(
+          find.byType(CalendarWeekSelector),
+        );
+        expect(
+          tester
+              .widget<ChoiceChip>(find.byKey(const Key('calendar-view-Week')))
+              .selected,
+          isTrue,
+        );
+        for (final date in calendarWeek(selector.selectedDay)) {
+          await upcomingTap(tester, 'calendar-week-day-${date.weekday}');
+          expect(
+            find.text(DateFormat.yMMMMEEEEd(lang).format(date)),
+            findsOneWidget,
+          );
+          final button = find.byKey(
+            ValueKey('calendar-week-day-${date.weekday}'),
+          );
+          expect(tester.getSize(button).width, greaterThanOrEqualTo(48));
+          expect(
+            tester
+                .widget<TextButton>(button)
+                .style!
+                .backgroundColor!
+                .resolve({}),
+            PelinesColors.brandPrimary,
+          );
+          expect(find.text(DateFormat.E(lang).format(date)), findsOneWidget);
+          expect(tester.takeException(), isNull);
+        }
+        expect(find.byKey(const Key('calendar-today-kpi')), findsNothing);
+        expect(find.byKey(const Key('calendar-revenue-kpi')), findsNothing);
+      });
+    }
+  }
+  testWidgets(
     'phone Month and Year share a row and popup selection updates grid',
     (tester) async {
       await _mount(tester, _Repo(), width: 390);
@@ -249,18 +391,44 @@ void main() {
       });
     }
   }
-  testWidgets(
-    'ASAP stays separate from scheduled Today; fulfillment context preserved',
-    (tester) async {
-      await _mount(tester, _Repo(includeAsap: true));
-      expect(find.text('Needs pickup time'), findsOneWidget);
-      expect(find.text('ASAP'), findsOneWidget);
-      expect(find.text('Pickup'), findsWidgets);
-      expect(find.text('Delivery'), findsWidgets);
-
-      expect(find.byType(OrderPreviewAction), findsNothing);
-    },
-  );
+  for (final lang in ['en', 'es']) {
+    testWidgets(
+      'ASAP is integrated in the correct day in Today Week Month $lang',
+      (tester) async {
+        final repo = _Repo(includeAsap: true);
+        await _mount(tester, repo, lang: lang);
+        for (final view in ['Today', 'Week', 'Month']) {
+          await upcomingTap(tester, 'calendar-view-$view');
+          expect(find.text('Needs pickup time'), findsNothing);
+          expect(find.text('Requiere hora de recogida'), findsNothing);
+          expect(find.text('ASAP'), findsOneWidget);
+          expect(find.text('ORD-asap'), findsOneWidget);
+          expect(
+            find.text(lang == 'en' ? '5 orders' : '5 órdenes'),
+            findsOneWidget,
+          );
+          expect(find.byType(OrderPreviewCard), findsNWidgets(5));
+          expect(find.byType(OrderPreviewAction), findsNothing);
+        }
+        final day = tester
+            .widget<CalendarMonthGrid>(find.byType(CalendarMonthGrid))
+            .selectedDay;
+        tester
+            .widget<CalendarMonthGrid>(find.byType(CalendarMonthGrid))
+            .onDateChanged(DateTime(day.year, day.month, day.day + 1));
+        await tester.pumpAndSettle();
+        expect(find.text('ORD-asap'), findsNothing);
+        expect(find.text(lang == 'en' ? '1 order' : '1 orden'), findsOneWidget);
+        await upcomingTap(tester, 'calendar-view-Week');
+        expect(find.text('ORD-asap'), findsNothing);
+        await upcomingTap(tester, 'calendar-view-Today');
+        await _search(tester, 'ASAP Customer');
+        expect(find.text('ORD-asap'), findsOneWidget);
+        expect(find.text(lang == 'en' ? '1 order' : '1 orden'), findsOneWidget);
+        expect(repo.calls, 1);
+      },
+    );
+  }
   testWidgets('Today has no KPI cards and retains planning cards and filters', (
     tester,
   ) async {
