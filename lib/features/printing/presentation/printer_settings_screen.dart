@@ -13,6 +13,7 @@ import '../../../app/theme/pelines_components.dart';
 import '../../../app/theme/pelines_tokens.dart';
 import '../../../core/time/pelines_time.dart';
 import '../../locations/providers/locations_providers.dart';
+import '../../locations/presentation/pelines_location_context.dart';
 import '../models/print_job.dart';
 import '../models/print_result.dart';
 import '../models/printer.dart';
@@ -182,13 +183,7 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
           child: ListView(
             padding: const EdgeInsets.all(PelinesSpacing.lg),
             children: [
-              PelinesStateBadge(
-                label: widget.locationName,
-                foreground: PelinesColors.brandPrimary,
-                background: PelinesColors.brandPrimarySoft,
-                icon: Icons.storefront_outlined,
-              ),
-              const SizedBox(height: 8),
+              const SectionLocationContext(),
               Text(
                 network
                     ? tr(

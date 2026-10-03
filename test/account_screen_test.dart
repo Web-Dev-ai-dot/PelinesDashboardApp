@@ -1,4 +1,9 @@
 import 'package:go_router/go_router.dart';
+import 'package:pelines_admin_app/features/locations/providers/locations_providers.dart';
+import 'package:pelines_admin_app/features/locations/presentation/pelines_location_context.dart';
+
+import 'section_location_context_test.dart' show HeaderLocation;
+
 import 'package:pelines_admin_app/app/navigation/admin_navigation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -47,6 +52,8 @@ void main() {
       addTearDown(harness.dispose);
 
       expect(find.text('Not set'), findsNWidgets(2));
+      expect(find.byType(PelinesLocationContext), findsOneWidget);
+      expect(find.text('Pelines Tualatin · 7670 SW Nyberg St'), findsOneWidget);
       expect(find.text('session@example.com'), findsOneWidget);
       expect(find.text('Admin'), findsOneWidget);
       expect(find.text('Read-only'), findsNWidgets(2));
@@ -136,6 +143,7 @@ class _WidgetHarness {
       overrides: [
         authRepositoryProvider.overrideWithValue(auth),
         accountRepositoryProvider.overrideWithValue(account),
+        currentLocationProvider.overrideWith(HeaderLocation.new),
       ],
     );
     await container.read(authControllerProvider.future);

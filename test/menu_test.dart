@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:pelines_admin_app/features/locations/presentation/pelines_location_context.dart';
+
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'package:pelines_admin_app/app/theme/app_theme.dart';
@@ -808,6 +810,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Test Product'), findsOneWidget);
+    expect(find.byType(SectionLocationContext), findsOneWidget);
     expect(find.textContaining(r'$12.50'), findsOneWidget);
     expect(find.textContaining('Unavailable'), findsOneWidget);
     await tester.ensureVisible(find.text('Test Product'));

@@ -64,16 +64,7 @@ class PickupSettingsScreen extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Align(
-                        alignment: AlignmentDirectional.centerStart,
-                        child: PelinesStateBadge(
-                          label: location.name,
-                          foreground: PelinesColors.brandPrimary,
-                          background: PelinesColors.brandPrimarySoft,
-                          icon: Icons.storefront_outlined,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
+                      const SectionLocationContext(),
                       Text(
                         tr(
                           context,

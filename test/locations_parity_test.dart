@@ -169,8 +169,10 @@ void main() {
             find.text(lang == 'en' ? 'Locations' : 'Ubicaciones'),
             findsOneWidget,
           );
-          expect(find.text('Backend Location a'), findsOneWidget);
-          expect(find.text('123 Backend Street'), findsOneWidget);
+          expect(
+            find.text('Backend Location a · 123 Backend Street'),
+            findsOneWidget,
+          );
           expect(find.text('+1 503 123 4567'), findsOneWidget);
           expect(
             find.text(lang == 'en' ? 'Online Ordering' : 'Pedidos en línea'),
@@ -300,8 +302,14 @@ void main() {
       await tester.pumpAndSettle();
       await tester.drag(find.byType(ListView).first, const Offset(0, 3000));
       await tester.pumpAndSettle();
-      expect(find.text('Backend Location b'), findsOneWidget);
-      expect(find.text('Backend Location a'), findsNothing);
+      expect(
+        find.text('Backend Location b · 123 Backend Street'),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Backend Location a · 123 Backend Street'),
+        findsNothing,
+      );
       expect(tester.takeException(), isNull);
     },
   );

@@ -1,4 +1,5 @@
 import 'package:pelines_admin_app/app/theme/app_theme.dart';
+import 'package:pelines_admin_app/features/locations/presentation/pelines_location_context.dart';
 
 import 'dart:async';
 
@@ -139,6 +140,7 @@ void main() {
           repository.requests.single.complete(sample());
           await tester.pumpAndSettle();
           expect(find.byKey(const Key('analytics-filter-bar')), findsOneWidget);
+          expect(find.byType(PelinesLocationContext), findsOneWidget);
           expect(
             find.byKey(ValueKey('analytics-kpi-columns-${viewport.$3}')),
             findsOneWidget,
@@ -346,7 +348,13 @@ void main() {
     expect(repository.locations, ['a', 'b']);
     repository.requests.last.complete(sample(location: 'b'));
     await tester.pumpAndSettle();
-    expect(find.text('b'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(PelinesLocationContext),
+        matching: find.text('b'),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('Custom picker saves inclusive same-day range without request', (

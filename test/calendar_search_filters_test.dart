@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pelines_admin_app/features/locations/presentation/pelines_location_context.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -447,6 +448,7 @@ void main() {
     expect(find.byType(OrderPreviewAction), findsNothing);
     expect(find.text('Print ticket'), findsNothing);
     expect(find.text('View Order Details'), findsNWidgets(4));
+    expect(find.byType(PelinesLocationContext), findsOneWidget);
     expect(find.textContaining('Taco tray'), findsWidgets);
     expect(find.textContaining('Guacamole'), findsWidgets);
     expect(find.text('iOS'), findsWidgets);

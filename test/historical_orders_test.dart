@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pelines_admin_app/features/locations/presentation/pelines_location_context.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -179,6 +180,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    expect(find.byType(SectionLocationContext), findsOneWidget);
     expect(find.text('Picked up'), findsOneWidget);
     expect(find.text('Refunded'), findsOneWidget);
     await tester.tap(find.text('completed-card'));
@@ -214,6 +216,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    expect(find.byType(SectionLocationContext), findsOneWidget);
     expect(find.text('Cancelled'), findsOneWidget);
     expect(find.text('Paid'), findsOneWidget);
     expect(find.textContaining('Cancelled at'), findsNothing);

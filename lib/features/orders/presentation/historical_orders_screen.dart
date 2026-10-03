@@ -5,11 +5,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'historical_orders_content.dart';
 
 import '../../../app/navigation/admin_navigation.dart';
-import '../../../app/theme/pelines_components.dart';
 import '../../../app/theme/pelines_tokens.dart';
 
 import '../../locations/models/location.dart';
 import '../../locations/providers/locations_providers.dart';
+import '../../locations/presentation/pelines_location_context.dart';
 import '../models/order_models.dart';
 import '../models/history_filters.dart';
 import '../providers/orders_providers.dart';
@@ -86,15 +86,7 @@ class _HistoricalOrdersScreenState
                   PelinesSpacing.md,
                   PelinesSpacing.xxs,
                 ),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: PelinesStateBadge(
-                    label: selected.name,
-                    foreground: PelinesColors.brandPrimary,
-                    background: PelinesColors.brandPrimarySoft,
-                    icon: Icons.storefront_outlined,
-                  ),
-                ),
+                child: const SectionLocationContext(),
               ),
               _HistoryFilterBar(
                 filters: _filters,

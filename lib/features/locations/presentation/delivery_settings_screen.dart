@@ -17,6 +17,7 @@ import '../providers/regular_delivery_controller.dart';
 import 'catering_delivery_screen.dart';
 import 'operations_parity_widgets.dart';
 import 'regular_delivery_screen.dart';
+import 'pelines_location_context.dart';
 
 class DeliverySettingsScreen extends ConsumerWidget {
   const DeliverySettingsScreen({super.key});
@@ -68,16 +69,7 @@ class DeliverySettingsScreen extends ConsumerWidget {
                   child: ListView(
                     padding: const EdgeInsets.all(PelinesSpacing.lg),
                     children: [
-                      Align(
-                        alignment: AlignmentDirectional.centerStart,
-                        child: PelinesStateBadge(
-                          label: location.name,
-                          foreground: PelinesColors.brandPrimary,
-                          background: PelinesColors.brandPrimarySoft,
-                          icon: Icons.storefront_outlined,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
+                      const SectionLocationContext(),
                       Text(
                         tr(
                           context,

@@ -13,6 +13,7 @@ class _LocationsContent extends StatelessWidget {
       key: const Key('locations-content'),
       padding: const EdgeInsets.all(PelinesSpacing.lg),
       children: [
+        const SectionLocationContext(),
         Text(
           tr(
             context,
@@ -45,7 +46,7 @@ class _LocationsContent extends StatelessWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              PelinesSectionHeading(location.name),
+                              PelinesSectionHeading(tr(context, 'Location')),
                               Text(
                                 location.slug,
                                 style: PelinesTypography.smallLabel,
@@ -71,11 +72,6 @@ class _LocationsContent extends StatelessWidget {
                             : PelinesColors.mutedSurface,
                       ),
                     ),
-                    if (location.address?.trim().isNotEmpty == true)
-                      _LocationInfo(
-                        label: tr(context, 'Address'),
-                        value: location.address!,
-                      ),
                     if (location.phone?.trim().isNotEmpty == true)
                       _LocationInfo(
                         label: tr(context, 'Phone'),

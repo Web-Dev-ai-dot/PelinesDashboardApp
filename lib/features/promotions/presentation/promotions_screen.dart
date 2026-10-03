@@ -10,6 +10,7 @@ import '../../../app/theme/pelines_components.dart';
 import '../../../app/theme/pelines_tokens.dart';
 import '../../locations/models/location.dart';
 import '../../locations/providers/locations_providers.dart';
+import '../../locations/presentation/pelines_location_context.dart';
 import '../models/discount.dart';
 import '../providers/promotions_providers.dart';
 
@@ -45,28 +46,29 @@ class PromotionsScreen extends ConsumerWidget {
                 width: PelinesPageWidth.dashboard,
                 child: Padding(
                   padding: const EdgeInsets.all(20),
-                  child: Wrap(
-                    spacing: 16,
-                    runSpacing: 12,
-                    crossAxisAlignment: WrapCrossAlignment.center,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      PelinesStateBadge(
-                        label: selected.name,
-                        foreground: PelinesColors.brandPrimary,
-                        background: PelinesColors.brandPrimarySoft,
-                        icon: Icons.storefront_outlined,
-                      ),
-                      PelinesButton(
-                        key: const Key('add-promotion'),
-                        label: tr(context, 'Add Promotion'),
-                        onPressed: () => context.push('/app/promotions/new'),
-                      ),
-                      IconButton(
-                        tooltip: tr(context, 'Refresh'),
-                        onPressed: ref
-                            .read(promotionsProvider.notifier)
-                            .refresh,
-                        icon: const Icon(Icons.refresh),
+                      const SectionLocationContext(),
+                      Wrap(
+                        spacing: 16,
+                        runSpacing: 12,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          PelinesButton(
+                            key: const Key('add-promotion'),
+                            label: tr(context, 'Add Promotion'),
+                            onPressed: () =>
+                                context.push('/app/promotions/new'),
+                          ),
+                          IconButton(
+                            tooltip: tr(context, 'Refresh'),
+                            onPressed: ref
+                                .read(promotionsProvider.notifier)
+                                .refresh,
+                            icon: const Icon(Icons.refresh),
+                          ),
+                        ],
                       ),
                     ],
                   ),

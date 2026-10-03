@@ -23,7 +23,7 @@ Location location({String name = 'Tualatin', Map<String, dynamic>? prefs}) =>
       deliveryMinimumCents: 0,
       createdAt: DateTime.utc(2026),
       updatedAt: DateTime.utc(2026),
-      address: 'Do not show contact',
+      address: '7670 SW Nyberg St',
       phone: '555-contact',
       servicePrefsJson: prefs,
     );
@@ -98,7 +98,7 @@ void main() {
             ),
             findsOneWidget,
           );
-          expect(find.text('Tualatin'), findsOneWidget);
+          expect(find.text('Tualatin · 7670 SW Nyberg St'), findsOneWidget);
           expect(
             find.byKey(const Key('accepting-orders-switch')),
             findsOneWidget,
@@ -112,7 +112,6 @@ void main() {
             expect(find.byKey(Key(key)), findsNothing);
           }
           for (final label in [
-            'Do not show contact',
             '555-contact',
             'Enable Pickup',
             'Preparation Time',
@@ -211,8 +210,8 @@ void main() {
         location(name: 'Portland', prefs: {'autoAcceptRegular': true}),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Portland'), findsOneWidget);
-      expect(find.text('Tualatin'), findsNothing);
+      expect(find.text('Portland · 7670 SW Nyberg St'), findsOneWidget);
+      expect(find.text('Tualatin · 7670 SW Nyberg St'), findsNothing);
       expect(find.text('Automatically accepted after payment'), findsOneWidget);
       current.replace(location(prefs: {'autoAcceptRegular': 'invalid'}));
       await tester.pumpAndSettle();

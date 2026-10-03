@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:pelines_admin_app/features/locations/presentation/pelines_location_context.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -124,10 +125,8 @@ void main() {
             _FakePromotionsRepository([discount]),
           );
           addTearDown(container.dispose);
-          final label = AdminLocalizations(Locale(language)).text(
-            status.label,
-            key: 'promotion.${status.label}',
-          );
+          final label = AdminLocalizations(Locale(language))
+              .text(status.label, key: 'promotion.${status.label}');
           for (final screen in <Widget>[
             const PromotionsScreen(),
             const PromotionDetailScreen(discountId: 'discount-id'),
@@ -148,6 +147,10 @@ void main() {
             );
             await tester.pumpAndSettle();
             expect(find.text(label), findsOneWidget);
+            expect(
+              find.byType(PelinesLocationContext),
+              screen is PromotionsScreen ? findsOneWidget : findsNothing,
+            );
             expect(tester.takeException(), isNull);
           }
         });

@@ -10,6 +10,7 @@ import '../../../app/theme/pelines_tokens.dart';
 import '../../../core/time/pelines_time.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../locations/providers/locations_providers.dart';
+import '../../locations/presentation/pelines_location_context.dart';
 import '../providers/analytics_providers.dart';
 import '../application/analytics_visualization_data.dart';
 import '../models/analytics_result.dart';
@@ -71,6 +72,7 @@ class AnalyticsScreen extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    const SectionLocationContext(),
                     const AnalyticsFilters(),
                     if (range.contains(PelinesTime.now()))
                       Padding(

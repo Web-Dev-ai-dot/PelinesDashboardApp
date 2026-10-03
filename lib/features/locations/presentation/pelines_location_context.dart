@@ -1,7 +1,25 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/theme/pelines_tokens.dart';
 import '../models/location.dart';
+import '../providers/locations_providers.dart';
+
+/// Section headers share the shell's selection; no requests or local cache.
+class SectionLocationContext extends ConsumerWidget {
+  const SectionLocationContext({super.key, this.bottomSpacing = 12});
+  final double bottomSpacing;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final location = ref.watch(currentLocationProvider).value;
+    if (location == null) return const SizedBox.shrink();
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomSpacing),
+      child: PelinesLocationContext(location: location),
+    );
+  }
+}
 
 /// Read-only location context. Location changes belong to the shell selector.
 class PelinesLocationContext extends StatelessWidget {

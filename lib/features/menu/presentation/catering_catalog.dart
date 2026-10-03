@@ -214,7 +214,7 @@ class _CateringCatalogState extends ConsumerState<MenuCatalogScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Text(loc.name),
+                        const SectionLocationContext(),
                         Wrap(
                           spacing: 12,
                           runSpacing: 12,
