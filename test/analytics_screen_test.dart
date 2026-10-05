@@ -3,6 +3,8 @@ import 'package:pelines_admin_app/features/locations/presentation/pelines_locati
 
 import 'dart:async';
 
+import 'package:pelines_admin_app/app/theme/pelines_tokens.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -139,6 +141,55 @@ void main() {
           );
           repository.requests.single.complete(sample());
           await tester.pumpAndSettle();
+          final export = find.byKey(const Key('analytics-export'));
+          final refresh = find.byKey(const Key('analytics-refresh'));
+          final primary = tester.widget<FilledButton>(export);
+          final secondary = tester.widget<OutlinedButton>(refresh);
+          expect(primary.onPressed, isNotNull);
+          expect(secondary.onPressed, isNotNull);
+          expect(
+            primary.style!.backgroundColor!.resolve({}),
+            PelinesColors.brandPrimary,
+          );
+          expect(
+            secondary.style!.foregroundColor!.resolve({}),
+            PelinesColors.textPrimary,
+          );
+          expect(tester.getSize(export).height, greaterThanOrEqualTo(48));
+          expect(tester.getSize(refresh).height, greaterThanOrEqualTo(48));
+          expect(
+            find.descendant(of: export, matching: find.byIcon(Icons.ios_share)),
+            findsOneWidget,
+          );
+          expect(
+            find.descendant(
+              of: refresh,
+              matching: find.text(lang == 'en' ? 'Refresh' : 'Actualizar'),
+            ),
+            findsOneWidget,
+          );
+          final exportRect = tester.getRect(export);
+          final refreshRect = tester.getRect(refresh);
+          if (viewport.$1 >= 768) {
+            expect(exportRect.center.dy, refreshRect.center.dy);
+            expect(refreshRect.left, greaterThan(exportRect.right));
+          } else if (viewport.$2 == 2) {
+            expect(refreshRect.top, greaterThanOrEqualTo(exportRect.bottom));
+          }
+          final status = find.byKey(
+            const Key('analytics-section-Order Status'),
+          );
+          final statusTexts = find.descendant(
+            of: status,
+            matching: find.byType(Text),
+          );
+          final left = tester.getTopLeft(statusTexts.first).dx;
+          for (final element in statusTexts.evaluate()) {
+            expect(
+              tester.getTopLeft(find.byWidget(element.widget)).dx,
+              closeTo(left, 0.01),
+            );
+          }
           expect(find.byKey(const Key('analytics-filter-bar')), findsOneWidget);
           expect(find.byType(PelinesLocationContext), findsOneWidget);
           expect(
@@ -189,6 +240,18 @@ void main() {
   ) async {
     await mount(tester);
     expect(find.text('Loading analytics...'), findsOneWidget);
+    expect(
+      tester
+          .widget<OutlinedButton>(find.byKey(const Key('analytics-refresh')))
+          .onPressed,
+      isNull,
+    );
+    expect(
+      tester
+          .widget<FilledButton>(find.byKey(const Key('analytics-export')))
+          .onPressed,
+      isNull,
+    );
     repository.requests.single.complete(sample());
     await tester.pumpAndSettle();
     for (final label in ['Sales', 'Orders', 'Average Order', 'Items Sold']) {
@@ -204,6 +267,18 @@ void main() {
     await tester.tap(find.byKey(const Key('analytics-refresh')));
     await tester.pump();
     expect(repository.requests.length, 2);
+    expect(
+      tester
+          .widget<OutlinedButton>(find.byKey(const Key('analytics-refresh')))
+          .onPressed,
+      isNull,
+    );
+    expect(
+      tester
+          .widget<FilledButton>(find.byKey(const Key('analytics-export')))
+          .onPressed,
+      isNull,
+    );
     repository.requests.last.completeError(Exception('offline'));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('analytics-refresh-error')), findsOneWidget);

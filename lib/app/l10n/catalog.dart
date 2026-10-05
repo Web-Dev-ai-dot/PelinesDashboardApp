@@ -1,5 +1,15 @@
 // English source messages and their Spanish UI translations. Backend values are never catalog keys.
 const spanishCatalog = <String, String>{
+  'Last 90 days': 'Últimos 90 días',
+  'Export / Reports': 'Exportar / Informes',
+  'Revenue Report': 'Informe de ingresos',
+  'Operational Report': 'Informe operativo',
+  'Preparing export…': 'Preparando exportación…',
+  'Loading Analytics…': 'Cargando analíticas…',
+  'Export unavailable. Refresh Analytics and try again.': 'Exportación no disponible. Actualiza Analíticas e inténtalo de nuevo.',
+  'Export unavailable: the selected period has incomplete coverage.': 'Exportación no disponible: el período seleccionado tiene cobertura incompleta.',
+  'Analytics changed. Please export again.': 'Las analíticas cambiaron. Vuelve a exportar.',
+  'Export failed. Please try again.': 'No se pudo exportar. Inténtalo de nuevo.',
   'View upcoming orders by week or month to plan kitchen production and pickup flow.': 'Consulta las próximas órdenes por semana o mes para planificar la producción en cocina y las recogidas.',
   'Week': 'Semana',
   'order': 'orden',

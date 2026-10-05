@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../../../app/l10n/admin_localizations.dart';
 import '../../../app/navigation/admin_navigation.dart';
 import '../../../app/theme/pelines_tokens.dart';
+import '../../../app/theme/app_theme.dart';
 import '../../../core/time/pelines_time.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../locations/providers/locations_providers.dart';
@@ -15,6 +16,7 @@ import '../providers/analytics_providers.dart';
 import '../application/analytics_visualization_data.dart';
 import '../models/analytics_result.dart';
 import 'analytics_filters.dart';
+import 'analytics_export_action.dart';
 import 'analytics_visualizations.dart';
 
 class AnalyticsScreen extends ConsumerWidget {
@@ -74,18 +76,21 @@ class AnalyticsScreen extends ConsumerWidget {
                   children: [
                     const SectionLocationContext(),
                     const AnalyticsFilters(),
+                    const SizedBox(height: 12),
                     if (range.contains(PelinesTime.now()))
                       Padding(
-                        padding: const EdgeInsets.only(top: 8),
+                        padding: const EdgeInsets.only(bottom: 12),
                         child: Text(
                           tr(context, 'This period is still in progress.'),
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                       ),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton.icon(
+                    AnalyticsExportAction(
+                      secondaryAction: OutlinedButton.icon(
                         key: const Key('analytics-refresh'),
+                        style: PelinesControlStyles.button(
+                          PelinesButtonVariant.secondary,
+                        ),
                         onPressed:
                             dataset.isLoading ||
                                 loaded == null ||
@@ -96,6 +101,7 @@ class AnalyticsScreen extends ConsumerWidget {
                         label: Text(tr(context, 'Refresh')),
                       ),
                     ),
+                    const SizedBox(height: 12),
                     if (dataset.isLoading) ...[
                       const Center(child: CircularProgressIndicator()),
                       Text(

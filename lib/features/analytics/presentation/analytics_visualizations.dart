@@ -119,37 +119,44 @@ class AnalyticsVisualizations extends StatelessWidget {
         const SizedBox(height: 16),
         _Section(
           title: 'Order Status',
-          child: Column(
-            children: [
-              for (final entry in {
-                'Completed': period.completed,
-                'Cancelled': period.cancelled,
-                'In Progress': period.inProgress,
-                if (period.unknownStatusOrders > 0)
-                  'Unknown': period.unknownStatusOrders,
-              }.entries)
+          child: Padding(
+            padding: const EdgeInsets.only(left: PelinesSpacing.xxs),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final entry in {
+                  'Completed': period.completed,
+                  'Cancelled': period.cancelled,
+                  'In Progress': period.inProgress,
+                  if (period.unknownStatusOrders > 0)
+                    'Unknown': period.unknownStatusOrders,
+                }.entries)
+                  _ValueRow(
+                    label: tr(context, entry.key),
+                    value: NumberFormat.decimalPattern(
+                      Localizations.localeOf(context).toLanguageTag(),
+                    ).format(entry.value),
+                  ),
+                const Divider(),
                 _ValueRow(
-                  label: tr(context, entry.key),
-                  value: NumberFormat.decimalPattern(
-                    Localizations.localeOf(context).toLanguageTag(),
-                  ).format(entry.value),
+                  label: tr(context, 'Cancellation Rate'),
+                  value: period.cancellationRate == null
+                      ? '—'
+                      : '${NumberFormat('0.0', Localizations.localeOf(context).toLanguageTag()).format(period.cancellationRate)}%',
                 ),
-              const Divider(),
-              _ValueRow(
-                label: tr(context, 'Cancellation Rate'),
-                value: period.cancellationRate == null
-                    ? '—'
-                    : '${NumberFormat('0.0', Localizations.localeOf(context).toLanguageTag()).format(period.cancellationRate)}%',
-              ),
-              _CancellationComparison(
-                result: result,
-                covered: analyticsComparisonIsCovered(dataset, result),
-              ),
-              Text(
-                tr(context, 'Cancelled eligible orders / all eligible orders.'),
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
+                _CancellationComparison(
+                  result: result,
+                  covered: analyticsComparisonIsCovered(dataset, result),
+                ),
+                Text(
+                  tr(
+                    context,
+                    'Cancelled eligible orders / all eligible orders.',
+                  ),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
           ),
         ),
       ],
@@ -464,13 +471,17 @@ class _ValueRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 8),
-    child: PelinesLabelValueRow(
-      label: Text(label),
-      value: Text(
-        value,
-        style: PelinesTypography.pageTitle(Theme.of(context).textTheme)
-            ?.copyWith(fontSize: 24),
-      ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: PelinesTypography.pageTitle(Theme.of(context).textTheme)
+              ?.copyWith(fontSize: 24),
+        ),
+      ],
     ),
   );
 }

@@ -43,9 +43,9 @@ class AnalyticsFilters extends ConsumerWidget {
             children: [
               for (final entry in {
                 AnalyticsDatePreset.today: 'Today',
-                AnalyticsDatePreset.last7Days: '7 Days',
-                AnalyticsDatePreset.last30Days: '30 Days',
-                AnalyticsDatePreset.last90Days: '90 Days',
+                AnalyticsDatePreset.last7Days: 'Last 7 days',
+                AnalyticsDatePreset.last30Days: 'Last 30 days',
+                AnalyticsDatePreset.last90Days: 'Last 90 days',
               }.entries)
                 ChoiceChip(
                   showCheckmark: false,
