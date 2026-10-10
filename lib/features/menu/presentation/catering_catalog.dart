@@ -160,7 +160,7 @@ class _CateringCatalogState extends ConsumerState<MenuCatalogScreen> {
   @override
   Widget build(BuildContext context) {
     final location = ref.watch(currentLocationProvider);
-    return Scaffold(
+    return AdminSectionScaffold(
       appBar: AdminAppBar(title: Text(tr(context, widget.kind.label))),
       body: location.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -214,7 +214,6 @@ class _CateringCatalogState extends ConsumerState<MenuCatalogScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        const SectionLocationContext(),
                         Wrap(
                           spacing: 12,
                           runSpacing: 12,

@@ -180,7 +180,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.byType(SectionLocationContext), findsOneWidget);
+    expect(find.byType(PelinesLocationContext), findsOneWidget);
     expect(find.text('Picked up'), findsOneWidget);
     expect(find.text('Refunded'), findsOneWidget);
     await tester.tap(find.text('completed-card'));
@@ -216,7 +216,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.byType(SectionLocationContext), findsOneWidget);
+    expect(find.byType(PelinesLocationContext), findsOneWidget);
     expect(find.text('Cancelled'), findsOneWidget);
     expect(find.text('Paid'), findsOneWidget);
     expect(find.textContaining('Cancelled at'), findsNothing);

@@ -17,6 +17,8 @@ import 'package:pelines_admin_app/features/orders/models/order_models.dart';
 import 'package:pelines_admin_app/features/orders/models/history_filters.dart';
 import 'package:pelines_admin_app/features/orders/presentation/historical_orders_screen.dart';
 import 'package:pelines_admin_app/features/orders/presentation/orders_calendar_screen.dart';
+import 'package:pelines_admin_app/features/orders/presentation/calendar_month_grid.dart';
+import 'package:pelines_admin_app/features/orders/models/orders_date_filter.dart';
 import 'package:pelines_admin_app/features/orders/providers/orders_providers.dart';
 
 import 'order_test_data.dart';
@@ -39,6 +41,7 @@ class _Current extends CurrentLocationController {
 }
 
 class _Repo implements OrdersRepository {
+  final now = DateTime.now();
   bool fail = false, empty = false;
   int calls = 0;
   Completer<void>? hold;
@@ -66,15 +69,13 @@ class _Repo implements OrdersRepository {
           'contactName': 'María Customer',
           'orderType': id == 'one' ? 'catering' : 'online',
           'eventDetails': {'eventName': 'Celebración familiar'},
-          'scheduledFor': id == 'one'
-              ? DateTime.now().toUtc().toIso8601String()
-              : null,
-          'createdAt': DateTime.now()
+          'scheduledFor': id == 'one' ? now.toUtc().toIso8601String() : null,
+          'createdAt': now
               .subtract(const Duration(days: 90))
               .toUtc()
               .toIso8601String(),
           'deliveredAt': status == OrderStatus.delivered && id == 'one'
-              ? DateTime.now().toUtc().toIso8601String()
+              ? now.toUtc().toIso8601String()
               : null,
         }),
     ];
@@ -210,26 +211,45 @@ void main() {
       testWidgets('Calendar month agenda layout $width/$scale/$language', (
         tester,
       ) async {
+        final repo = _Repo();
         await _mount(
           tester,
-          _Repo(),
+          repo,
           'calendar',
           width: width,
           scale: scale,
           language: language,
         );
+        expect(
+          tester
+              .widget<ChoiceChip>(find.byKey(const Key('calendar-view-Today')))
+              .selected,
+          isTrue,
+        );
+        expect(find.byType(CalendarMonthGrid), findsNothing);
+        final monthTab = find.byKey(const Key('calendar-view-Month'));
+        await tester.ensureVisible(monthTab);
+        await tester.tap(monthTab);
+        await tester.pumpAndSettle();
+        expect(tester.widget<ChoiceChip>(monthTab).selected, isTrue);
         final wide = width - 32 >= 1000 * scale;
         expect(
           find.byKey(const Key('calendar-wide-layout')),
           wide ? findsOneWidget : findsNothing,
         );
-        expect(find.byType(CalendarDatePicker), findsOneWidget);
-        expect(find.text(language == 'es' ? 'Mes' : 'Month'), findsOneWidget);
-        final picker = tester.widget<CalendarDatePicker>(
-          find.byType(CalendarDatePicker),
+        expect(find.byType(CalendarMonthGrid), findsOneWidget);
+        expect(
+          find.descendant(
+            of: monthTab,
+            matching: find.text(language == 'es' ? 'Mes' : 'Month'),
+          ),
+          findsOneWidget,
+        );
+        final picker = tester.widget<CalendarMonthGrid>(
+          find.byType(CalendarMonthGrid),
         );
         // Date selection must change the agenda without an API request.
-        final today = picker.initialDate!;
+        final today = picker.selectedDay;
         picker.onDateChanged(today.add(const Duration(days: 1)));
         await tester.pumpAndSettle();
         expect(
@@ -240,12 +260,25 @@ void main() {
           ),
           findsOneWidget,
         );
-        expect(
-          find.text('ORD-two'),
-          findsOneWidget,
-        ); // Unscheduled remains visible.
+        expect(find.text('ORD-one'), findsNothing);
+        expect(find.text('ORD-two'), findsNothing);
+        expect(repo.calls, 1);
+        // ASAP belongs to its Pacific operational day, not every day's agenda.
+        final asapDay = pacificDate(
+          repo.now.subtract(const Duration(days: 90)),
+        );
+        picker.onDateChanged(
+          DateTime(asapDay.year, asapDay.month, asapDay.day),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('ORD-two'), findsOneWidget);
+        expect(find.text('ASAP'), findsOneWidget);
+        expect(find.text('ORD-one'), findsNothing);
+        expect(repo.calls, 1);
         picker.onDateChanged(today);
         await tester.pumpAndSettle();
+        expect(find.text('ORD-two'), findsNothing);
+        expect(repo.calls, 1);
         final order = find.text('ORD-one');
         await tester.ensureVisible(order);
         await tester.pumpAndSettle();

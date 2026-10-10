@@ -140,7 +140,15 @@ void main() {
   ]) {
     testWidgets('Store split reuses existing cards $section', (tester) async {
       await _pump(tester, StoreOperationsScreen(section: section), width: 1200);
-      expect(find.text('Tualatin'), findsWidgets);
+      if (section == StoreOperationsSection.locations) {
+        expect(
+          find.text('Tualatin · 123 Backend Address', findRichText: true),
+          findsOneWidget,
+        );
+      } else {
+        expect(find.text('Tualatin'), findsWidgets);
+        expect(find.text('123 Backend Address'), findsOneWidget);
+      }
       expect(
         find.text('Business Hours'),
         section == StoreOperationsSection.delivery
@@ -186,7 +194,10 @@ void main() {
           lang: lang,
         );
         await tester.pumpAndSettle();
-        expect(find.text('Tualatin'), findsOneWidget);
+        expect(
+          find.text('Tualatin · 123 Backend Address', findRichText: true),
+          findsOneWidget,
+        );
         expect(find.byKey(const Key('add-promotion')), findsOneWidget);
         expect(find.text('CODE-local'), findsOneWidget);
         expect(find.text('CODE-hidden'), findsNothing);

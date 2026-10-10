@@ -17,13 +17,12 @@ import '../providers/regular_delivery_controller.dart';
 import 'catering_delivery_screen.dart';
 import 'operations_parity_widgets.dart';
 import 'regular_delivery_screen.dart';
-import 'pelines_location_context.dart';
 
 class DeliverySettingsScreen extends ConsumerWidget {
   const DeliverySettingsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) => Scaffold(
+  Widget build(BuildContext context, WidgetRef ref) => AdminSectionScaffold(
     key: const Key('delivery-settings-screen'),
     appBar: AdminAppBar(
       title: Text(
@@ -69,7 +68,6 @@ class DeliverySettingsScreen extends ConsumerWidget {
                   child: ListView(
                     padding: const EdgeInsets.all(PelinesSpacing.lg),
                     children: [
-                      const SectionLocationContext(),
                       Text(
                         tr(
                           context,

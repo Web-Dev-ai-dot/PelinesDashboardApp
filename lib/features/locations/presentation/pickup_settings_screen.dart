@@ -20,7 +20,7 @@ class PickupSettingsScreen extends ConsumerWidget {
         ),
       );
     });
-    return Scaffold(
+    return AdminSectionScaffold(
       key: const Key('pickup-settings-screen'),
       appBar: AdminAppBar(
         title: Text(
@@ -64,7 +64,6 @@ class PickupSettingsScreen extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const SectionLocationContext(),
                       Text(
                         tr(
                           context,

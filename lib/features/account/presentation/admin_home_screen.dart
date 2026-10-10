@@ -6,7 +6,6 @@ import '../../../app/navigation/admin_navigation.dart';
 import '../../../app/theme/pelines_tokens.dart';
 import '../../locations/models/location.dart';
 import '../../locations/presentation/pelines_location_selector.dart';
-import '../../locations/presentation/pelines_location_context.dart';
 import '../../locations/providers/locations_providers.dart';
 import '../../orders/presentation/today_orders_view.dart';
 import '../../orders/models/orders_date_filter.dart';
@@ -28,7 +27,7 @@ class _AdminHomeScreenState extends ConsumerState<AdminHomeScreen> {
       currentLocationProvider,
     );
 
-    return Scaffold(
+    return AdminSectionScaffold(
       appBar: AdminAppBar(
         title: Text(
           tr(context, widget.upcoming ? 'Upcoming' : 'To Do'),
@@ -84,10 +83,6 @@ class _HomeContent extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-              child: PelinesLocationContext(location: location),
-            ),
-            Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: Align(
                 alignment: AlignmentDirectional.centerStart,
@@ -102,8 +97,7 @@ class _HomeContent extends ConsumerWidget {
                 ),
               ),
             ),
-            // Keep Orders' existing bounded viewport; long context scrolls above it
-            // instead of squeezing its filters and list at large text scales.
+            // Keep Orders' existing bounded viewport and scrolling behavior.
             SizedBox(
               height: constraints.maxHeight,
               child: TodayOrdersView(

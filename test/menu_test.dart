@@ -810,7 +810,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Test Product'), findsOneWidget);
-    expect(find.byType(SectionLocationContext), findsOneWidget);
+    expect(find.byType(PelinesLocationContext), findsOneWidget);
     expect(find.textContaining(r'$12.50'), findsOneWidget);
     expect(find.textContaining('Unavailable'), findsOneWidget);
     await tester.ensureVisible(find.text('Test Product'));

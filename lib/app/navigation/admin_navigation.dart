@@ -10,6 +10,7 @@ import 'package:go_router/go_router.dart';
 import '../../features/auth/providers/auth_providers.dart';
 import '../../features/locations/providers/locations_providers.dart';
 import '../../features/locations/presentation/pelines_location_selector.dart';
+import '../../features/locations/presentation/pelines_location_context.dart';
 import '../theme/pelines_tokens.dart';
 import '../l10n/language_toggle.dart';
 import 'navigation_preferences.dart';
@@ -193,6 +194,102 @@ class _AdminPopScopeState<T> extends State<AdminPopScope<T>> {
 
 /// Page heading below the shell topbar. Back and page actions stay on the
 /// original Navigator, so drafts and deep links retain their existing guards.
+class AdminSectionScaffold extends ConsumerWidget {
+  const AdminSectionScaffold({
+    required this.appBar,
+    required this.body,
+    this.showLocation = true,
+    super.key,
+  });
+  final AdminAppBar appBar;
+  final Widget body;
+  final bool showLocation;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (!showLocation) return Scaffold(appBar: appBar, body: body);
+    final current = ref.watch(currentLocationProvider);
+    // AsyncValue may retain the previous branch while loading or on error.
+    final location = current.isLoading || current.hasError
+        ? null
+        : current.value;
+    return Scaffold(
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Material(
+              key: const Key('persistent-section-header'),
+              color: Theme.of(context).scaffoldBackgroundColor,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+                  final text = appBar.title;
+                  final heading = Semantics(
+                    header: true,
+                    child: text is Text && text.data != null
+                        ? Text(
+                            text.data!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: PelinesTypography.pageTitle(
+                              Theme.of(context).textTheme,
+                              width: constraints.maxWidth,
+                            ),
+                          )
+                        : text ?? const SizedBox.shrink(),
+                  );
+                  final title = Row(
+                    children: [
+                      if (appBar.leading != null) appBar.leading!,
+                      Expanded(child: heading),
+                      ...?appBar.actions,
+                    ],
+                  );
+                  final contextLine = location == null
+                      ? null
+                      : PelinesLocationContext(location: location, maxLines: 2);
+                  return Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: PelinesLayout.pagePadding(
+                        constraints.maxWidth,
+                      ),
+                      vertical: 12,
+                    ),
+                    child:
+                        constraints.maxWidth >= 900 * scale &&
+                            contextLine != null
+                        ? Row(
+                            children: [
+                              Expanded(flex: 2, child: title),
+                              const SizedBox(width: 24),
+                              Expanded(flex: 3, child: contextLine),
+                            ],
+                          )
+                        : Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              title,
+                              if (contextLine != null) ...[
+                                const SizedBox(height: 6),
+                                contextLine,
+                              ],
+                            ],
+                          ),
+                  );
+                },
+              ),
+            ),
+            Expanded(child: body),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class AdminAppBar extends StatelessWidget implements PreferredSizeWidget {
   const AdminAppBar({
     this.title,

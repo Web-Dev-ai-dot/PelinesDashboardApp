@@ -13,7 +13,6 @@ import '../../../app/theme/pelines_components.dart';
 import '../../../app/theme/pelines_tokens.dart';
 import '../../../core/time/pelines_time.dart';
 import '../../locations/providers/locations_providers.dart';
-import '../../locations/presentation/pelines_location_context.dart';
 import '../models/print_job.dart';
 import '../models/print_result.dart';
 import '../models/printer.dart';
@@ -27,7 +26,7 @@ class PrinterSettingsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final location = ref.watch(currentLocationProvider);
-    return Scaffold(
+    return AdminSectionScaffold(
       appBar: AdminAppBar(
         title: Text(
           tr(context, 'Printer Settings'),
@@ -183,7 +182,6 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
           child: ListView(
             padding: const EdgeInsets.all(PelinesSpacing.lg),
             children: [
-              const SectionLocationContext(),
               Text(
                 network
                     ? tr(

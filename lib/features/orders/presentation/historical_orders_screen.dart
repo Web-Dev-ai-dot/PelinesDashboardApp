@@ -9,7 +9,6 @@ import '../../../app/theme/pelines_tokens.dart';
 
 import '../../locations/models/location.dart';
 import '../../locations/providers/locations_providers.dart';
-import '../../locations/presentation/pelines_location_context.dart';
 import '../models/order_models.dart';
 import '../models/history_filters.dart';
 import '../providers/orders_providers.dart';
@@ -43,7 +42,7 @@ class _HistoricalOrdersScreenState
         ? tr(context, 'Completed Orders')
         : tr(context, 'Cancelled Orders');
 
-    return Scaffold(
+    return AdminSectionScaffold(
       appBar: AdminAppBar(
         title: Text(
           title,
@@ -79,15 +78,6 @@ class _HistoricalOrdersScreenState
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  PelinesSpacing.md,
-                  PelinesSpacing.sm,
-                  PelinesSpacing.md,
-                  PelinesSpacing.xxs,
-                ),
-                child: const SectionLocationContext(),
-              ),
               _HistoryFilterBar(
                 filters: _filters,
                 showPayment: widget.kind == HistoricalOrdersKind.cancelled,

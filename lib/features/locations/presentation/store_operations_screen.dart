@@ -1,6 +1,5 @@
 import '../../../app/theme/app_theme.dart';
 import 'operations_parity_widgets.dart';
-import 'pelines_location_context.dart';
 
 import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'package:flutter/material.dart';
@@ -57,7 +56,8 @@ class StoreOperationsScreen extends ConsumerWidget {
 
     final AsyncValue<Location?> current = ref.watch(currentLocationProvider);
     final StoreOperationState operation = ref.watch(storeOperationsProvider);
-    return Scaffold(
+    return AdminSectionScaffold(
+      showLocation: section == StoreOperationsSection.locations,
       appBar: AdminAppBar(
         title: Text(
           tr(context, switch (section) {

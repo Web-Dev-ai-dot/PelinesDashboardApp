@@ -17,7 +17,6 @@ import 'order_preview_card.dart';
 import 'calendar_month_grid.dart';
 import 'upcoming_control_sheets.dart';
 import '../models/upcoming_filters.dart';
-import '../../locations/presentation/pelines_location_context.dart';
 import '../../../app/theme/app_theme.dart';
 
 class OrdersCalendarScreen extends ConsumerStatefulWidget {
@@ -62,7 +61,7 @@ class _OrdersCalendarScreenState extends ConsumerState<OrdersCalendarScreen> {
     final AsyncValue<HistoricalOrdersState> orders = ref.watch(
       calendarOrdersProvider,
     );
-    return Scaffold(
+    return AdminSectionScaffold(
       appBar: AdminAppBar(
         title: Text(
           tr(context, 'Calendar'),
@@ -255,8 +254,6 @@ class _OrdersCalendarScreenState extends ConsumerState<OrdersCalendarScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                PelinesLocationContext(location: location),
-                const SizedBox(height: 12),
                 Text(
                   tr(
                     context,

@@ -12,7 +12,10 @@ class SectionLocationContext extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final location = ref.watch(currentLocationProvider).value;
+    final current = ref.watch(currentLocationProvider);
+    final location = current.isLoading || current.hasError
+        ? null
+        : current.value;
     if (location == null) return const SizedBox.shrink();
     return Padding(
       padding: EdgeInsets.only(bottom: bottomSpacing),
@@ -23,9 +26,14 @@ class SectionLocationContext extends ConsumerWidget {
 
 /// Read-only location context. Location changes belong to the shell selector.
 class PelinesLocationContext extends StatelessWidget {
-  const PelinesLocationContext({required this.location, super.key});
+  const PelinesLocationContext({
+    required this.location,
+    this.maxLines,
+    super.key,
+  });
 
   final Location location;
+  final int? maxLines;
 
   @override
   Widget build(BuildContext context) {
@@ -64,6 +72,10 @@ class PelinesLocationContext extends StatelessWidget {
               color: PelinesColors.textSecondary,
             ),
             softWrap: true,
+            maxLines: maxLines,
+            overflow: maxLines == null
+                ? TextOverflow.clip
+                : TextOverflow.ellipsis,
           ),
         ),
       ],

@@ -13,7 +13,6 @@ class _LocationsContent extends StatelessWidget {
       key: const Key('locations-content'),
       padding: const EdgeInsets.all(PelinesSpacing.lg),
       children: [
-        const SectionLocationContext(),
         Text(
           tr(
             context,

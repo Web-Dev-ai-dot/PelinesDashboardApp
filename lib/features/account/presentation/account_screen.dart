@@ -10,7 +10,6 @@ import '../../../app/theme/pelines_components.dart';
 import '../../../app/theme/pelines_tokens.dart';
 import '../../auth/models/admin_session.dart';
 import '../../auth/providers/auth_providers.dart';
-import '../../locations/presentation/pelines_location_context.dart';
 import '../models/profile.dart';
 import '../models/profile_edit.dart';
 import '../providers/profile_mutation_controller.dart';
@@ -21,7 +20,7 @@ class AccountScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final AsyncValue<AdminSession?> session = ref.watch(authControllerProvider);
-    return Scaffold(
+    return AdminSectionScaffold(
       appBar: AdminAppBar(
         title: Text(
           tr(context, 'My Profile'),
@@ -62,7 +61,6 @@ class _AccountContent extends ConsumerWidget {
       child: ListView(
         padding: const EdgeInsets.all(PelinesSpacing.lg),
         children: <Widget>[
-          const SectionLocationContext(),
           PelinesSettingsCard(
             key: const Key('profile-card'),
             title: tr(context, 'My Profile'),

@@ -756,6 +756,23 @@ void menuCatalogTests(MenuKind kind) {
           expect(find.text('Meal 2'), findsNothing);
           await tester.drag(find.byType(ListView).first, const Offset(0, -700));
           await tester.pumpAndSettle();
+          final persistentHeader = find.byKey(
+            const Key('persistent-section-header'),
+          );
+          expect(persistentHeader.hitTestable(), findsOneWidget);
+          expect(
+            find.descendant(
+              of: persistentHeader,
+              matching: find.text(
+                lang == 'en'
+                    ? kind.label
+                    : kind == MenuKind.catering
+                    ? 'Menú de catering'
+                    : 'Menú regular',
+              ),
+            ),
+            findsOneWidget,
+          );
           expect(tester.takeException(), isNull);
         },
       );

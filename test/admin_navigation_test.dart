@@ -973,7 +973,7 @@ void main() {
         );
         expect(
           find.descendant(
-            of: find.byType(AdminAppBar),
+            of: find.byKey(const Key('persistent-section-header')),
             matching: find.text(language == 'es' ? 'Próximas' : 'Upcoming'),
           ),
           findsOneWidget,

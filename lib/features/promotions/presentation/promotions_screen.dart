@@ -10,7 +10,6 @@ import '../../../app/theme/pelines_components.dart';
 import '../../../app/theme/pelines_tokens.dart';
 import '../../locations/models/location.dart';
 import '../../locations/providers/locations_providers.dart';
-import '../../locations/presentation/pelines_location_context.dart';
 import '../models/discount.dart';
 import '../providers/promotions_providers.dart';
 
@@ -21,7 +20,7 @@ class PromotionsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final AsyncValue<Location?> location = ref.watch(currentLocationProvider);
     final AsyncValue<List<Discount>> promotions = ref.watch(promotionsProvider);
-    return Scaffold(
+    return AdminSectionScaffold(
       appBar: AdminAppBar(
         title: Text(
           tr(context, 'Promotions'),
@@ -49,7 +48,6 @@ class PromotionsScreen extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const SectionLocationContext(),
                       Wrap(
                         spacing: 16,
                         runSpacing: 12,
