@@ -19,6 +19,16 @@ import 'package:pelines_admin_app/features/orders/providers/orders_providers.dar
 
 import 'order_test_data.dart';
 
+import 'package:pelines_admin_app/features/orders/data/orders_repository.dart';
+
+class _ConfirmedRepository implements OrdersRepository {
+  @override
+  Future<OrderDetail> getOrderById(String id) async =>
+      orderDetail(id: id, locationId: 'a', status: OrderStatus.confirmed);
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
 void main() {
   for (final change in ['logout', 'location', 'acknowledge']) {
     test('late snapshot read cannot undo $change', () async {
@@ -383,6 +393,7 @@ void main() {
             authControllerProvider.overrideWith(_FakeAuth.new),
             currentLocationProvider.overrideWith(_FakeLocation.new),
             todayOrdersProvider.overrideWith(_FakeToday.new),
+            ordersRepositoryProvider.overrideWithValue(_ConfirmedRepository()),
             orderDetailProvider.overrideWith(
               (ref, id) async => orderDetail(
                 id: id,

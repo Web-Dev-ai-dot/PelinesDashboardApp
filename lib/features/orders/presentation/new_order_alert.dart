@@ -8,7 +8,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/theme/pelines_components.dart';
 import '../../../app/theme/pelines_tokens.dart';
 import '../../../core/api/api_exception.dart';
+import '../../auth/providers/auth_providers.dart';
 import '../../locations/models/location.dart';
+import '../../locations/providers/locations_providers.dart';
 import '../models/order_models.dart';
 import '../models/order_status_action.dart';
 import '../providers/order_alerts_controller.dart';
@@ -168,7 +170,8 @@ class _NewOrderDecision extends ConsumerStatefulWidget {
   ConsumerState<_NewOrderDecision> createState() => _NewOrderDecisionState();
 }
 
-class _NewOrderDecisionState extends ConsumerState<_NewOrderDecision> {
+class _NewOrderDecisionState extends ConsumerState<_NewOrderDecision>
+    with WidgetsBindingObserver {
   OrderDetail? _order;
   Object? _error;
   bool _loading = true;
@@ -176,11 +179,41 @@ class _NewOrderDecisionState extends ConsumerState<_NewOrderDecision> {
   bool _completed = false;
   bool _requiresRefresh = false;
   bool _refreshOnCompletion = false;
+  final Object _session = Object();
+  int _request = 0;
+  bool _requestInFlight = false;
+  bool _foreground = true;
+  OrderStatus? _initialCanonicalStatus;
+  OrderStatusAction? _localAction;
+  bool _localRequestSent = false;
+  bool _localSuccess = false;
+  final _cancelKey = GlobalKey<CancelOrderActionState>();
   late final OrderAlertCoordinator _feedback;
+
+  bool get _active =>
+      mounted &&
+      !_completed &&
+      ref.read(currentLocationProvider).value?.id == widget.location.id &&
+      ref.read(orderAlertsProvider).value?.locationId == widget.location.id &&
+      _feedback.orderId == widget.orderId &&
+      _feedback.locationId == widget.location.id;
+
+  bool _owns(Object session, int request) =>
+      identical(session, _session) &&
+      request == _request &&
+      _active &&
+      _foreground;
+
+  static bool _resolvedStatus(OrderStatus status) =>
+      const {OrderStatus.confirmed, OrderStatus.cancelled}.contains(status);
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _foreground =
+        WidgetsBinding.instance.lifecycleState == null ||
+        WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
     _feedback = ref.read(orderAlertCoordinatorProvider);
     _feedback.present(widget.location.id, widget.orderId);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -188,37 +221,70 @@ class _NewOrderDecisionState extends ConsumerState<_NewOrderDecision> {
     });
   }
 
+  @override
+  void dispose() {
+    _request++;
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _foreground = state == AppLifecycleState.resumed;
+    if (!_foreground) {
+      _request++;
+    }
+    // The shell's resume tick requests a fresh detail. Its post-frame dispatch
+    // runs after all lifecycle observers have updated their foreground state.
+  }
+
+  void _finishResolvedDecision() {
+    if (!_active || !_foreground || _localSuccess) return;
+    _feedback.resolve();
+    _cancelKey.currentState?.dismissConfirmation();
+    unawaited(_finish());
+    setState(() {}); // Hide the completed presentation during the queue pause.
+    // Completion does not wait for the list refresh or invent a board move.
+    unawaited(ref.read(todayOrdersProvider.notifier).refresh());
+    ref.invalidate(orderDetailProvider(widget.orderId));
+  }
+
   Future<void> _refresh() async {
+    if (!_active || !_foreground || _localSuccess) {
+      return;
+    }
     if (_acting || ref.read(orderMutationProvider(widget.orderId)).isBusy) {
       return;
     }
+    final request = ++_request;
+    if (_requestInFlight) {
+      _refreshOnCompletion = true;
+      return;
+    }
+    _requestInFlight = true;
+    final session = _session;
     setState(() {
       _loading = true;
       _error = null;
     });
     final token = _feedback.generation;
-    // Observe the first GET result, including an error while Riverpod schedules
-    // a read retry. Awaiting provider.future alone hides those errors from UI.
-    final result = Completer<OrderDetail>();
-    ref.invalidate(orderDetailProvider(widget.orderId));
-    final subscription = ref.listenManual<AsyncValue<OrderDetail>>(
-      orderDetailProvider(widget.orderId),
-      (_, next) {
-        if (result.isCompleted) return;
-        if (next.hasError && !next.isLoading) {
-          result.completeError(next.error!, next.stackTrace);
-        } else if (!next.isLoading && next.value != null) {
-          result.complete(next.value!);
-        }
-      },
-      fireImmediately: true,
-    );
     try {
-      final order = await result.future;
-      if (!mounted) return;
-      if (order.id != widget.orderId) {
+      // Own this GET directly: a shared provider refresh must not deliver an
+      // older result into a newer presentation request.
+      final order = await ref
+          .read(ordersRepositoryProvider)
+          .getOrderById(widget.orderId);
+      if (!_owns(session, request) ||
+          ref.read(orderMutationProvider(widget.orderId)).isBusy) {
+        return;
+      }
+      if (order.id != widget.orderId ||
+          order.locationId != widget.location.id) {
         throw const ApiException(message: 'Unable to verify order identity.');
       }
+      _initialCanonicalStatus ??= order.status;
+      final localResolved =
+          _localRequestSent && _localAction?.target == order.status;
       ref
           .read(orderMutationProvider(widget.orderId).notifier)
           .adoptRefreshedOrder(order);
@@ -226,6 +292,20 @@ class _NewOrderDecisionState extends ConsumerState<_NewOrderDecision> {
         _order = order;
         _requiresRefresh = false;
       });
+      if (localResolved) {
+        _localSuccess = true;
+        _feedback.resolve();
+        await _finish();
+        if (mounted) {
+          unawaited(ref.read(todayOrdersProvider.notifier).refresh());
+        }
+        return;
+      }
+      if (_initialCanonicalStatus == OrderStatus.pending &&
+          _resolvedStatus(order.status)) {
+        _finishResolvedDecision();
+        return;
+      }
       if (_feedback.orderId == widget.orderId &&
           order.locationId == widget.location.id) {
         _feedback.verify(
@@ -237,16 +317,20 @@ class _NewOrderDecisionState extends ConsumerState<_NewOrderDecision> {
         );
       }
     } on Object catch (error) {
-      if (mounted &&
-          token == _feedback.generation &&
-          _feedback.orderId == widget.orderId &&
-          error is ApiException &&
-          error.statusCode == 404) {
-        _feedback.resolve();
+      if (!_owns(session, request)) return;
+      if (error is ApiException && error.statusCode == 401) {
+        await ref.read(authControllerProvider.notifier).signOut();
+        return;
       }
-      if (mounted) setState(() => _error = error);
+      if (error is ApiException && error.statusCode == 404) {
+        _feedback.resolve();
+        // A 404 permits explicit acknowledgement; it does not prove a status.
+      }
+      setState(() {
+        _error = error;
+      });
     } finally {
-      subscription.close();
+      _requestInFlight = false;
       if (mounted) setState(() => _loading = false);
       if (mounted && _refreshOnCompletion) {
         _refreshOnCompletion = false;
@@ -256,14 +340,15 @@ class _NewOrderDecisionState extends ConsumerState<_NewOrderDecision> {
   }
 
   Future<void> _finish() async {
-    if (_completed) return;
+    if (!_active) return;
+    _request++;
     _feedback.mute();
     _completed = true;
     await widget.onComplete();
   }
 
   Future<void> _accept(OrderDetail order) async {
-    if (_completed || _acting || _loading) return;
+    if (!_active || _acting || _loading) return;
     _feedback.mute();
     setState(() => _acting = true);
     try {
@@ -272,44 +357,76 @@ class _NewOrderDecisionState extends ConsumerState<_NewOrderDecision> {
           .acceptOrder(order);
     } finally {
       if (mounted) setState(() => _acting = false);
+      if (_active && _refreshOnCompletion) {
+        _refreshOnCompletion = false;
+        unawaited(_refresh());
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final mutation = ref.watch(orderMutationProvider(widget.orderId));
+    if (_completed &&
+        !_localSuccess &&
+        _initialCanonicalStatus == OrderStatus.pending &&
+        _order != null &&
+        _resolvedStatus(_order!.status)) {
+      return const SizedBox.shrink();
+    }
     final notes = ref.watch(orderNotesProvider(widget.orderId));
     ref.listen<OrderMutationState>(orderMutationProvider(widget.orderId), (
       previous,
       next,
     ) {
+      if (!_active) return;
+      if (next.isBusy) {
+        _request++;
+        _localAction = next.action;
+        _localRequestSent = ref
+            .read(orderMutationProvider(widget.orderId).notifier)
+            .statusRequestSent;
+      }
       if (next.phase == OrderMutationPhase.error) {
+        _localAction = next.action;
+        _localRequestSent = ref
+            .read(orderMutationProvider(widget.orderId).notifier)
+            .statusRequestSent;
         setState(() => _requiresRefresh = true);
       }
       if (next.phase == OrderMutationPhase.success &&
           next.canonicalOrder != null &&
           next.action != null &&
           next.canonicalOrder!.status == next.action!.target) {
+        _localSuccess = true;
         _feedback.resolve();
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) unawaited(_finish());
         });
       }
+      if (previous?.isBusy == true && !next.isBusy && _refreshOnCompletion) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_active && !_acting) {
+            _refreshOnCompletion = false;
+            unawaited(_refresh());
+          }
+        });
+      }
     });
     ref.listen<AsyncValue<TodayOrdersState>>(todayOrdersProvider, (_, next) {
       if (next.value != null &&
+          !next.isLoading &&
+          !next.hasError &&
+          next.value!.snapshotLocationId == widget.location.id &&
           !next.value!.isRefreshing &&
-          next.value!.refreshError == null &&
-          !_loading) {
+          next.value!.refreshError == null) {
         unawaited(_refresh());
       }
     });
     ref.listen<int>(appResumeTickProvider, (_, _) {
-      if (_loading) {
-        _refreshOnCompletion = true;
-      } else {
-        unawaited(_refresh());
-      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_active) unawaited(_refresh());
+      });
     });
     final order = mutation.canonicalOrder ?? _order;
     final busy = _loading || _acting || mutation.isBusy || notes.isBusy;
@@ -476,6 +593,13 @@ class _NewOrderDecisionState extends ConsumerState<_NewOrderDecision> {
                 ),
               if (canCancel)
                 CancelOrderAction(
+                  key: _cancelKey,
+                  canSubmit: () =>
+                      _active &&
+                      _foreground &&
+                      !_loading &&
+                      !_requiresRefresh &&
+                      !ref.read(orderMutationProvider(widget.orderId)).isBusy,
                   order: order,
                   busy: busy || _completed,
                   expanded: true,
@@ -493,7 +617,7 @@ class _NewOrderDecisionState extends ConsumerState<_NewOrderDecision> {
                 style: TextButton.styleFrom(
                   minimumSize: const Size.fromHeight(56),
                 ),
-                onPressed: busy ? null : _refresh,
+                onPressed: busy || _completed ? null : _refresh,
                 child: Text(tr(context, 'Refresh')),
               ),
             ];

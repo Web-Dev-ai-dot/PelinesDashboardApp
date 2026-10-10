@@ -53,12 +53,23 @@ class _OrderPreviewActionState extends ConsumerState<OrderPreviewAction> {
     final detail = ref.watch(orderDetailProvider(summary.id));
     final notes = ref.watch(orderNotesProvider(summary.id));
     final location = ref.watch(currentLocationProvider).value;
-    if (detail.value != null && !identical(_seen, detail.value)) {
+    if (!detail.isLoading &&
+        !detail.hasError &&
+        detail.value != null &&
+        !identical(_seen, detail.value)) {
       _seen = detail.value;
       final canonical = detail.value!;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           final current = ref.read(orderMutationProvider(summary.id));
+          final latest = ref.read(orderDetailProvider(summary.id));
+          // A retained loading value or a superseded frame is not a new GET.
+          if (latest.isLoading ||
+              latest.hasError ||
+              !identical(latest.value, canonical) ||
+              !identical(current, mutation)) {
+            return;
+          }
           // The board's reconciliation GET must not immediately erase a failed
           // action message when the canonical status/payment are unchanged.
           if (widget.showNextStatus &&

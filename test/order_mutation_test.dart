@@ -18,6 +18,64 @@ import 'order_test_data.dart';
 import 'package:pelines_admin_app/features/orders/presentation/order_preview_action.dart';
 
 void main() {
+  testWidgets('preview remount during refresh cannot restore cached status', (
+    tester,
+  ) async {
+    final before = orderDetail(status: OrderStatus.confirmed);
+    final after = orderDetail(status: OrderStatus.preparing);
+    final refresh = Completer<OrderDetail>();
+    var reads = 0;
+    final container = ProviderContainer(
+      overrides: [
+        currentLocationProvider.overrideWith(_FakeCurrentLocation.new),
+        orderDetailProvider.overrideWith(
+          (ref, id) async => ++reads == 1 ? before : await refresh.future,
+        ),
+      ],
+    );
+    final keep = container.listen(orderMutationProvider(before.id), (_, _) {});
+    await container.read(currentLocationProvider.future);
+    await container.read(orderDetailProvider(before.id).future);
+    container
+        .read(orderMutationProvider(before.id).notifier)
+        .adoptRefreshedOrder(after);
+    container.invalidate(orderDetailProvider(before.id));
+    // The refreshed provider retains its old value while the GET is pending.
+    final pending = container.read(orderDetailProvider(before.id).future);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          home: Scaffold(
+            body: OrderPreviewAction(
+              order: OrderSummary.fromJson(orderJson(status: 'preparing')),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(
+      container.read(orderMutationProvider(before.id)).canonicalOrder?.status,
+      OrderStatus.preparing,
+    );
+    expect(find.text('Marking ready...'), findsOneWidget);
+    expect(
+      tester
+          .widget<FilledButton>(find.byKey(const Key('order-primary-action')))
+          .onPressed,
+      isNull,
+    );
+    refresh.complete(after);
+    await pending;
+    await tester.pumpAndSettle();
+    expect(find.text('Mark ready'), findsOneWidget);
+    expect(find.text('Start preparing'), findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+    keep.close();
+    container.dispose();
+  });
+
   for (final (OrderStatus source, OrderStatus target)
       in <(OrderStatus, OrderStatus)>[
         (OrderStatus.pending, OrderStatus.confirmed),

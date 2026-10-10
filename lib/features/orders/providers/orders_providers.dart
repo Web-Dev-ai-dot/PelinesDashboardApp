@@ -292,6 +292,10 @@ class OrderMutationController extends Notifier<OrderMutationState> {
   OrderMutationController(this.orderId);
 
   final String orderId;
+  // Whether the current local attempt reached the status request. A reconciled
+  // target after an uncertain request belongs to that local completion flow.
+  bool _statusRequestSent = false;
+  bool get statusRequestSent => _statusRequestSent;
 
   @override
   OrderMutationState build() => const OrderMutationState();
@@ -357,6 +361,7 @@ class OrderMutationController extends Notifier<OrderMutationState> {
         !_allows(order, action)) {
       return;
     }
+    _statusRequestSent = false;
     if (!order.paymentStatus.isOperationallyPaid) {
       state = OrderMutationState(
         phase: OrderMutationPhase.error,
@@ -375,6 +380,7 @@ class OrderMutationController extends Notifier<OrderMutationState> {
     final OrderDetail? canonical = await _preflight(order, action);
     if (canonical == null) return;
     try {
+      _statusRequestSent = true;
       final OrderDetail provisional = await ref
           .read(ordersRepositoryProvider)
           .updateOrderStatus(orderId: orderId, status: action.target);

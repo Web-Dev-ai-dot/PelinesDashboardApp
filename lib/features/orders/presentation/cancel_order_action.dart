@@ -16,6 +16,7 @@ class CancelOrderAction extends ConsumerStatefulWidget {
     this.sheetStyle = false,
     this.onConfirmationOpened,
     this.onConfirmationClosed,
+    this.canSubmit,
     super.key,
   });
   final OrderDetail order;
@@ -24,6 +25,7 @@ class CancelOrderAction extends ConsumerStatefulWidget {
   final bool sheetStyle;
   final VoidCallback? onConfirmationOpened;
   final ValueChanged<bool>? onConfirmationClosed;
+  final bool Function()? canSubmit;
 
   @override
   ConsumerState<CancelOrderAction> createState() => CancelOrderActionState();
@@ -31,6 +33,31 @@ class CancelOrderAction extends ConsumerStatefulWidget {
 
 class CancelOrderActionState extends ConsumerState<CancelOrderAction> {
   bool _confirming = false;
+  int _confirmationGeneration = 0;
+  Route<dynamic>? _confirmationRoute;
+  NavigatorState? _confirmationNavigator;
+
+  void dismissConfirmation() {
+    _confirmationGeneration++;
+    final route = _confirmationRoute;
+    _confirmationRoute = null;
+    if (route?.isActive == true && _confirmationNavigator?.mounted == true) {
+      _confirmationNavigator!.removeRoute(route!);
+    }
+  }
+
+  @override
+  void dispose() {
+    _confirmationGeneration++;
+    final route = _confirmationRoute;
+    final navigator = _confirmationNavigator;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (route?.isActive == true && navigator?.mounted == true) {
+        navigator!.removeRoute(route!);
+      }
+    });
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) => widget.expanded
@@ -65,43 +92,51 @@ class CancelOrderActionState extends ConsumerState<CancelOrderAction> {
         );
 
   Future<void> _confirm() async {
-    if (_confirming || widget.busy) return;
+    if (_confirming || widget.busy || widget.canSubmit?.call() == false) return;
+    final token = ++_confirmationGeneration;
     widget.onConfirmationOpened?.call();
     final OrderDetail order = widget.order;
     setState(() => _confirming = true);
     try {
       final bool? confirmed = await showDialog<bool>(
         context: context,
-        builder: (BuildContext context) => AlertDialog(
-          title: Text(tr(context, 'Cancel Order?')),
-          content: Text(
-            'Cancel ${order.orderNumber} (${money(order.totalCents)})?\n'
-            'Cancellation may initiate a refund if this order has already been paid.',
-          ),
-          actions: <Widget>[
-            TextButton(
-              key: const Key('cancel-order-keep'),
-              onPressed: () => Navigator.of(context).pop(false),
-              child: Text(tr(context, 'Keep Order')),
+        builder: (BuildContext context) {
+          _confirmationRoute = ModalRoute.of(context);
+          _confirmationNavigator = Navigator.of(context);
+          return AlertDialog(
+            title: Text(tr(context, 'Cancel Order?')),
+            content: Text(
+              'Cancel ${order.orderNumber} (${money(order.totalCents)})?\n'
+              'Cancellation may initiate a refund if this order has already been paid.',
             ),
-            FilledButton(
-              key: const Key('cancel-order-confirm'),
-              style: FilledButton.styleFrom(
-                backgroundColor: PelinesColors.destructive,
+            actions: <Widget>[
+              TextButton(
+                key: const Key('cancel-order-keep'),
+                onPressed: () => Navigator.of(context).pop(false),
+                child: Text(tr(context, 'Keep Order')),
               ),
-              onPressed: () => Navigator.of(context).pop(true),
-              child: Text(tr(context, 'Cancel Order')),
-            ),
-          ],
-        ),
+              FilledButton(
+                key: const Key('cancel-order-confirm'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: PelinesColors.destructive,
+                ),
+                onPressed: () => Navigator.of(context).pop(true),
+                child: Text(tr(context, 'Cancel Order')),
+              ),
+            ],
+          );
+        },
       );
-      if (!mounted) return;
+      if (!mounted || token != _confirmationGeneration) return;
       widget.onConfirmationClosed?.call(confirmed == true);
-      if (confirmed != true || !mounted) return;
+      if (confirmed != true || !mounted || widget.canSubmit?.call() == false) {
+        return;
+      }
       await ref
           .read(orderMutationProvider(order.id).notifier)
           .cancelOrder(order);
     } finally {
+      if (token == _confirmationGeneration) _confirmationRoute = null;
       if (mounted) setState(() => _confirming = false);
     }
   }

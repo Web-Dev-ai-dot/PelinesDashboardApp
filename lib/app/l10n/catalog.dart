@@ -582,7 +582,7 @@ const spanishCatalog = <String, String>{
   "Order marked picked up": "Pedido marcado como recogido",
   "Order marked ready": "Pedido marcado como listo",
   "Order moved to preparing": "Pedido en preparación",
-  "Order no longer available": "El pedido ya no está disponible",
+  "Order no longer available": "La orden ya no está disponible",
   "Order no longer available.": "El pedido ya no está disponible.",
   "Order status changed on the server.": "El estado del pedido cambió en el servidor.",
   "Order status changed while the request was being processed.": "El estado del pedido cambió mientras se procesaba la solicitud.",

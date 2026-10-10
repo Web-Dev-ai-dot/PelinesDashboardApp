@@ -140,11 +140,13 @@ class _Store implements OrderAlertStore {
 
 class _Sound implements OrderAlertSound {
   int plays = 0;
+  final soundCounts = <int>[];
   int stops = 0;
   bool fail = false;
   @override
   Future<void> play({int soundCount = 1}) async {
     plays++;
+    soundCounts.add(soundCount);
     if (fail) throw StateError('native effects unavailable');
   }
 
@@ -168,9 +170,11 @@ class _Repo implements OrdersRepository {
   Completer<void>? holdPatch;
   bool failList = false;
   int listCalls = 0;
+  final detailResponses = <Future<OrderDetail>>[];
   @override
   Future<OrderDetail> getOrderById(String id) async {
     gets++;
+    if (detailResponses.isNotEmpty) return detailResponses.removeAt(0);
     if (getError != null) throw getError!;
     return orders[id] ??
         (throw const ApiException(message: 'Missing', statusCode: 404));
@@ -348,6 +352,397 @@ Future<_Harness> _pump(
 }
 
 void main() {
+  for (final width in [390.0, 768.0, 1366.0]) {
+    testWidgets('B.1 silent resolution after content scroll at $width', (
+      tester,
+    ) async {
+      tester.view.physicalSize = Size(width, 1100);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final h = await _pump(tester, scale: 2, language: 'es');
+      h.repo.orders['A'] = _detail('A', rich: true, itemCount: 20);
+      await h.emit(tester);
+      await tester.drag(
+        find.byType(SingleChildScrollView).last,
+        const Offset(0, -600),
+      );
+      await tester.pumpAndSettle();
+      h.repo.orders['A'] = _detail(
+        'A',
+        rich: true,
+        itemCount: 20,
+        status: OrderStatus.confirmed,
+      );
+      await h.emit(tester);
+      expect(find.byKey(const Key('new-order-bottom-sheet')), findsNothing);
+      expect(tester.takeException(), isNull);
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+      expect(h.unseen, isEmpty);
+    });
+  }
+  for (final change in ['location', 'logout', 'dispose']) {
+    for (final delayed in [false, true]) {
+      testWidgets(
+        'B.1 $change invalidates ${delayed ? "late GET" : "completion"}',
+        (tester) async {
+          final h = await _pump(tester);
+          (h.container.read(authControllerProvider.notifier) as _Auth)
+              .signedIn();
+          await tester.pumpAndSettle();
+          h.repo.orders['A'] = _detail('A');
+          await h.emit(tester);
+          final late = Completer<OrderDetail>();
+          if (delayed) h.repo.detailResponses.add(late.future);
+          h.repo.orders['A'] = _detail('A', status: OrderStatus.confirmed);
+          await h.container.read(todayOrdersProvider.notifier).refresh();
+          await tester.pump();
+          if (change == 'location') {
+            (h.container.read(currentLocationProvider.notifier) as _Location)
+                .clear();
+          } else if (change == 'logout') {
+            (h.container.read(authControllerProvider.notifier) as _Auth)
+                .signedOut();
+          } else {
+            await tester.pumpWidget(const SizedBox.shrink());
+          }
+          await tester.pumpAndSettle();
+          if (delayed) {
+            late.complete(_detail('A', status: OrderStatus.confirmed));
+          }
+          await tester.pumpAndSettle();
+          await tester.pump(const Duration(seconds: 4));
+          expect(find.byKey(const Key('new-order-bottom-sheet')), findsNothing);
+          expect(
+            find.byKey(const Key('alert-resolution-message')),
+            findsNothing,
+          );
+          expect(h.repo.patches, 0);
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  }
+
+  testWidgets('B.1 X wins before remote resolution and cannot reopen', (
+    tester,
+  ) async {
+    final h = await _pump(tester);
+    h.repo.orders['A'] = _detail('A');
+    await h.emit(tester);
+    await tester.tap(find.byKey(const Key('alert-defer')));
+    h.repo.orders['A'] = _detail('A', status: OrderStatus.confirmed);
+    await h.emit(tester);
+    await tester.pump(const Duration(seconds: 4));
+    expect(h.unseen, isEmpty);
+    expect(find.byKey(const Key('new-order-bottom-sheet')), findsNothing);
+    expect(h.repo.patches, 0);
+  });
+
+  for (final failRefresh in [false, true]) {
+    testWidgets(
+      'B.1 canonical resolution reconciles To-Do; refresh failure=$failRefresh',
+      (tester) async {
+        final h = await _pump(
+          tester,
+          realToday: true,
+          child: Scaffold(
+            body: TodayOrdersView(location: _location, onChangeLocation: () {}),
+          ),
+        );
+        h.repo.orders['A'] = _detail('A');
+        await h.emit(tester);
+        h.repo.orders['A'] = _detail('A', status: OrderStatus.confirmed);
+        // Detail-only refresh proves the board is reconciled by completion.
+        h.repo.failList = failRefresh;
+        await tester.tap(find.byKey(const Key('alert-refresh')));
+        await tester.pumpAndSettle();
+        await tester.pump(const Duration(seconds: 2));
+        await tester.pumpAndSettle();
+        expect(h.unseen, isEmpty);
+        expect(find.byKey(const Key('new-order-bottom-sheet')), findsNothing);
+        final today = h.container.read(todayOrdersProvider).requireValue;
+        if (failRefresh) {
+          expect(today.refreshError, isNotNull);
+        } else {
+          expect(today.orders.single.status, OrderStatus.confirmed);
+          expect(
+            find.descendant(
+              of: find.byKey(const Key('todo-column-confirmed')),
+              matching: find.text('A'),
+            ),
+            findsOneWidget,
+          );
+        }
+        expect(h.repo.patches, 0);
+      },
+    );
+  }
+  for (final language in ['en', 'es']) {
+    for (final status in [
+      OrderStatus.confirmed,
+      OrderStatus.cancelled,
+      OrderStatus.preparing,
+      OrderStatus.ready,
+      OrderStatus.delivered,
+    ]) {
+      testWidgets('B.1 pending resolves $status $language with no mutation', (
+        tester,
+      ) async {
+        tester.view.physicalSize = const Size(320, 740);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final h = await _pump(tester, language: language, scale: 2);
+        final future = DateTime.now().add(const Duration(days: 7));
+        h.repo.orders['A'] = _detail('A', scheduled: future);
+        await h.emit(tester);
+        h.repo.orders['A'] = _detail('A', status: status, scheduled: future);
+        final stops = h.sound.stops;
+        await h.container.read(todayOrdersProvider.notifier).refresh();
+        await tester.pump();
+        await tester.pump();
+        final closes =
+            status == OrderStatus.confirmed || status == OrderStatus.cancelled;
+        // No elapsed visual delay: completion has already updated unseen.
+        // Delivered leaves unseen through existing eligibility, but the open
+        // presentation remains pinned until explicit acknowledgement.
+        final removedFromUnseen = closes || status == OrderStatus.delivered;
+        expect(h.unseen, removedFromUnseen ? isEmpty : ['A']);
+        expect(h.sound.stops, greaterThan(stops));
+        expect(find.byKey(const Key('alert-resolution-message')), findsNothing);
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('alert-accept')), findsNothing);
+        expect(
+          find.byKey(const Key('new-order-bottom-sheet')),
+          closes ? findsNothing : findsOneWidget,
+        );
+        expect(
+          find.byKey(const Key('alert-acknowledge')),
+          closes ? findsNothing : findsOneWidget,
+        );
+        await tester.pump(const Duration(seconds: 3));
+        expect(h.unseen, removedFromUnseen ? isEmpty : ['A']);
+        expect(h.repo.patches, 0);
+        expect(h.sound.soundCounts, [3]);
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
+
+  testWidgets(
+    'B.1 queued pending first presented confirmed keeps Acknowledge',
+    (tester) async {
+      final h = await _pump(tester);
+      h.repo.orders['A'] = _detail('A');
+      h.repo.orders['B'] = _detail('B');
+      await h.emit(tester);
+      h.repo.orders['B'] = _detail('B', status: OrderStatus.confirmed);
+      await tester.tap(find.byKey(const Key('alert-defer')));
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 10));
+      expect(find.byKey(const Key('alert-acknowledge')), findsOneWidget);
+      expect(find.byKey(const Key('alert-resolution-message')), findsNothing);
+      expect(h.sound.soundCounts, [3, 1]);
+      expect(h.unseen, ['B']);
+    },
+  );
+
+  for (final status in [
+    OrderStatus.confirmed,
+    OrderStatus.preparing,
+    OrderStatus.ready,
+    OrderStatus.delivered,
+  ]) {
+    testWidgets('initially confirmed remains explicit after $status', (
+      tester,
+    ) async {
+      final h = await _pump(tester);
+      h.repo.orders['A'] = _detail('A', status: OrderStatus.confirmed);
+      await h.emit(tester);
+      h.repo.orders['A'] = _detail('A', status: status);
+      await tester.tap(find.byKey(const Key('alert-refresh')));
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 5));
+      expect(find.byKey(const Key('new-order-bottom-sheet')), findsOneWidget);
+      expect(find.byKey(const Key('alert-acknowledge')), findsOneWidget);
+      expect(find.byKey(const Key('alert-resolution-message')), findsNothing);
+      expect(h.repo.patches, 0);
+      await tester.tap(find.byKey(const Key('alert-acknowledge')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('new-order-bottom-sheet')), findsNothing);
+    });
+  }
+
+  for (final weak in ['403', 'network', 'unknown', 'payment', 'missing-list']) {
+    testWidgets('B.1 weak signal $weak never auto completes', (tester) async {
+      final h = await _pump(tester);
+      h.repo.orders['A'] = _detail('A');
+      await h.emit(tester);
+      if (weak == '403' || weak == 'network') {
+        h.repo.getError = ApiException(
+          message: 'Unavailable',
+          statusCode: weak == '403' ? 403 : null,
+        );
+      } else if (weak == 'unknown') {
+        h.repo.orders['A'] = _detail('A', status: OrderStatus.unknown);
+      } else if (weak == 'payment') {
+        h.repo.orders['A'] = _detail('A', payment: PaymentStatus.failed);
+      } else {
+        final detail = h.repo.orders.remove('A')!;
+        h.repo.detailResponses.add(Future.value(detail));
+      }
+      await h.emit(tester);
+      await tester.pump(const Duration(seconds: 3));
+      expect(find.byKey(const Key('new-order-bottom-sheet')), findsOneWidget);
+      expect(find.byKey(const Key('alert-resolution-message')), findsNothing);
+      expect(h.repo.patches, 0);
+    });
+  }
+
+  testWidgets('B.1 404 permits acknowledgement without claiming cancellation', (
+    tester,
+  ) async {
+    final h = await _pump(tester, language: 'es');
+    h.repo.orders['A'] = _detail('A');
+    await h.emit(tester);
+    h.repo.orders.remove('A');
+    await h.emit(tester);
+    expect(find.text('La orden ya no está disponible'), findsOneWidget);
+    expect(find.text('Esta orden ya fue cancelada'), findsNothing);
+    await tester.tap(find.byKey(const Key('alert-acknowledge')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('new-order-bottom-sheet')), findsNothing);
+    expect(h.repo.patches, 0);
+  });
+
+  testWidgets('B.1 resolution closes Cancel dialog without PATCH', (
+    tester,
+  ) async {
+    final h = await _pump(tester, cancel: true);
+    h.repo.orders['A'] = _detail('A');
+    await h.emit(tester);
+    await tester.tap(find.byKey(const Key('cancel-order-action')));
+    await tester.pumpAndSettle();
+    h.repo.orders['A'] = _detail('A', status: OrderStatus.confirmed);
+    await h.emit(tester);
+    expect(find.byKey(const Key('cancel-order-confirm')), findsNothing);
+    expect(find.byKey(const Key('new-order-bottom-sheet')), findsNothing);
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
+    expect(h.repo.patches, 0);
+    expect(h.unseen, isEmpty);
+  });
+
+  for (final cancel in [false, true]) {
+    testWidgets(
+      'B.1 concurrent local ${cancel ? "Cancel" : "Accept"} and late success wins',
+      (tester) async {
+        final h = await _pump(tester, cancel: cancel);
+        h.repo.orders['A'] = _detail('A');
+        await h.emit(tester);
+        h.repo.holdPatch = Completer<void>();
+        if (cancel) {
+          await tester.tap(find.byKey(const Key('cancel-order-action')));
+          await tester.pumpAndSettle();
+          await tester.tap(find.byKey(const Key('cancel-order-confirm')));
+        } else {
+          await tester.tap(find.byKey(const Key('alert-accept')));
+        }
+        await tester.pump();
+        h.repo.orders['A'] = _detail(
+          'A',
+          status: cancel ? OrderStatus.cancelled : OrderStatus.confirmed,
+        );
+        await h.container.read(todayOrdersProvider.notifier).refresh();
+        await tester.pump();
+        expect(find.byKey(const Key('alert-resolution-message')), findsNothing);
+        expect(h.unseen.contains('A'), cancel ? isFalse : isTrue);
+        h.repo.holdPatch!.complete();
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('new-order-bottom-sheet')), findsNothing);
+        expect(h.repo.patches, 1);
+        expect(h.unseen, isEmpty);
+      },
+    );
+  }
+
+  testWidgets(
+    'B.1 manual GET superseded by poll cannot resolve from old result',
+    (tester) async {
+      final h = await _pump(tester);
+      h.repo.orders['A'] = _detail('A');
+      await h.emit(tester);
+      final stale = Completer<OrderDetail>();
+      h.repo.detailResponses.add(stale.future);
+      await tester.tap(find.byKey(const Key('alert-refresh')));
+      await tester.pump();
+      await h.container.read(todayOrdersProvider.notifier).refresh();
+      await tester.pump();
+      stale.complete(_detail('A', status: OrderStatus.confirmed));
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 2));
+      expect(find.byKey(const Key('alert-accept')), findsOneWidget);
+      expect(find.byKey(const Key('alert-resolution-message')), findsNothing);
+      expect(h.unseen, ['A']);
+    },
+  );
+
+  testWidgets(
+    'B.1 Mute then resolution waits in background and revalidates on resume',
+    (tester) async {
+      final h = await _pump(tester);
+      h.repo.orders['A'] = _detail('A');
+      await h.emit(tester);
+      await tester.tap(find.byKey(const Key('alert-mute')));
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      h.repo.orders['A'] = _detail('A', status: OrderStatus.confirmed);
+      await h.emit(tester);
+      await tester.pump(const Duration(seconds: 5));
+      expect(h.unseen, ['A']);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('new-order-bottom-sheet')), findsNothing);
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+      expect(h.unseen, isEmpty);
+      expect(h.sound.soundCounts, [3]);
+    },
+  );
+
+  testWidgets(
+    'B.1 resolution advances A B C with existing pause; no late A completion',
+    (tester) async {
+      final h = await _pump(tester);
+      for (final id in ['A', 'B', 'C']) {
+        h.repo.orders[id] = _detail(id);
+      }
+      await h.emit(tester);
+      h.repo.orders['A'] = _detail('A', status: OrderStatus.confirmed);
+      await h.emit(tester);
+      expect(h.unseen, ['B', 'C']);
+      expect(find.byKey(const Key('new-order-bottom-sheet')), findsNothing);
+      expect(find.text('B'), findsNothing);
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+      expect(find.text('B'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 2));
+      expect(h.unseen, ['B', 'C']);
+      await tester.tap(find.byKey(const Key('alert-defer')));
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+      expect(find.text('C'), findsOneWidget);
+      expect(h.repo.patches, 0);
+    },
+  );
   setUpAll(PelinesTime.initialize);
   for (final width in [320.0, 390.0, 768.0, 1366.0]) {
     for (final language in ['en', 'es']) {
@@ -635,7 +1030,7 @@ void main() {
     },
   );
 
-  for (final change in ['confirmed', 'unpaid', 'missing']) {
+  for (final change in ['unpaid', 'missing']) {
     testWidgets(
       '10.4 canonical $change stops while pinned fullscreen remains',
       (tester) async {
@@ -912,13 +1307,13 @@ void main() {
       final upcoming = h.container.read(calendarOrdersProvider).requireValue;
       expect(upcoming.orders.single.id, 'future');
       expect(upcoming.orders.single.status, OrderStatus.pending);
-      await tester.tap(find.widgetWithText(ChoiceChip, 'Waiting'));
+      await tester.tap(find.byKey(const Key('todo-tab-pending')));
       await tester.pumpAndSettle();
       expect(find.text('future'), findsOneWidget);
       expect(
         find.descendant(
-          of: find.byKey(const Key('waiting-count')),
-          matching: find.text('1'),
+          of: find.byKey(const Key('todo-tab-pending')),
+          matching: find.text('Waiting · 1'),
         ),
         findsOneWidget,
       );
@@ -1014,13 +1409,13 @@ void main() {
     await tester.pumpAndSettle();
     await h.container.read(calendarOrdersProvider.notifier).refresh();
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(ChoiceChip, 'Waiting'));
+    await tester.tap(find.byKey(const Key('todo-tab-pending')));
     await tester.pumpAndSettle();
     expect(find.text('A'), findsOneWidget);
     expect(
       find.descendant(
-        of: find.byKey(const Key('waiting-count')),
-        matching: find.text('1'),
+        of: find.byKey(const Key('todo-tab-pending')),
+        matching: find.text('Waiting · 1'),
       ),
       findsOneWidget,
     );
@@ -1247,8 +1642,9 @@ void main() {
       h.repo.getError = null;
       await tester.tap(find.byKey(const Key('alert-refresh')));
       await tester.pumpAndSettle();
-      expect(find.byKey(const Key('alert-acknowledge')), findsOneWidget);
-      expect(h.unseen, ['A']);
+      expect(find.byKey(const Key('new-order-bottom-sheet')), findsNothing);
+      expect(find.byKey(const Key('alert-resolution-message')), findsNothing);
+      expect(h.unseen, isEmpty);
       expect(h.repo.patches, 1);
     },
   );
@@ -1267,7 +1663,10 @@ void main() {
       expect(h.unseen, ['A']);
       await tester.tap(find.byKey(const Key('alert-refresh')));
       await tester.pumpAndSettle();
-      expect(find.byKey(const Key('alert-acknowledge')), findsOneWidget);
+      expect(find.byKey(const Key('new-order-bottom-sheet')), findsNothing);
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+      expect(h.unseen, isEmpty);
     },
   );
 
@@ -1469,9 +1868,10 @@ void main() {
           await tester.tap(find.byKey(const Key('alert-refresh')));
           await tester.pumpAndSettle();
           expect(find.byKey(const Key('alert-accept')), findsNothing);
-          expect(h.unseen, ['A']);
-          await tester.tap(find.byKey(const Key('alert-acknowledge')));
-          await tester.pumpAndSettle();
+          expect(
+            find.byKey(const Key('alert-resolution-message')),
+            findsNothing,
+          );
           expect(h.unseen, isEmpty);
           expect(h.repo.patches, 1);
         }
@@ -1479,7 +1879,7 @@ void main() {
     );
   }
 
-  for (final change in ['confirmed', 'unpaid', 'missing']) {
+  for (final change in ['unpaid', 'missing']) {
     testWidgets(
       'remote $change pins current queue item until explicit acknowledgement',
       (tester) async {

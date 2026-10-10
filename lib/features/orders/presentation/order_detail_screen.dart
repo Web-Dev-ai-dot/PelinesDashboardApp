@@ -49,10 +49,25 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
     final AsyncValue<OrderDetail> detail = ref.watch(
       orderDetailProvider(widget.orderId),
     );
-    if (detail.value != null && !identical(_lastOrder, detail.value)) {
+    if (!detail.isLoading &&
+        !detail.hasError &&
+        detail.value != null &&
+        !identical(_lastOrder, detail.value)) {
       final OrderDetail refreshed = detail.value!;
+      final mutation = ref.read(orderMutationProvider(widget.orderId));
       _lastOrder = refreshed;
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final latest = ref.read(orderDetailProvider(widget.orderId));
+        if (latest.isLoading ||
+            latest.hasError ||
+            !identical(latest.value, refreshed) ||
+            !identical(
+              ref.read(orderMutationProvider(widget.orderId)),
+              mutation,
+            )) {
+          return;
+        }
         ref
             .read(orderMutationProvider(widget.orderId).notifier)
             .adoptRefreshedOrder(refreshed);
