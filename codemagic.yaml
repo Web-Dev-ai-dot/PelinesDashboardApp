@@ -46,11 +46,13 @@ workflows:
             --custom-export-options='{"teamID":"B4YBH74VKG","destination":"export"}'
           test "$(/usr/libexec/PlistBuddy -c 'Print teamID' "$HOME/export_options.plist")" = "B4YBH74VKG"
           flutter build ios --release --config-only \
+            --build-name=1.0.0 --build-number=5 \
             --dart-define-from-file="$STAGING_DEFINE_FILE"
           xcodebuild -resolvePackageDependencies \
             -workspace ios/Runner.xcworkspace -scheme Runner \
             -configuration Release
           flutter build ipa --release \
+            --build-name=1.0.0 --build-number=5 \
             --export-options-plist="$HOME/export_options.plist" \
             --dart-define-from-file="$STAGING_DEFINE_FILE"
           plutil -lint build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app/Info.plist
