@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
+import 'package:pelines_admin_app/app/theme/pelines_tokens.dart';
 import 'package:pelines_admin_app/features/locations/providers/locations_providers.dart';
 import 'package:pelines_admin_app/features/menu/data/menu_repository.dart';
 import 'package:pelines_admin_app/features/menu/models/menu_models.dart';
@@ -308,6 +309,22 @@ void main() => menuCatalogTests(MenuKind.catering);
 
 void menuCatalogTests(MenuKind kind) {
   final prefix = kind == MenuKind.catering ? 'catering' : 'regular';
+  testWidgets('category edit action retains navigation', (tester) async {
+    await mount(tester, Repo(kind: kind));
+    final edit = find.descendant(
+      of: find.byKey(ValueKey('$prefix-category-header-c')),
+      matching: find.widgetWithText(TextButton, 'Edit Category'),
+    );
+    await tester.ensureVisible(edit);
+    await tester.tap(edit);
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<CategoryFormScreen>(find.byType(CategoryFormScreen))
+          .categoryId,
+      'c',
+    );
+  });
   testWidgets('in-card actions retain edit, duplicate and delete callbacks', (
     tester,
   ) async {
@@ -558,9 +575,11 @@ void menuCatalogTests(MenuKind kind) {
   for (final lang in ['en', 'es']) {
     for (final viewport in [
       (390.0, 1.0, 1),
+      (320.0, 1.0, 1),
       (800.0, 1.0, 2),
       (1440.0, 1.0, 3),
       (390.0, 2.0, 1),
+      (320.0, 2.0, 1),
       (800.0, 2.0, 1),
     ]) {
       testWidgets(
@@ -589,6 +608,28 @@ void menuCatalogTests(MenuKind kind) {
             findsWidgets,
           );
           expect(find.text('Category wrong'), findsNothing);
+          if (kind == MenuKind.catering) {
+            final wrap = find.byKey(const Key('catering-category-wrap'));
+            expect(tester.widget<Wrap>(wrap).alignment, WrapAlignment.start);
+            final all = find.byKey(const Key('catering-category-all'));
+            final first = find.byKey(const Key('catering-category-c'));
+            final last = find.byKey(const Key('catering-category-d'));
+            expect(tester.getTopLeft(all).dx, tester.getTopLeft(wrap).dx);
+            if (viewport.$2 == 1 && viewport.$1 >= 390) {
+              expect(tester.getTopLeft(first).dy, tester.getTopLeft(all).dy);
+            }
+            if (viewport.$1 == 320) {
+              expect(
+                tester.getTopLeft(last).dy,
+                greaterThan(tester.getTopLeft(all).dy),
+              );
+            }
+            expect(tester.widget<ChoiceChip>(all).selected, isTrue);
+            expect(
+              tester.widget<ChoiceChip>(all).selectedColor,
+              PelinesColors.brandPrimary,
+            );
+          }
           expect(
             tester.getTopLeft(find.text('Meal 2')).dy,
             lessThanOrEqualTo(tester.getTopLeft(find.text('Meal 10')).dy),
@@ -600,6 +641,43 @@ void menuCatalogTests(MenuKind kind) {
           expect(find.byKey(const Key('menu-image-fallback')), findsWidgets);
           final card = find.byKey(const ValueKey('menu-product-2'));
           final header = find.byKey(ValueKey('$prefix-category-header-c'));
+          if (kind == MenuKind.catering) {
+            for (final edit in [true, false]) {
+              final action = edit
+                  ? find.descendant(
+                      of: header,
+                      matching: find.widgetWithText(
+                        TextButton,
+                        lang == 'en' ? 'Edit Category' : 'Editar categoría',
+                      ),
+                    )
+                  : find.byKey(const ValueKey('catering-delete-c'));
+              final button = tester.widget<TextButton>(action);
+              expect(tester.getSize(action).height, greaterThanOrEqualTo(48));
+              expect(
+                tester.getRect(header).contains(tester.getCenter(action)),
+                isTrue,
+              );
+              expect(
+                find.descendant(
+                  of: action,
+                  matching: find.byIcon(
+                    edit ? Icons.edit_outlined : Icons.delete_outline,
+                  ),
+                ),
+                findsOneWidget,
+              );
+              expect(
+                button.style!.backgroundColor!.resolve({}),
+                edit ? PelinesColors.mutedSurface : Colors.white,
+              );
+              expect(
+                button.style!.foregroundColor!.resolve({}),
+                edit ? PelinesColors.textPrimary : PelinesColors.destructive,
+              );
+              expect(button.style!.side!.resolve({})!.width, greaterThan(0));
+            }
+          }
           for (final label
               in lang == 'en'
                   ? ['Edit', 'Duplicate', 'Delete']
@@ -609,6 +687,30 @@ void menuCatalogTests(MenuKind kind) {
               matching: find.widgetWithText(TextButton, label),
             );
             expect(action, findsOneWidget);
+            if (kind == MenuKind.catering) {
+              final button = tester.widget<TextButton>(action);
+              expect(button.style!.side!.resolve({})!.width, greaterThan(0));
+              expect(
+                find.descendant(of: action, matching: find.byType(Icon)),
+                findsOneWidget,
+              );
+              if (label == 'Edit' || label == 'Editar') {
+                expect(
+                  button.style!.backgroundColor!.resolve({}),
+                  PelinesColors.mutedSurface,
+                );
+              }
+              if (label == 'Delete' || label == 'Eliminar') {
+                expect(
+                  button.style!.foregroundColor!.resolve({}),
+                  PelinesColors.destructive,
+                );
+                expect(
+                  button.style!.side!.resolve({})!.color,
+                  PelinesColors.destructive,
+                );
+              }
+            }
             expect(tester.getSize(action).height, greaterThanOrEqualTo(48));
             expect(
               tester.getRect(card).contains(tester.getCenter(action)),
@@ -645,6 +747,12 @@ void menuCatalogTests(MenuKind kind) {
           await tester.tap(find.byKey(ValueKey('$prefix-category-d')));
           await tester.pumpAndSettle();
           expect(find.text('Meal b'), findsOneWidget);
+          expect(
+            tester
+                .widget<ChoiceChip>(find.byKey(ValueKey('$prefix-category-d')))
+                .selected,
+            isTrue,
+          );
           expect(find.text('Meal 2'), findsNothing);
           await tester.drag(find.byType(ListView).first, const Offset(0, -700));
           await tester.pumpAndSettle();

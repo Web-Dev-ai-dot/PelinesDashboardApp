@@ -248,7 +248,8 @@ class _CateringCatalogState extends ConsumerState<MenuCatalogScreen> {
                           ],
                         ),
                         const SizedBox(height: 16),
-                        PelinesFilterBar(
+                        _CatalogFilters(
+                          catering: widget.kind == MenuKind.catering,
                           search: PelinesInput(
                             key: ValueKey('$prefix-search'),
                             label: tr(
@@ -313,15 +314,17 @@ class _CateringCatalogState extends ConsumerState<MenuCatalogScreen> {
                                   const SizedBox(height: 8),
                                   MenuActions(
                                     children: [
-                                      TextButton(
+                                      _CatalogProductAction(
+                                        catering:
+                                            widget.kind == MenuKind.catering,
+                                        label: tr(context, 'Edit Category'),
+                                        icon: Icons.edit_outlined,
+                                        filled: true,
                                         onPressed: busy
                                             ? null
                                             : () => context.push(
                                                 '/app/menu/${widget.kind.name}/categories/${category.id}/edit',
                                               ),
-                                        child: Text(
-                                          tr(context, 'Edit Category'),
-                                        ),
                                       ),
                                       CateringDeleteButton(
                                         query: query,
@@ -380,15 +383,25 @@ class _CateringCatalogState extends ConsumerState<MenuCatalogScreen> {
                                           '$prefix-product-actions-${p.id}',
                                         ),
                                         children: [
-                                          TextButton(
+                                          _CatalogProductAction(
+                                            catering:
+                                                widget.kind ==
+                                                MenuKind.catering,
+                                            label: tr(context, 'Edit'),
+                                            icon: Icons.edit_outlined,
+                                            filled: true,
                                             onPressed: busy
                                                 ? null
                                                 : () => context.push(
                                                     '${productPath(p)}/edit?category=${Uri.encodeQueryComponent(category.name)}',
                                                   ),
-                                            child: Text(tr(context, 'Edit')),
                                           ),
-                                          TextButton(
+                                          _CatalogProductAction(
+                                            catering:
+                                                widget.kind ==
+                                                MenuKind.catering,
+                                            label: tr(context, 'Duplicate'),
+                                            icon: Icons.copy_outlined,
                                             onPressed:
                                                 busy ||
                                                     uncertainCopies.contains(
@@ -396,18 +409,17 @@ class _CateringCatalogState extends ConsumerState<MenuCatalogScreen> {
                                                     )
                                                 ? null
                                                 : () => action(query, p, true),
-                                            child: Text(
-                                              tr(context, 'Duplicate'),
-                                            ),
                                           ),
-                                          TextButton(
-                                            style: MenuActions.style(
-                                              destructive: true,
-                                            ),
+                                          _CatalogProductAction(
+                                            catering:
+                                                widget.kind ==
+                                                MenuKind.catering,
+                                            label: tr(context, 'Delete'),
+                                            icon: Icons.delete_outline,
+                                            destructive: true,
                                             onPressed: busy
                                                 ? null
                                                 : () => action(query, p, false),
-                                            child: Text(tr(context, 'Delete')),
                                           ),
                                         ],
                                       ),
@@ -425,6 +437,90 @@ class _CateringCatalogState extends ConsumerState<MenuCatalogScreen> {
           );
         },
       ),
+    );
+  }
+}
+
+/// Catering pills size to their content; Regular retains its existing layout.
+class _CatalogFilters extends StatelessWidget {
+  const _CatalogFilters({
+    required this.catering,
+    required this.search,
+    required this.filters,
+  });
+  final bool catering;
+  final Widget search;
+  final List<Widget> filters;
+
+  @override
+  Widget build(BuildContext context) => catering
+      ? PelinesCard(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              search,
+              const SizedBox(height: 12),
+              Wrap(
+                key: const Key('catering-category-wrap'),
+                alignment: WrapAlignment.start,
+                spacing: 8,
+                runSpacing: 8,
+                children: filters,
+              ),
+            ],
+          ),
+        )
+      : PelinesFilterBar(search: search, filters: filters);
+}
+
+class _CatalogProductAction extends StatelessWidget {
+  const _CatalogProductAction({
+    required this.catering,
+    required this.label,
+    required this.icon,
+    required this.onPressed,
+    this.filled = false,
+    this.destructive = false,
+  });
+  final bool catering, filled, destructive;
+  final String label;
+  final IconData icon;
+  final VoidCallback? onPressed;
+
+  static ButtonStyle style({
+    bool filled = false,
+    bool destructive = false,
+    Color? backgroundColor,
+  }) => TextButton.styleFrom(
+    minimumSize: const Size(48, 48),
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    foregroundColor: destructive
+        ? PelinesColors.destructive
+        : PelinesColors.textPrimary,
+    backgroundColor: filled ? PelinesColors.mutedSurface : backgroundColor,
+    side: BorderSide(
+      color: destructive
+          ? PelinesColors.destructive
+          : PelinesColors.textSecondary,
+    ),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    if (!catering) {
+      return TextButton(
+        style: destructive ? MenuActions.style(destructive: true) : null,
+        onPressed: onPressed,
+        child: Text(label),
+      );
+    }
+    return TextButton.icon(
+      style: style(filled: filled, destructive: destructive),
+      onPressed: onPressed,
+      icon: Icon(icon, size: 18),
+      label: Text(label),
     );
   }
 }
@@ -538,7 +634,12 @@ class _CateringDeleteButtonState extends ConsumerState<CateringDeleteButton> {
       : TextButton.icon(
           key: ValueKey('catering-delete-${widget.id}'),
           style: widget.entity == CateringEntity.category
-              ? MenuActions.style(destructive: true)
+              ? widget.query.kind == MenuKind.catering
+                    ? _CatalogProductAction.style(
+                        destructive: true,
+                        backgroundColor: Colors.white,
+                      )
+                    : MenuActions.style(destructive: true)
               : null,
           onPressed: busy ? null : remove,
           icon: busy
