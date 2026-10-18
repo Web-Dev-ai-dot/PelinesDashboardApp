@@ -111,8 +111,13 @@ account and app-specific password. It is not configured by this change.
 
 Before pressing **Start build**, confirm the intended commit and app record,
 secure group access, and a build number that Apple has not already accepted for
-this version. The workflow intentionally does not change the current version or
-build-number command. Every manual run now attempts upload after validation;
+this version. Both Flutter commands currently request version **1.0.0**, build
+**6**, and the archived app's version and build are checked before upload. Build
+5 has already been used in App Store Connect. There is no automatic numbering
+or ASC API integration configured; update both build-number arguments and the
+archive check before a later upload, after confirming the latest number in ASC.
+The shared `pubspec.yaml` version is not used for these explicit overrides.
+Every manual run now attempts upload after validation;
 there is no separate approval prompt within the run. No run/upload was performed
 while preparing this configuration.
 
