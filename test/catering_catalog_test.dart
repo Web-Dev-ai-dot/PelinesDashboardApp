@@ -11,6 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'package:pelines_admin_app/app/theme/pelines_tokens.dart';
+import 'package:pelines_admin_app/features/locations/presentation/pelines_location_context.dart';
 import 'package:pelines_admin_app/features/locations/providers/locations_providers.dart';
 import 'package:pelines_admin_app/features/menu/data/menu_repository.dart';
 import 'package:pelines_admin_app/features/menu/models/menu_models.dart';
@@ -405,63 +406,80 @@ void menuCatalogTests(MenuKind kind) {
     ]);
   });
   for (final lang in ['en', 'es']) {
-    testWidgets('${kind.label} editor and modifier detail fit 2x $lang', (
-      tester,
-    ) async {
-      final repo = Repo(kind: kind)
-        ..groups = [
-          MenuModifierGroup(
-            id: 'g',
-            productId: 'p',
-            name: 'Sides',
-            sortOrder: 0,
-            isRequired: true,
-            minSelect: 1,
-            maxSelect: 2,
-            options: [
-              MenuModifierOption(
-                id: 'o',
-                groupId: 'g',
-                name: 'Rice',
-                priceDeltaCents: 200,
-                isDefault: false,
+    for (final viewport in [
+      (320.0, 2.0),
+      (390.0, 2.0),
+      (800.0, 1.0),
+      (1440.0, 1.0),
+      (800.0, 2.0),
+    ]) {
+      testWidgets(
+        '${kind.label} editor and modifier detail fit $lang/$viewport',
+        (tester) async {
+          final repo = Repo(kind: kind)
+            ..groups = [
+              MenuModifierGroup(
+                id: 'g',
+                productId: 'p',
+                name: 'Sides',
                 sortOrder: 0,
+                isRequired: true,
+                minSelect: 1,
+                maxSelect: 2,
+                options: [
+                  MenuModifierOption(
+                    id: 'o',
+                    groupId: 'g',
+                    name: 'Rice',
+                    priceDeltaCents: 200,
+                    isDefault: false,
+                    sortOrder: 0,
+                  ),
+                ],
               ),
-            ],
-          ),
-        ];
-      final router = await mount(
-        tester,
-        repo,
-        lang: lang,
-        width: 390,
-        scale: 2,
+            ];
+          final router = await mount(
+            tester,
+            repo,
+            lang: lang,
+            width: viewport.$1,
+            scale: viewport.$2,
+          );
+          router.go('/app/menu/${kind.name}/categories/c/products/p/edit');
+          await tester.pumpAndSettle();
+          expect(
+            find.text(
+              lang == 'en'
+                  ? (kind == MenuKind.catering ? 'Photo' : 'Product Image')
+                  : (kind == MenuKind.catering
+                        ? 'Foto'
+                        : 'Imagen del producto'),
+            ),
+            findsOneWidget,
+          );
+          for (var i = 0; i < 7; i++) {
+            await tester.drag(
+              find.byType(ListView).first,
+              const Offset(0, -500),
+            );
+            await tester.pumpAndSettle();
+            expect(tester.takeException(), isNull);
+          }
+          router.go('/app/menu/${kind.name}/categories/c/products/p');
+          await tester.pumpAndSettle();
+          for (var i = 0; i < 7; i++) {
+            await tester.drag(
+              find.byType(ListView).first,
+              const Offset(0, -500),
+            );
+            await tester.pumpAndSettle();
+            expect(tester.takeException(), isNull);
+          }
+          expect(find.text('Sides'), findsOneWidget);
+          expect(find.text('Rice'), findsOneWidget);
+        },
       );
-      router.go('/app/menu/${kind.name}/categories/c/products/p/edit');
-      await tester.pumpAndSettle();
-      expect(
-        find.text(
-          lang == 'en'
-              ? (kind == MenuKind.catering ? 'Photo' : 'Product Image')
-              : (kind == MenuKind.catering ? 'Foto' : 'Imagen del producto'),
-        ),
-        findsOneWidget,
-      );
-      for (var i = 0; i < 7; i++) {
-        await tester.drag(find.byType(ListView).first, const Offset(0, -500));
-        await tester.pumpAndSettle();
-        expect(tester.takeException(), isNull);
-      }
-      router.go('/app/menu/${kind.name}/categories/c/products/p');
-      await tester.pumpAndSettle();
-      for (var i = 0; i < 7; i++) {
-        await tester.drag(find.byType(ListView).first, const Offset(0, -500));
-        await tester.pumpAndSettle();
-        expect(tester.takeException(), isNull);
-      }
-      expect(find.text('Sides'), findsOneWidget);
-      expect(find.text('Rice'), findsOneWidget);
-    });
+    }
   }
   test(
     '${kind.label} upload failure preserves old image and retry persists URL',
@@ -603,17 +621,33 @@ void menuCatalogTests(MenuKind kind) {
             ),
             findsOneWidget,
           );
+          final description = find.byKey(const Key('menu-catalog-description'));
+          expect(description, findsOneWidget);
+          expect(find.byType(PelinesLocationContext), findsOneWidget);
+          expect(
+            tester.getRect(description).top,
+            greaterThanOrEqualTo(
+              tester.getRect(find.byType(PelinesLocationContext)).bottom,
+            ),
+          );
+          final create = find.text(
+            lang == 'en' ? 'New Category' : 'Nueva categoría',
+          );
+          expect(
+            tester.getRect(create).top,
+            greaterThan(tester.getRect(description).bottom),
+          );
           expect(
             find.byKey(ValueKey('menu-grid-${viewport.$3}')),
             findsWidgets,
           );
           expect(find.text('Category wrong'), findsNothing);
-          if (kind == MenuKind.catering) {
-            final wrap = find.byKey(const Key('catering-category-wrap'));
+          {
+            final wrap = find.byKey(ValueKey('$prefix-category-wrap'));
             expect(tester.widget<Wrap>(wrap).alignment, WrapAlignment.start);
-            final all = find.byKey(const Key('catering-category-all'));
-            final first = find.byKey(const Key('catering-category-c'));
-            final last = find.byKey(const Key('catering-category-d'));
+            final all = find.byKey(ValueKey('$prefix-category-all'));
+            final first = find.byKey(ValueKey('$prefix-category-c'));
+            final last = find.byKey(ValueKey('$prefix-category-d'));
             expect(tester.getTopLeft(all).dx, tester.getTopLeft(wrap).dx);
             if (viewport.$2 == 1 && viewport.$1 >= 390) {
               expect(tester.getTopLeft(first).dy, tester.getTopLeft(all).dy);
@@ -625,6 +659,8 @@ void menuCatalogTests(MenuKind kind) {
               );
             }
             expect(tester.widget<ChoiceChip>(all).selected, isTrue);
+            expect(tester.widget<ChoiceChip>(all).shape, isA<StadiumBorder>());
+            expect(tester.getSize(all).height, greaterThanOrEqualTo(48));
             expect(
               tester.widget<ChoiceChip>(all).selectedColor,
               PelinesColors.brandPrimary,
@@ -641,7 +677,7 @@ void menuCatalogTests(MenuKind kind) {
           expect(find.byKey(const Key('menu-image-fallback')), findsWidgets);
           final card = find.byKey(const ValueKey('menu-product-2'));
           final header = find.byKey(ValueKey('$prefix-category-header-c'));
-          if (kind == MenuKind.catering) {
+          {
             for (final edit in [true, false]) {
               final action = edit
                   ? find.descendant(
@@ -676,6 +712,7 @@ void menuCatalogTests(MenuKind kind) {
                 edit ? PelinesColors.textPrimary : PelinesColors.destructive,
               );
               expect(button.style!.side!.resolve({})!.width, greaterThan(0));
+              expect(button.style!.shape!.resolve({}), isA<StadiumBorder>());
             }
           }
           for (final label
@@ -687,7 +724,7 @@ void menuCatalogTests(MenuKind kind) {
               matching: find.widgetWithText(TextButton, label),
             );
             expect(action, findsOneWidget);
-            if (kind == MenuKind.catering) {
+            {
               final button = tester.widget<TextButton>(action);
               expect(button.style!.side!.resolve({})!.width, greaterThan(0));
               expect(

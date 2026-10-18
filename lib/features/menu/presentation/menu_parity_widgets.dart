@@ -10,6 +10,7 @@ class MenuActions extends StatelessWidget {
 
   static ButtonStyle style({bool destructive = false}) => TextButton.styleFrom(
     minimumSize: const Size(48, 48),
+    shape: const StadiumBorder(),
     foregroundColor: destructive
         ? PelinesColors.destructive
         : PelinesColors.textPrimary,
@@ -41,12 +42,12 @@ class MenuCardGrid extends StatelessWidget {
         children: [
           for (var row = 0; row < children.length; row += columns)
             Padding(
-              padding: const EdgeInsets.only(bottom: 20),
+              padding: const EdgeInsets.only(bottom: 16),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   for (var col = 0; col < columns; col++) ...[
-                    if (col > 0) const SizedBox(width: 20),
+                    if (col > 0) const SizedBox(width: 16),
                     Expanded(
                       child: row + col < children.length
                           ? children[row + col]
@@ -65,7 +66,7 @@ class MenuCardGrid extends StatelessWidget {
 class MenuFormList extends StatelessWidget {
   const MenuFormList({
     required this.children,
-    this.padding = const EdgeInsets.all(20),
+    this.padding = const EdgeInsets.all(16),
     super.key,
   });
   final List<Widget> children;
@@ -78,6 +79,7 @@ class MenuFormList extends StatelessWidget {
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 800),
           child: PelinesCard(
+            padding: const EdgeInsets.all(16),
             child: Material(
               type: MaterialType.transparency,
               child: Column(
@@ -103,7 +105,7 @@ class MenuFieldPair extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(child: first),
-              const SizedBox(width: 20),
+              const SizedBox(width: 16),
               Expanded(child: second),
             ],
           )

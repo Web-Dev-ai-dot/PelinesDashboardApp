@@ -161,7 +161,38 @@ class _CateringCatalogState extends ConsumerState<MenuCatalogScreen> {
   Widget build(BuildContext context) {
     final location = ref.watch(currentLocationProvider);
     return AdminSectionScaffold(
-      appBar: AdminAppBar(title: Text(tr(context, widget.kind.label))),
+      appBar: AdminAppBar(
+        title: Text(tr(context, widget.kind.label)),
+        actions: [
+          if (!location.isLoading &&
+              !location.hasError &&
+              location.value != null)
+            Consumer(
+              builder: (context, ref, _) {
+                final loc = location.value!;
+                final query = (
+                  locationId: loc.id,
+                  locationSlug: loc.slug,
+                  kind: widget.kind,
+                );
+                final catalog = ref.watch(cateringCatalogProvider(query));
+                if (catalog.isLoading ||
+                    catalog.hasError ||
+                    catalog.value == null) {
+                  return const SizedBox.shrink();
+                }
+                return AdminHeaderRefresh(
+                  onPressed: busy
+                      ? null
+                      : () {
+                          ref.invalidate(menuCategoriesProvider(query));
+                          ref.invalidate(menuProductsProvider);
+                        },
+                );
+              },
+            ),
+        ],
+      ),
       body: location.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => MenuError(
@@ -214,6 +245,14 @@ class _CateringCatalogState extends ConsumerState<MenuCatalogScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        Text(
+                          tr(context, 'Browse categories and products'),
+                          key: const Key('menu-catalog-description'),
+                          style: const TextStyle(
+                            color: PelinesColors.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
                         Wrap(
                           spacing: 12,
                           runSpacing: 12,
@@ -231,18 +270,6 @@ class _CateringCatalogState extends ConsumerState<MenuCatalogScreen> {
                               onPressed: busy || data.categories.isEmpty
                                   ? null
                                   : () => newItem(data.categories),
-                            ),
-                            IconButton(
-                              tooltip: tr(context, 'Refresh'),
-                              onPressed: busy
-                                  ? null
-                                  : () {
-                                      ref.invalidate(
-                                        menuCategoriesProvider(query),
-                                      );
-                                      ref.invalidate(menuProductsProvider);
-                                    },
-                              icon: const Icon(Icons.refresh),
                             ),
                           ],
                         ),
@@ -273,6 +300,19 @@ class _CateringCatalogState extends ConsumerState<MenuCatalogScreen> {
                                 label: Text(c?.name ?? tr(context, 'All')),
                                 selected: selected == c?.id,
                                 selectedColor: PelinesColors.brandPrimary,
+                                backgroundColor: PelinesColors.mutedSurface,
+                                shape: const StadiumBorder(),
+                                side: BorderSide(
+                                  color: selected == c?.id
+                                      ? PelinesColors.brandPrimary
+                                      : PelinesColors.border,
+                                ),
+                                materialTapTargetSize:
+                                    MaterialTapTargetSize.padded,
+                                labelPadding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 4,
+                                ),
                                 labelStyle: TextStyle(
                                   color: selected == c?.id
                                       ? Colors.white
@@ -306,6 +346,7 @@ class _CateringCatalogState extends ConsumerState<MenuCatalogScreen> {
                                 '$prefix-category-header-${category.id}',
                               ),
                               variant: PelinesCardVariant.compact,
+                              padding: const EdgeInsets.all(16),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
@@ -440,7 +481,7 @@ class _CateringCatalogState extends ConsumerState<MenuCatalogScreen> {
   }
 }
 
-/// Catering pills size to their content; Regular retains its existing layout.
+/// Both menu kinds use the same wrapping controls at every viewport.
 class _CatalogFilters extends StatelessWidget {
   const _CatalogFilters({
     required this.catering,
@@ -450,27 +491,26 @@ class _CatalogFilters extends StatelessWidget {
   final bool catering;
   final Widget search;
   final List<Widget> filters;
-
   @override
-  Widget build(BuildContext context) => catering
-      ? PelinesCard(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              search,
-              const SizedBox(height: 12),
-              Wrap(
-                key: const Key('catering-category-wrap'),
-                alignment: WrapAlignment.start,
-                spacing: 8,
-                runSpacing: 8,
-                children: filters,
-              ),
-            ],
+  Widget build(BuildContext context) => PelinesCard(
+    padding: const EdgeInsets.all(12),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        search,
+        const SizedBox(height: 12),
+        Wrap(
+          key: Key(
+            catering ? 'catering-category-wrap' : 'regular-category-wrap',
           ),
-        )
-      : PelinesFilterBar(search: search, filters: filters);
+          alignment: WrapAlignment.start,
+          spacing: 8,
+          runSpacing: 8,
+          children: filters,
+        ),
+      ],
+    ),
+  );
 }
 
 class _CatalogProductAction extends StatelessWidget {
@@ -503,18 +543,11 @@ class _CatalogProductAction extends StatelessWidget {
           ? PelinesColors.destructive
           : PelinesColors.textSecondary,
     ),
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    shape: const StadiumBorder(),
   );
 
   @override
   Widget build(BuildContext context) {
-    if (!catering) {
-      return TextButton(
-        style: destructive ? MenuActions.style(destructive: true) : null,
-        onPressed: onPressed,
-        child: Text(label),
-      );
-    }
     return TextButton.icon(
       style: style(filled: filled, destructive: destructive),
       onPressed: onPressed,
@@ -632,14 +665,10 @@ class _CateringDeleteButtonState extends ConsumerState<CateringDeleteButton> {
         )
       : TextButton.icon(
           key: ValueKey('catering-delete-${widget.id}'),
-          style: widget.entity == CateringEntity.category
-              ? widget.query.kind == MenuKind.catering
-                    ? _CatalogProductAction.style(
-                        destructive: true,
-                        backgroundColor: Colors.white,
-                      )
-                    : MenuActions.style(destructive: true)
-              : null,
+          style: _CatalogProductAction.style(
+            destructive: true,
+            backgroundColor: PelinesColors.card,
+          ),
           onPressed: busy ? null : remove,
           icon: busy
               ? const SizedBox(

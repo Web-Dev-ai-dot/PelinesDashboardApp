@@ -262,24 +262,30 @@ class _ProductTile extends StatelessWidget {
         children: [
           MenuPhoto(url: product.imageUrl),
           Padding(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                PelinesLabelValueRow(
-                  label: Text(
-                    product.name,
-                    style: PelinesTypography.sectionTitle(
-                      Theme.of(context).textTheme,
-                    )?.copyWith(fontSize: 24),
-                  ),
-                  value: Text(
-                    money(product.priceCents),
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w600,
+                OverflowBar(
+                  alignment: MainAxisAlignment.spaceBetween,
+                  overflowAlignment: OverflowBarAlignment.end,
+                  spacing: 12,
+                  overflowSpacing: 4,
+                  children: [
+                    Text(
+                      product.name,
+                      style: PelinesTypography.sectionTitle(
+                        Theme.of(context).textTheme,
+                      )?.copyWith(fontSize: 20),
                     ),
-                  ),
+                    Text(
+                      money(product.priceCents),
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 8),
                 Text(
@@ -299,7 +305,7 @@ class _ProductTile extends StatelessWidget {
                     style: const TextStyle(color: PelinesColors.textSecondary),
                   ),
                 ],
-                const Divider(height: 32),
+                const Divider(height: 20),
                 if (catering && product.servesCount != null)
                   Text('${tr(context, 'Serves')}: ${product.servesCount}'),
                 Align(
@@ -323,7 +329,7 @@ class _ProductTile extends StatelessWidget {
                   variant: PelinesButtonVariant.secondary,
                   onPressed: onTap,
                 ),
-                if (actions != null) ...[const Divider(height: 24), actions!],
+                if (actions != null) ...[const Divider(height: 20), actions!],
               ],
             ),
           ),
