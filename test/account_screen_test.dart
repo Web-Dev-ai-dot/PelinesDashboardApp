@@ -53,7 +53,7 @@ void main() {
 
       expect(find.text('Not set'), findsNWidgets(2));
       expect(find.byType(PelinesLocationContext), findsOneWidget);
-      expect(find.text('Pelines Tualatin · 7670 SW Nyberg St'), findsOneWidget);
+      expect(find.text('Tualatin · 7670 SW Nyberg St'), findsOneWidget);
       expect(find.text('session@example.com'), findsOneWidget);
       expect(find.text('Admin'), findsOneWidget);
       expect(find.text('Read-only'), findsNWidgets(2));

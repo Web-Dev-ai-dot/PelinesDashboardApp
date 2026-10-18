@@ -224,7 +224,6 @@ class AdminSectionScaffold extends ConsumerWidget {
               color: Theme.of(context).scaffoldBackgroundColor,
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
                   final text = appBar.title;
                   final heading = Semantics(
                     header: true,
@@ -249,7 +248,17 @@ class AdminSectionScaffold extends ConsumerWidget {
                   );
                   final contextLine = location == null
                       ? null
-                      : PelinesLocationContext(location: location, maxLines: 2);
+                      : PelinesLocationContext(
+                          location: location,
+                          // Two compact lines on phones. Enlarged text needs
+                          // natural height to retain the complete address.
+                          maxLines:
+                              constraints.maxWidth < 600 &&
+                                  MediaQuery.textScalerOf(context).scale(14) <=
+                                      14
+                              ? 2
+                              : null,
+                        );
                   return Padding(
                     padding: EdgeInsets.symmetric(
                       horizontal: PelinesLayout.pagePadding(
@@ -257,27 +266,17 @@ class AdminSectionScaffold extends ConsumerWidget {
                       ),
                       vertical: 12,
                     ),
-                    child:
-                        constraints.maxWidth >= 900 * scale &&
-                            contextLine != null
-                        ? Row(
-                            children: [
-                              Expanded(flex: 2, child: title),
-                              const SizedBox(width: 24),
-                              Expanded(flex: 3, child: contextLine),
-                            ],
-                          )
-                        : Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              title,
-                              if (contextLine != null) ...[
-                                const SizedBox(height: 6),
-                                contextLine,
-                              ],
-                            ],
-                          ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        title,
+                        if (contextLine != null) ...[
+                          const SizedBox(height: 6),
+                          contextLine,
+                        ],
+                      ],
+                    ),
                   );
                 },
               ),
@@ -288,6 +287,27 @@ class AdminSectionScaffold extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// Compact pill action shared by section headers; the caller owns readiness.
+class AdminHeaderRefresh extends StatelessWidget {
+  const AdminHeaderRefresh({required this.onPressed, super.key});
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+    message: tr(context, 'Refresh'),
+    child: OutlinedButton(
+      onPressed: onPressed,
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(48, 48),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        shape: const StadiumBorder(),
+        foregroundColor: PelinesColors.textPrimary,
+      ),
+      child: Icon(Icons.refresh, semanticLabel: tr(context, 'Refresh')),
+    ),
+  );
 }
 
 class AdminAppBar extends StatelessWidget implements PreferredSizeWidget {

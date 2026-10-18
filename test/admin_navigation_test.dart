@@ -978,7 +978,22 @@ void main() {
           ),
           findsOneWidget,
         );
-        expect(find.byKey(const Key('orders-header-refresh')), findsOneWidget);
+        final refresh = find.byKey(const Key('orders-header-refresh'));
+        final header = find.byKey(const Key('persistent-section-header'));
+        final title = find.descendant(
+          of: header,
+          matching: find.text(language == 'es' ? 'Próximas' : 'Upcoming'),
+        );
+        expect(refresh, findsOneWidget);
+        expect(find.descendant(of: header, matching: refresh), findsOneWidget);
+        expect(
+          tester.getRect(refresh).left,
+          greaterThanOrEqualTo(tester.getRect(title).right),
+        );
+        expect(
+          tester.getRect(refresh).center.dy,
+          closeTo(tester.getRect(title).center.dy, 1),
+        );
         expect(find.byKey(const Key('orders-search')), findsOneWidget);
         expect(find.byKey(const Key('upcoming-filters')), findsOneWidget);
         expect(tester.takeException(), isNull);

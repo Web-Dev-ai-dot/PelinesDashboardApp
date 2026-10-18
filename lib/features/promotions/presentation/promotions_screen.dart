@@ -26,6 +26,14 @@ class PromotionsScreen extends ConsumerWidget {
           tr(context, 'Promotions'),
           style: PelinesTypography.pageTitle(Theme.of(context).textTheme),
         ),
+        actions: [
+          if (!location.isLoading &&
+              !location.hasError &&
+              location.value != null)
+            AdminHeaderRefresh(
+              onPressed: ref.read(promotionsProvider.notifier).refresh,
+            ),
+        ],
       ),
       body: location.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -58,13 +66,6 @@ class PromotionsScreen extends ConsumerWidget {
                             label: tr(context, 'Add Promotion'),
                             onPressed: () =>
                                 context.push('/app/promotions/new'),
-                          ),
-                          IconButton(
-                            tooltip: tr(context, 'Refresh'),
-                            onPressed: ref
-                                .read(promotionsProvider.notifier)
-                                .refresh,
-                            icon: const Icon(Icons.refresh),
                           ),
                         ],
                       ),

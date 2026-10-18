@@ -33,6 +33,18 @@ class _AdminHomeScreenState extends ConsumerState<AdminHomeScreen> {
           tr(context, widget.upcoming ? 'Upcoming' : 'To Do'),
           style: PelinesTypography.pageTitle(Theme.of(context).textTheme),
         ),
+        actions: [
+          if (locations.value?.isNotEmpty == true &&
+              !locations.isLoading &&
+              !locations.hasError &&
+              !currentLocation.isLoading &&
+              !currentLocation.hasError &&
+              currentLocation.value != null)
+            AdminHeaderRefresh(
+              key: const Key('orders-header-refresh'),
+              onPressed: () => _ordersKey.currentState?.refresh(),
+            ),
+        ],
       ),
       body: locations.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -82,21 +94,6 @@ class _HomeContent extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: Align(
-                alignment: AlignmentDirectional.centerStart,
-                child: OutlinedButton.icon(
-                  key: const Key('orders-header-refresh'),
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size(48, 48),
-                  ),
-                  onPressed: () => ordersKey.currentState?.refresh(),
-                  icon: const Icon(Icons.refresh),
-                  label: Text(tr(context, 'Refresh')),
-                ),
-              ),
-            ),
             // Keep Orders' existing bounded viewport and scrolling behavior.
             SizedBox(
               height: constraints.maxHeight,

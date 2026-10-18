@@ -52,11 +52,11 @@ class LanguageToggle extends ConsumerWidget {
                     shape: const StadiumBorder(),
                     animationDuration: const Duration(milliseconds: 180),
                     backgroundColor: language == code
-                        ? PelinesColors.brandPrimarySoft
+                        ? PelinesColors.languageSelectedBackground
                         : Colors.transparent,
                     foregroundColor: language == code
-                        ? PelinesColors.brandPrimary
-                        : PelinesColors.textSecondary,
+                        ? PelinesColors.languageSelectedText
+                        : PelinesColors.textPrimary,
                   ),
                   onPressed: () async {
                     try {
@@ -82,8 +82,7 @@ class LanguageToggle extends ConsumerWidget {
             key: const Key('language-pill'),
             padding: EdgeInsets.all(inline ? 2 : PelinesSpacing.xxs),
             decoration: BoxDecoration(
-              color: inline ? PelinesColors.card : PelinesColors.mutedSurface,
-              border: Border.all(color: PelinesColors.border),
+              color: PelinesColors.mutedSurface,
               borderRadius: BorderRadius.circular(PelinesRadius.pill),
             ),
             child: stacked

@@ -9,21 +9,42 @@ import 'package:pelines_admin_app/app/theme/app_theme.dart';
 import 'package:pelines_admin_app/app/theme/pelines_tokens.dart';
 
 class _Store implements LanguageStore {
+  String value = 'en';
   @override
-  Future<String?> read() async => 'en';
+  Future<String?> read() async => value;
   @override
-  Future<void> write(String language) async {}
+  Future<void> write(String language) async {
+    value = language;
+  }
 }
 
 void main() {
+  test('language selection persists across provider containers', () async {
+    final store = _Store();
+    final first = ProviderContainer(
+      overrides: [languageStoreProvider.overrideWithValue(store)],
+    );
+    await first.read(localeProvider.notifier).select('es');
+    expect(store.value, 'es');
+    first.dispose();
+    final restored = ProviderContainer(
+      overrides: [languageStoreProvider.overrideWithValue(store)],
+    );
+    addTearDown(restored.dispose);
+    final subscription = restored.listen(localeProvider, (_, _) {});
+    addTearDown(subscription.close);
+    await Future<void>.delayed(Duration.zero);
+    expect(restored.read(localeProvider).languageCode, 'es');
+  });
   for (final width in [120.0, 232.0, 304.0]) {
     for (final scale in [1.0, 2.0]) {
       testWidgets('language pill fits navigation width $width at $scale', (
         tester,
       ) async {
+        final store = _Store();
         await tester.pumpWidget(
           ProviderScope(
-            overrides: [languageStoreProvider.overrideWithValue(_Store())],
+            overrides: [languageStoreProvider.overrideWithValue(store)],
             child: Consumer(
               builder: (context, ref, _) => MaterialApp(
                 locale: ref.watch(localeProvider),
@@ -75,11 +96,20 @@ void main() {
         await tester.pumpAndSettle();
         expect(
           tester.widget<TextButton>(es).style!.backgroundColor!.resolve({}),
-          PelinesColors.brandPrimarySoft,
+          PelinesColors.languageSelectedBackground,
         );
         expect(
           tester.widget<TextButton>(en).style!.backgroundColor!.resolve({}),
           Colors.transparent,
+        );
+        expect(store.value, 'es');
+        expect(
+          tester.widget<TextButton>(es).style!.foregroundColor!.resolve({}),
+          PelinesColors.languageSelectedText,
+        );
+        expect(
+          tester.widget<TextButton>(en).style!.foregroundColor!.resolve({}),
+          PelinesColors.textPrimary,
         );
         expect(find.byTooltip('Idioma'), findsOneWidget);
         await tester.tap(en);

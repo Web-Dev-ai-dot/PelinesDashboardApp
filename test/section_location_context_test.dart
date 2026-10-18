@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -9,8 +10,8 @@ import 'package:pelines_admin_app/features/locations/providers/locations_provide
 import 'package:pelines_admin_app/features/locations/presentation/pelines_location_context.dart';
 
 Location headerLocation({
-  String name = 'Pelines Tualatin',
-  String? address = '7670 SW Nyberg St',
+  String name = 'Tualatin',
+  String? address = '7670 SW Nyberg St, Tualatin, OR 97062',
 }) => Location(
   id: name,
   name: name,
@@ -32,6 +33,29 @@ class HeaderLocation extends CurrentLocationController {
 }
 
 void main() {
+  test(
+    'header street extraction preserves uncertain and incomplete addresses',
+    () {
+      for (final entry in <String, String>{
+        '7670 SW Nyberg St, Tualatin, OR 97062': '7670 SW Nyberg St',
+        '25627 SE Stark St, Troutdale, OR 97060': '25627 SE Stark St',
+        '123 Main St, Suite 4, Portland, OR 97201': '123 Main St, Suite 4',
+        '123 Main Street, Portland, OR': '123 Main Street',
+        '123 Main St, Portland, OR 97201-1234, USA': '123 Main St',
+        '7670 SW Nyberg St': '7670 SW Nyberg St',
+        '7670 SW Nyberg St, Tualatin': '7670 SW Nyberg St, Tualatin',
+        'Unknown, extra context': 'Unknown, extra context',
+        '123 Main St, Building A, Portland, OR 97201':
+            '123 Main St, Building A, Portland, OR 97201',
+        '123 Main St, Portland, ZZ 97201': '123 Main St, Portland, ZZ 97201',
+        '': '',
+      }.entries) {
+        expect(compactLocationStreet(entry.key), entry.value);
+      }
+      expect(compactLocationStreet(null), isNull);
+      expect(compactLocationStreet('   '), '');
+    },
+  );
   for (final (width, scale) in [
     (320.0, 1.0),
     (390.0, 1.0),
@@ -50,6 +74,7 @@ void main() {
           tester.view.devicePixelRatio = 1;
           addTearDown(tester.view.resetPhysicalSize);
           addTearDown(tester.view.resetDevicePixelRatio);
+          var refreshes = 0;
           final container = ProviderContainer(
             overrides: [
               currentLocationProvider.overrideWith(HeaderLocation.new),
@@ -75,9 +100,14 @@ void main() {
                   builder: (context) => AdminSectionScaffold(
                     appBar: AdminAppBar(
                       title: Text(tr(context, 'Catering Menu')),
+                      actions: [
+                        AdminHeaderRefresh(onPressed: () => refreshes++),
+                      ],
                     ),
                     body: ListView(
                       children: [
+                        const Text('Approved description'),
+                        const TextField(key: Key('section-controls')),
                         for (var i = 0; i < 50; i++)
                           SizedBox(height: 80, child: Text('Row $i')),
                       ],
@@ -88,16 +118,63 @@ void main() {
             ),
           );
           await tester.pumpAndSettle();
-          expect(
-            find.text('Pelines Tualatin · 7670 SW Nyberg St'),
-            findsOneWidget,
-          );
+          expect(find.text('Tualatin · 7670 SW Nyberg St'), findsOneWidget);
           expect(find.byType(PelinesLocationContext), findsOneWidget);
           final heading = find.byKey(const Key('persistent-section-header'));
           final title = find.text(
             lang == 'en' ? 'Catering Menu' : 'Menú de catering',
           );
           expect(title, findsOneWidget);
+          final locationText = tester.widget<Text>(
+            find.descendant(
+              of: find.byType(PelinesLocationContext),
+              matching: find.byType(Text),
+            ),
+          );
+          final locationParagraph = tester.renderObject<RenderParagraph>(
+            find
+                .descendant(
+                  of: find.byType(PelinesLocationContext),
+                  matching: find.byType(RichText),
+                )
+                .first,
+          );
+          expect(locationParagraph.didExceedMaxLines, isFalse);
+          expect(
+            locationText.textSpan!.toPlainText(),
+            'Tualatin \u00b7 7670 SW Nyberg St',
+          );
+          expect(
+            find.descendant(
+              of: find.byType(PelinesLocationContext),
+              matching: find.byType(InkWell),
+            ),
+            findsNothing,
+          );
+          final locationRect = tester.getRect(
+            find.byType(PelinesLocationContext),
+          );
+          final titleRect = tester.getRect(title);
+          final refreshRect = tester.getRect(find.byType(AdminHeaderRefresh));
+          expect(locationRect.top, greaterThanOrEqualTo(titleRect.bottom));
+          expect(refreshRect.left, greaterThanOrEqualTo(titleRect.right));
+          expect(
+            (refreshRect.center.dy - titleRect.center.dy).abs(),
+            lessThan(1),
+          );
+          expect(
+            tester.getRect(find.text('Approved description')).top,
+            greaterThanOrEqualTo(locationRect.bottom),
+          );
+          expect(
+            tester.getRect(find.byKey(const Key('section-controls'))).top,
+            greaterThanOrEqualTo(
+              tester.getRect(find.text('Approved description')).bottom,
+            ),
+          );
+          expect(find.byType(AdminHeaderRefresh), findsOneWidget);
+          await tester.tap(find.byType(AdminHeaderRefresh));
+          expect(refreshes, 1);
           final before = tester.getRect(heading);
           await tester.drag(find.byType(ListView), const Offset(0, -700));
           await tester.pumpAndSettle();
@@ -115,18 +192,15 @@ void main() {
           expect(find.textContaining('Tualatin'), findsNothing);
           current.replace(
             headerLocation(
-              name: 'Portland',
-              address: '123 Long Canonical Address Suite 456, Portland',
+              name: 'Troutdale',
+              address: '25627 SE Stark St, Troutdale, OR 97060',
             ),
           );
           await tester.pumpAndSettle();
-          expect(
-            find.text(
-              'Portland · 123 Long Canonical Address Suite 456, Portland',
-            ),
-            findsOneWidget,
-          );
+          expect(find.text('Troutdale · 25627 SE Stark St'), findsOneWidget);
           expect(find.textContaining('Tualatin'), findsNothing);
+          expect(find.textContaining('97060'), findsNothing);
+          expect(find.textContaining(', OR'), findsNothing);
           expect(tester.takeException(), isNull);
           for (final address in [null, '', '   ']) {
             current.replace(

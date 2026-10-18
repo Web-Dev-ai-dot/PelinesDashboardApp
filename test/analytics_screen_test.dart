@@ -142,7 +142,10 @@ void main() {
           repository.requests.single.complete(sample());
           await tester.pumpAndSettle();
           final export = find.byKey(const Key('analytics-export'));
-          final refresh = find.byKey(const Key('analytics-refresh'));
+          final refresh = find.descendant(
+            of: find.byKey(const Key('analytics-refresh')),
+            matching: find.byType(OutlinedButton),
+          );
           final primary = tester.widget<FilledButton>(export);
           final secondary = tester.widget<OutlinedButton>(refresh);
           expect(primary.onPressed, isNotNull);
@@ -162,20 +165,17 @@ void main() {
             findsOneWidget,
           );
           expect(
-            find.descendant(
-              of: refresh,
-              matching: find.text(lang == 'en' ? 'Refresh' : 'Actualizar'),
-            ),
+            find.descendant(of: refresh, matching: find.byIcon(Icons.refresh)),
             findsOneWidget,
           );
           final exportRect = tester.getRect(export);
           final refreshRect = tester.getRect(refresh);
-          if (viewport.$1 >= 768) {
-            expect(exportRect.center.dy, refreshRect.center.dy);
-            expect(refreshRect.left, greaterThan(exportRect.right));
-          } else if (viewport.$2 == 2) {
-            expect(refreshRect.top, greaterThanOrEqualTo(exportRect.bottom));
-          }
+          expect(refreshRect.bottom, lessThan(exportRect.top));
+          final header = find.byKey(const Key('persistent-section-header'));
+          expect(
+            find.descendant(of: header, matching: refresh),
+            findsOneWidget,
+          );
           final status = find.byKey(
             const Key('analytics-section-Order Status'),
           );
@@ -242,7 +242,12 @@ void main() {
     expect(find.text('Loading analytics...'), findsOneWidget);
     expect(
       tester
-          .widget<OutlinedButton>(find.byKey(const Key('analytics-refresh')))
+          .widget<OutlinedButton>(
+            find.descendant(
+              of: find.byKey(const Key('analytics-refresh')),
+              matching: find.byType(OutlinedButton),
+            ),
+          )
           .onPressed,
       isNull,
     );
@@ -269,7 +274,12 @@ void main() {
     expect(repository.requests.length, 2);
     expect(
       tester
-          .widget<OutlinedButton>(find.byKey(const Key('analytics-refresh')))
+          .widget<OutlinedButton>(
+            find.descendant(
+              of: find.byKey(const Key('analytics-refresh')),
+              matching: find.byType(OutlinedButton),
+            ),
+          )
           .onPressed,
       isNull,
     );
@@ -316,13 +326,13 @@ void main() {
     await mount(tester, language: 'es', width: 1100);
     repository.requests.single.complete(sample(count: 2000));
     await tester.pumpAndSettle();
+    expect(find.byTooltip('Actualizar'), findsOneWidget);
     for (final text in [
       'Analíticas',
       'Ventas',
       'Órdenes',
       'Pedido promedio',
       'Artículos vendidos',
-      'Actualizar',
     ]) {
       expect(find.text(text), findsOneWidget);
     }

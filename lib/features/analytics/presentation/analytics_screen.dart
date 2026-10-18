@@ -7,7 +7,6 @@ import 'package:intl/intl.dart';
 import '../../../app/l10n/admin_localizations.dart';
 import '../../../app/navigation/admin_navigation.dart';
 import '../../../app/theme/pelines_tokens.dart';
-import '../../../app/theme/app_theme.dart';
 import '../../../core/time/pelines_time.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../locations/providers/locations_providers.dart';
@@ -58,6 +57,15 @@ class AnalyticsScreen extends ConsumerWidget {
           tr(context, 'Analytics'),
           style: PelinesTypography.pageTitle(Theme.of(context).textTheme),
         ),
+        actions: [
+          AdminHeaderRefresh(
+            key: const Key('analytics-refresh'),
+            onPressed:
+                dataset.isLoading || loaded == null || loaded.isRefreshing
+                ? null
+                : refresh,
+          ),
+        ],
       ),
       body: SafeArea(
         child: RefreshIndicator(
@@ -83,22 +91,7 @@ class AnalyticsScreen extends ConsumerWidget {
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                       ),
-                    AnalyticsExportAction(
-                      secondaryAction: OutlinedButton.icon(
-                        key: const Key('analytics-refresh'),
-                        style: PelinesControlStyles.button(
-                          PelinesButtonVariant.secondary,
-                        ),
-                        onPressed:
-                            dataset.isLoading ||
-                                loaded == null ||
-                                loaded.isRefreshing
-                            ? null
-                            : refresh,
-                        icon: const Icon(Icons.refresh),
-                        label: Text(tr(context, 'Refresh')),
-                      ),
-                    ),
+                    const AnalyticsExportAction(),
                     const SizedBox(height: 12),
                     if (dataset.isLoading) ...[
                       const Center(child: CircularProgressIndicator()),

@@ -5,6 +5,30 @@ import '../../../app/theme/pelines_tokens.dart';
 import '../models/location.dart';
 import '../providers/locations_providers.dart';
 
+/// Header-only adapter for the API's scalar address. Strip a locality only
+/// when both a numbered street and an explicit US city/state suffix match.
+/// Unknown formats retain their original content; never split at the first comma.
+String? compactLocationStreet(String? address) {
+  final value = address?.trim();
+  if (value == null || value.isEmpty) return value;
+  final postal = RegExp(
+    r'^(.+),\s*([A-Za-z][A-Za-z .\x27-]*),\s*'
+    r'(AL|AK|AZ|AR|CA|CO|CT|DE|DC|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY)'
+    r'(?:\s+\d{5}(?:-\d{4})?)?(?:,\s*(?:USA|United States))?$',
+    caseSensitive: false,
+  ).firstMatch(value);
+  if (postal == null) return value;
+  final street = postal.group(1)!.trim();
+  final numberedStreet = RegExp(
+    r'^\d+[A-Za-z]?(?:-\d+)?\s+[^,\n]+\s+'
+    r'(?:St|Street|Ave|Avenue|Rd|Road|Blvd|Boulevard|Dr|Drive|Ln|Lane|Way|Ct|Court|Pl|Place|Pkwy|Parkway|Hwy|Highway|Ter|Terrace|Cir|Circle)\.?'
+    r'(?:\s+(?:N|S|E|W|NE|NW|SE|SW))?'
+    r'(?:,?\s+(?:Suite|Ste|Unit|Apt|#)\s*[-A-Za-z0-9]+)?$',
+    caseSensitive: false,
+  );
+  return numberedStreet.hasMatch(street) ? street : value;
+}
+
 /// Section headers share the shell's selection; no requests or local cache.
 class SectionLocationContext extends ConsumerWidget {
   const SectionLocationContext({super.key, this.bottomSpacing = 12});
@@ -37,7 +61,7 @@ class PelinesLocationContext extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final address = location.address?.trim();
+    final address = compactLocationStreet(location.address);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

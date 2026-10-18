@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 abstract final class PelinesColors {
+  static const Color languageSelectedBackground = Color(0xFFF8CDD1);
+  static const Color languageSelectedText = Color(0xFFB91C1C);
   static const Color brandPrimary = Color(0xFFF21D1D);
   static const Color brandPrimarySoft = Color(0x33F21D1D);
   static const Color brandYellow = Color(0xFFFBB224);
@@ -23,6 +25,18 @@ abstract final class PelinesColors {
   // Accessible text on the web's pale yellow surface.
   static const Color amberForeground = Color(0xFF805000);
   static const Color tableHeader = Color(0xFFFAFBFB);
+}
+
+/// Approved soft palette for board tabs and column headings only.
+abstract final class PelinesBoardColors {
+  static const waitingBackground = Color(0xFFFFE4BA);
+  static const waitingText = Color(0xFF855300);
+  static const confirmedBackground = Color(0xFFC7F3D9);
+  static const confirmedText = Color(0xFF086B3B);
+  static const preparingBackground = Color(0xFFE8DAFF);
+  static const preparingText = Color(0xFF6435A1);
+  static const readyBackground = Color(0xFFFFD9DC);
+  static const readyText = Color(0xFFA52D38);
 }
 
 abstract final class PelinesSpacing {
