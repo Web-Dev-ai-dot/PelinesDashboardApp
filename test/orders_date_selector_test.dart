@@ -378,6 +378,26 @@ void main() {
       final loadedCalls = repository.calls;
       await _date(tester, 'Upcoming');
       expect(find.text('waiting-tomorrow'), findsOneWidget);
+      expect(
+        container
+            .read(calendarOrdersProvider)
+            .requireValue
+            .orders
+            .any((order) => order.id == 'waiting-later'),
+        isTrue,
+      );
+      // Column lists build lazily; reveal the later card before asserting UI.
+      await tester.scrollUntilVisible(
+        find.text('waiting-later'),
+        200,
+        scrollable: find
+            .descendant(
+              of: find.byKey(const Key('todo-column-pending')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await tester.pumpAndSettle();
       expect(find.text('waiting-later'), findsOneWidget);
       expect(repository.calls, loadedCalls);
       await tester.pumpAndSettle();

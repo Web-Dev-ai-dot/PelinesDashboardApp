@@ -344,7 +344,7 @@ void main() {
       expect(find.byKey(const Key('cancel-order-action')), findsNothing);
       expect(find.byKey(const Key('order-primary-action')), findsNothing);
       expect(find.byKey(const Key('save-internal-notes')), findsNothing);
-      expect(find.text('refunded'), findsOneWidget);
+      expect(find.text('Refunded'), findsOneWidget);
     },
   );
   testWidgets('location changes while confirmation is open: zero PATCH', (
@@ -372,7 +372,7 @@ void main() {
       );
       await _pumpDetail(tester, _FakeOrdersRepository(getResult: order));
       expect(find.text('refund_pending'), findsOneWidget);
-      expect(find.text('refunded'), findsNothing);
+      expect(find.text('Refunded'), findsNothing);
       expect(find.byKey(const Key('save-internal-notes')), findsNothing);
     },
   );

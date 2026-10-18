@@ -14,7 +14,6 @@ import 'package:pelines_admin_app/features/locations/models/location.dart';
 import 'package:pelines_admin_app/features/locations/providers/locations_providers.dart';
 import 'package:pelines_admin_app/features/orders/data/orders_repository.dart';
 import 'package:pelines_admin_app/features/orders/models/order_models.dart';
-import 'package:pelines_admin_app/features/orders/models/history_filters.dart';
 import 'package:pelines_admin_app/features/orders/presentation/historical_orders_screen.dart';
 import 'package:pelines_admin_app/features/orders/presentation/orders_calendar_screen.dart';
 import 'package:pelines_admin_app/features/orders/presentation/calendar_month_grid.dart';
@@ -179,7 +178,7 @@ void main() {
           final table = width - 32 >= 840 * scale;
           expect(find.byType(DataTable), table ? findsOneWidget : findsNothing);
           expect(
-            find.byKey(const ValueKey('history-card-one')),
+            find.byKey(const ValueKey('history-row-one')),
             table ? findsNothing : findsOneWidget,
           );
           expect(find.text('María Customer'), findsNWidgets(2));
@@ -192,7 +191,9 @@ void main() {
             );
           }
           expect(find.byKey(const Key('order-primary-action')), findsNothing);
-          final view = find.byKey(const ValueKey('history-view-one'));
+          final view = find.byKey(
+            ValueKey(table ? 'history-view-one' : 'history-row-one'),
+          );
           await tester.ensureVisible(view);
           await tester.pumpAndSettle();
           expect(tester.getSize(view).height, greaterThanOrEqualTo(48));
@@ -203,7 +204,11 @@ void main() {
           router.pop();
           await tester.pumpAndSettle();
           expect(
-            find.byKey(const Key('historical-adaptive-table')),
+            find.byKey(
+              Key(
+                table ? 'historical-adaptive-table' : 'history-shared-surface',
+              ),
+            ),
             findsOneWidget,
           );
         });
@@ -222,7 +227,15 @@ void main() {
         );
         expect(
           tester
-              .widget<ChoiceChip>(find.byKey(const Key('calendar-view-Today')))
+              .widget<Semantics>(
+                find
+                    .ancestor(
+                      of: find.byKey(const Key('calendar-view-Today')),
+                      matching: find.byType(Semantics),
+                    )
+                    .first,
+              )
+              .properties
               .selected,
           isTrue,
         );
@@ -231,7 +244,17 @@ void main() {
         await tester.ensureVisible(monthTab);
         await tester.tap(monthTab);
         await tester.pumpAndSettle();
-        expect(tester.widget<ChoiceChip>(monthTab).selected, isTrue);
+        expect(
+          tester
+              .widget<Semantics>(
+                find
+                    .ancestor(of: monthTab, matching: find.byType(Semantics))
+                    .first,
+              )
+              .properties
+              .selected,
+          isTrue,
+        );
         final wide = width - 32 >= 1000 * scale;
         expect(
           find.byKey(const Key('calendar-wide-layout')),
@@ -326,30 +349,26 @@ void main() {
   ) async {
     final repo = _Repo();
     await _mount(tester, repo, 'completed');
-    await tester.tap(find.byType(PopupMenuButton<HistoryDateFilter>));
+    await tester.tap(find.byKey(const Key('history-date-range')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Today').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('history-range-apply')));
     await tester.pumpAndSettle();
     expect(find.text('ORD-one'), findsOneWidget);
     expect(find.text('ORD-two'), findsNothing);
     expect(repo.calls, 1);
   });
-  testWidgets('Cancelled financial filter preserves refunded distinction', (
+  testWidgets('Cancelled shows all financial states without hidden filters', (
     tester,
   ) async {
     final repo = _Repo();
     await _mount(tester, repo, 'cancelled', width: 1366);
-    final filter = find.byType(PopupMenuButton<PaymentStatus?>);
-    await tester.ensureVisible(filter);
-    await tester.tap(filter);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Refunded').last);
-    await tester.pumpAndSettle();
+    expect(find.byType(PopupMenuButton<PaymentStatus?>), findsNothing);
     expect(find.text('ORD-one'), findsOneWidget);
-    expect(find.text('ORD-two'), findsNothing);
+    expect(find.text('Refunded'), findsOneWidget);
+    expect(find.text('Paid'), findsOneWidget);
     expect(repo.calls, 1);
-    await tester.tap(find.text('Clear filters'));
-    await tester.pumpAndSettle();
     expect(find.text('ORD-two'), findsOneWidget);
   });
 }

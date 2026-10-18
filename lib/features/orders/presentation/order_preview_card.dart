@@ -33,6 +33,7 @@ class OrderPreviewCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final richLayout = statusBoard || planning;
     final detail = statusBoard || planning
         ? ref.watch(orderDetailProvider(order.id))
         : null;
@@ -53,21 +54,24 @@ class OrderPreviewCard extends ConsumerWidget {
         shadowColor: PelinesColors.border,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: PelinesColors.border, width: 2),
+          side: BorderSide(
+            color: PelinesColors.border,
+            width: richLayout ? 1 : 2,
+          ),
         ),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: view,
           child: Padding(
-            padding: const EdgeInsets.all(20),
+            padding: EdgeInsets.all(richLayout ? 16 : 20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
                   order.orderNumber,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
+                  style: TextStyle(
+                    fontSize: richLayout ? 20 : 16,
+                    fontWeight: richLayout ? FontWeight.w700 : FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -174,21 +178,34 @@ class OrderPreviewCard extends ConsumerWidget {
                   else
                     for (final item in detail.value!.items)
                       OrderParityItem(item: item),
-                  Text(
-                    tr(context, 'Total'),
-                    style: PelinesTypography.smallLabel,
-                  ),
                 ],
-                Align(
-                  alignment: AlignmentDirectional.centerEnd,
-                  child: Text(
-                    money(order.totalCents),
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
+                if (richLayout)
+                  PelinesLabelValueRow(
+                    alignValueEnd: true,
+                    label: Text(
+                      tr(context, 'Total'),
+                      style: PelinesTypography.smallLabel,
+                    ),
+                    value: Text(
+                      money(order.totalCents),
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: PelinesColors.brandPrimary,
+                      ),
+                    ),
+                  )
+                else
+                  Align(
+                    alignment: AlignmentDirectional.centerEnd,
+                    child: Text(
+                      money(order.totalCents),
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
-                ),
                 const SizedBox(height: 16),
                 if (!planning)
                   GestureDetector(

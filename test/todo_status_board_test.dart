@@ -14,6 +14,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'package:pelines_admin_app/app/theme/app_theme.dart';
+import 'package:pelines_admin_app/app/theme/pelines_components.dart';
+import 'package:pelines_admin_app/app/theme/pelines_tokens.dart';
 import 'package:pelines_admin_app/features/locations/models/location.dart';
 import 'package:pelines_admin_app/features/locations/providers/locations_providers.dart';
 import 'package:pelines_admin_app/features/orders/data/orders_repository.dart';
@@ -232,6 +234,47 @@ Future<void> tab(WidgetTester tester, String status) async {
 }
 
 void main() {
+  testWidgets('slim tab surface retains a 48px effective touch target', (
+    tester,
+  ) async {
+    await _mount(tester, _Repository(today: true));
+    final target = find.byKey(const Key('todo-tab-confirmed'));
+    await tester.ensureVisible(target);
+    await tester.pumpAndSettle();
+    final surface = find.descendant(
+      of: target,
+      matching: find.byType(Material),
+    );
+    expect(tester.getSize(surface).height, 36);
+    expect(tester.getSize(target).height, greaterThanOrEqualTo(48));
+    final rect = tester.getRect(target);
+    await tester.tapAt(Offset(rect.center.dx, rect.top + 1));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<OutlinedButton>(target).style!.side!.resolve({})!.color,
+      PelinesColors.textPrimary,
+    );
+    final scroll = tester
+        .widget<SingleChildScrollView>(
+          find.byKey(const Key('todo-board-scroll')),
+        )
+        .controller!;
+    expect(scroll.offset, greaterThan(0));
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('To-Do displays only the channel returned by existing Detail', (
+    tester,
+  ) async {
+    final repo = _Repository(today: true);
+    repo.rows['pending']!['source'] = 'ios';
+    await _mount(tester, repo);
+    expect(
+      find.descendant(of: card('pending'), matching: find.text('iOS')),
+      findsOneWidget,
+    );
+    expect(find.text('Web'), findsNothing);
+    expect(repo.patches, 0);
+  });
   for (final upcoming in [false, true]) {
     for (final (result, label) in [
       (PrintJobStatus.submitted, 'Submitted (not physical confirmation)'),
@@ -337,6 +380,48 @@ void main() {
           for (final status in ['pending', 'confirmed', 'preparing', 'ready']) {
             expect(column(status), findsOneWidget);
           }
+          for (final status in ['pending', 'confirmed', 'preparing', 'ready']) {
+            final target = find.byKey(Key('todo-tab-$status'));
+            final button = tester.widget<OutlinedButton>(target);
+            expect(button.child, isA<Text>());
+            expect(
+              find.descendant(
+                of: target,
+                matching: find.byType(PelinesStateBadge),
+              ),
+              findsNothing,
+            );
+            expect(button.style!.shape!.resolve({}), isA<StadiumBorder>());
+            final background = button.style!.backgroundColor!.resolve({})!;
+            final foreground = button.style!.foregroundColor!.resolve({})!;
+            final heading = tester.widget<PelinesStateBadge>(
+              find.byKey(Key('todo-column-heading-$status')),
+            );
+            expect(heading.background, background);
+            expect(heading.foreground, foreground);
+            expect(heading.dot, isTrue);
+            expect(heading.label, endsWith(status == 'preparing' ? '0' : '1'));
+            expect(background.a, 1);
+            expect(background, switch (status) {
+              'pending' => const Color(0xFFFFE4BA),
+              'confirmed' => const Color(0xFFC7F3D9),
+              'preparing' => const Color(0xFFE8DAFF),
+              _ => const Color(0xFFFFD9DC),
+            });
+            expect(foreground, switch (status) {
+              'pending' => const Color(0xFF855300),
+              'confirmed' => const Color(0xFF086B3B),
+              'preparing' => const Color(0xFF6435A1),
+              _ => const Color(0xFFA52D38),
+            });
+            final a = background.computeLuminance(),
+                b = foreground.computeLuminance();
+            expect(
+              ((a > b ? a : b) + .05) / ((a > b ? b : a) + .05),
+              greaterThanOrEqualTo(4.5),
+            );
+            expect(tester.getSize(target).height, greaterThanOrEqualTo(48));
+          }
           expect(find.text('ASAP'), findsOneWidget);
           expect(find.text('2× Tacos'), findsOneWidget);
           expect(find.textContaining('Extras: Guacamole'), findsOneWidget);
@@ -350,6 +435,13 @@ void main() {
           for (final status in ['ready', 'preparing', 'confirmed', 'pending']) {
             await tab(tester, status);
             expect(column(status).hitTestable(), findsOneWidget);
+            final selected = tester.widget<OutlinedButton>(
+              find.byKey(Key('todo-tab-$status')),
+            );
+            expect(
+              selected.style!.side!.resolve({})!.color,
+              PelinesColors.textPrimary,
+            );
             expect(tester.takeException(), isNull);
           }
           expect(

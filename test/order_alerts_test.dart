@@ -408,7 +408,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('new-order-bottom-sheet')), findsOneWidget);
-      expect(find.text('1 of 2'), findsOneWidget);
+      expect(find.text('1 of 2'), findsNothing);
       final context = tester.element(
         find.byKey(const Key('new-order-bottom-sheet')),
       );
@@ -418,7 +418,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.pump(const Duration(seconds: 2));
       await tester.pumpAndSettle();
-      expect(find.text('1 of 1'), findsOneWidget);
+      expect(find.text('1 of 1'), findsNothing);
       expect(container.read(orderAlertsProvider).value!.unseenIds, ['C']);
       await tester.tap(find.byKey(const Key('alert-acknowledge')));
       await tester.pumpAndSettle();

@@ -1,3 +1,4 @@
+import 'package:pelines_admin_app/app/theme/pelines_tokens.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -44,7 +45,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       await upcomingTap(tester, 'calendar-view-Month');
-      expect(find.byType(DropdownButtonFormField<int>), findsNWidgets(2));
+      expect(find.byType(DropdownButtonFormField<int>), findsNothing);
       expect(find.byType(CalendarMonthGrid), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
@@ -66,65 +67,58 @@ void main() {
     },
   );
 
-  testWidgets(
-    'Calendar Month Year dropdowns alone update grid and clamp selected day',
-    (tester) async {
-      await tester.binding.setSurfaceSize(const Size(768, 1000));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            currentLocationProvider.overrideWith(_CurrentLocation.new),
-            ordersRepositoryProvider.overrideWithValue(_Repository()),
-          ],
-          child: const MaterialApp(home: OrdersCalendarScreen()),
-        ),
-      );
-      await tester.pumpAndSettle();
-      await upcomingTap(tester, 'calendar-view-Month');
-      final picker = find.byType(CalendarMonthGrid);
-      expect(picker, findsOneWidget);
-      expect(find.byType(DropdownButtonFormField<int>), findsNWidgets(2));
-      final loc = MaterialLocalizations.of(tester.element(picker));
-      expect(find.byType(CalendarDatePicker), findsNothing);
-      expect(find.byTooltip(loc.nextMonthTooltip), findsNothing);
-      expect(find.byTooltip(loc.previousMonthTooltip), findsNothing);
-      await calendarPeriod(tester, 'Year', 2024);
-      await calendarPeriod(tester, 'Month', 1);
-      expect(
-        find.byKey(const ValueKey('calendar-grid-2024-1')),
-        findsOneWidget,
-      );
-      await upcomingTap(tester, 'calendar-day-31');
-      expect(
-        tester.widget<CalendarMonthGrid>(picker).selectedDay,
-        DateTime(2024, 1, 31),
-      );
-      await calendarPeriod(tester, 'Month', 2);
-      expect(
-        tester.widget<CalendarMonthGrid>(picker).selectedDay,
-        DateTime(2024, 2, 29),
-      );
-      expect(find.byKey(const ValueKey('calendar-day-30')), findsNothing);
-      await calendarPeriod(tester, 'Year', 2025);
-      expect(
-        tester.widget<CalendarMonthGrid>(picker).selectedDay,
-        DateTime(2025, 2, 28),
-      );
-      expect(
-        find.byKey(const ValueKey('calendar-grid-2025-2')),
-        findsOneWidget,
-      );
-      await upcomingTap(tester, 'calendar-day-15');
-      final selected = DateTime(2025, 2, 15);
-      expect(tester.widget<CalendarMonthGrid>(picker).selectedDay, selected);
-      await upcomingTap(tester, 'calendar-view-Today');
-      await upcomingTap(tester, 'calendar-view-Week');
-      await upcomingTap(tester, 'calendar-view-Month');
-      expect(tester.widget<CalendarMonthGrid>(picker).selectedDay, selected);
-      expect(tester.takeException(), isNull);
-    },
-  );
+  testWidgets('Calendar month coordinates update grid and clamp selected day', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(768, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          currentLocationProvider.overrideWith(_CurrentLocation.new),
+          ordersRepositoryProvider.overrideWithValue(_Repository()),
+        ],
+        child: const MaterialApp(home: OrdersCalendarScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await upcomingTap(tester, 'calendar-view-Month');
+    final picker = find.byType(CalendarMonthGrid);
+    expect(picker, findsOneWidget);
+    expect(find.byType(DropdownButtonFormField<int>), findsNothing);
+    final loc = MaterialLocalizations.of(tester.element(picker));
+    expect(find.byType(CalendarDatePicker), findsNothing);
+    expect(find.byTooltip(loc.nextMonthTooltip), findsOneWidget);
+    expect(find.byTooltip(loc.previousMonthTooltip), findsOneWidget);
+    await calendarPeriod(tester, 'Year', 2024);
+    await calendarPeriod(tester, 'Month', 1);
+    expect(find.byKey(const ValueKey('calendar-grid-2024-1')), findsOneWidget);
+    await upcomingTap(tester, 'calendar-day-31');
+    expect(
+      tester.widget<CalendarMonthGrid>(picker).selectedDay,
+      DateTime(2024, 1, 31),
+    );
+    await calendarPeriod(tester, 'Month', 2);
+    expect(
+      tester.widget<CalendarMonthGrid>(picker).selectedDay,
+      DateTime(2024, 2, 29),
+    );
+    expect(find.byKey(const ValueKey('calendar-day-30')), findsNothing);
+    await calendarPeriod(tester, 'Year', 2025);
+    expect(
+      tester.widget<CalendarMonthGrid>(picker).selectedDay,
+      DateTime(2025, 2, 28),
+    );
+    expect(find.byKey(const ValueKey('calendar-grid-2025-2')), findsOneWidget);
+    await upcomingTap(tester, 'calendar-day-15');
+    final selected = DateTime(2025, 2, 15);
+    expect(tester.widget<CalendarMonthGrid>(picker).selectedDay, selected);
+    await upcomingTap(tester, 'calendar-view-Today');
+    await upcomingTap(tester, 'calendar-view-Week');
+    await upcomingTap(tester, 'calendar-view-Month');
+    expect(tester.widget<CalendarMonthGrid>(picker).selectedDay, selected);
+    expect(tester.takeException(), isNull);
+  });
 
   test('calendar includes only active statuses', () {
     final List<OrderSummary> result = calendarRelevantOrders(
@@ -360,9 +354,11 @@ void main() {
       expect(scroll.pixels, offset);
       expect(
         tester
-            .widget<ChoiceChip>(find.byKey(Key('calendar-view-$view')))
-            .selected,
-        isTrue,
+            .widget<TextButton>(find.byKey(Key('calendar-view-$view')))
+            .style!
+            .backgroundColor!
+            .resolve({}),
+        PelinesColors.brandPrimary,
       );
       expect(
         tester.widget<EditableText>(find.byType(EditableText)).controller.text,

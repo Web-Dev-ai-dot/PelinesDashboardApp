@@ -1,5 +1,15 @@
 // English source messages and their Spanish UI translations. Backend values are never catalog keys.
 const spanishCatalog = <String, String>{
+  "Completed orders": "Pedidos completados",
+  "Cancelled orders": "Pedidos cancelados",
+  "Payment remains paid; refund not confirmed.": "El pago sigue cobrado; reembolso no confirmado.",
+  "No loaded orders match these filters.": "Ningún pedido cargado coincide con estos filtros.",
+  "No completed orders loaded for this location.": "No hay pedidos completados cargados para esta sucursal.",
+  "No cancelled orders loaded for this location.": "No hay pedidos cancelados cargados para esta sucursal.",
+  "Showing {shown} of {count} loaded orders": "Mostrando {shown} de {count} pedidos cargados",
+  "History is limited to loaded orders; more may exist on the server.": "El historial se limita a los pedidos cargados; puede haber más en el servidor.",
+  "Load More": "Cargar más",
+  'Custom range': 'Rango personalizado',
   'Last 90 days': 'Últimos 90 días',
   'Export / Reports': 'Exportar / Informes',
   'Revenue Report': 'Informe de ingresos',

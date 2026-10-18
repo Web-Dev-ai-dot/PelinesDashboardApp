@@ -4,95 +4,75 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../../app/l10n/admin_localizations.dart';
-import '../../../app/theme/app_theme.dart';
 import '../../../app/theme/pelines_tokens.dart';
 import '../models/orders_date_filter.dart';
 
-/// Calendar-only date coordinates. Period changes use the existing clamping
-/// rule; the grid has no second header, arrows, or swipe navigation.
+/// Calendar-only coordinates. Month arrows retain the existing day clamp.
 class CalendarMonthGrid extends StatelessWidget {
   const CalendarMonthGrid({
     required this.selectedDay,
     required this.today,
     required this.onDateChanged,
+    this.hasOrders,
     super.key,
   });
   final DateTime selectedDay, today;
   final ValueChanged<DateTime> onDateChanged;
+  final bool Function(DateTime)? hasOrders;
 
   @override
   Widget build(BuildContext context) {
     final loc = MaterialLocalizations.of(context);
     final locale = Localizations.localeOf(context).toLanguageTag();
-    final offset = DateUtils.firstDayOffset(
-      selectedDay.year,
-      selectedDay.month,
-      loc,
-    );
+    final offset = DateTime(selectedDay.year, selectedDay.month, 1).weekday % 7;
     final days = DateUtils.getDaysInMonth(selectedDay.year, selectedDay.month);
     final count = ((offset + days + 6) ~/ 7) * 7;
     final scale = MediaQuery.textScalerOf(context).scale(1);
-    Widget select({
-      required String label,
-      required int value,
-      required List<int> values,
-      required String Function(int) text,
-      required ValueChanged<int> onChanged,
-    }) => DropdownButtonFormField<int>(
-      key: ValueKey('calendar-$label-$value'),
-      initialValue: value,
-      isExpanded: true,
-      decoration: PelinesControlStyles.input(label: tr(context, label)),
-      items: [
-        for (final option in values)
-          DropdownMenuItem(
-            value: option,
-            child: Text(
-              text(option),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-      ],
-      onChanged: (value) {
-        if (value != null) onChanged(value);
-      },
-    );
+    void shiftMonth(int delta) {
+      final month = DateTime(selectedDay.year, selectedDay.month + delta);
+      onDateChanged(dayInMonth(selectedDay, month.year, month.month));
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final month = select(
-              label: 'Month',
-              value: selectedDay.month,
-              values: List.generate(12, (i) => i + 1),
-              text: (m) => DateFormat.MMMM(locale).format(DateTime(2024, m)),
-              onChanged: (m) =>
-                  onDateChanged(dayInMonth(selectedDay, selectedDay.year, m)),
-            );
-            final year = select(
-              label: 'Year',
-              value: selectedDay.year,
-              values: List.generate(81, (i) => 2020 + i),
-              text: (y) => '$y',
-              onChanged: (y) =>
-                  onDateChanged(dayInMonth(selectedDay, y, selectedDay.month)),
-            );
-            return constraints.maxWidth >= 270 * scale
-                ? Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(flex: 3, child: month),
-                      const SizedBox(width: 12),
-                      Expanded(flex: 2, child: year),
-                    ],
-                  )
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [month, const SizedBox(height: 12), year],
-                  );
-          },
+        Row(
+          children: [
+            IconButton(
+              key: const Key('calendar-previous-month'),
+              tooltip: loc.previousMonthTooltip,
+              style: IconButton.styleFrom(
+                backgroundColor: PelinesColors.mutedSurface,
+                minimumSize: const Size(48, 48),
+                shape: const CircleBorder(),
+              ),
+              onPressed: () => shiftMonth(-1),
+              icon: const Icon(Icons.chevron_left),
+            ),
+            Expanded(
+              child: Semantics(
+                header: true,
+                child: Text(
+                  DateFormat.yMMMM(locale).format(selectedDay),
+                  key: const Key('calendar-month-title'),
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleLarge
+                      ?.copyWith(fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
+            IconButton(
+              key: const Key('calendar-next-month'),
+              tooltip: loc.nextMonthTooltip,
+              style: IconButton.styleFrom(
+                backgroundColor: PelinesColors.mutedSurface,
+                minimumSize: const Size(48, 48),
+                shape: const CircleBorder(),
+              ),
+              onPressed: () => shiftMonth(1),
+              icon: const Icon(Icons.chevron_right),
+            ),
+          ],
         ),
         const SizedBox(height: 12),
         Row(
@@ -102,7 +82,7 @@ class CalendarMonthGrid extends StatelessWidget {
                 child: ExcludeSemantics(
                   child: Center(
                     child: Text(
-                      loc.narrowWeekdays[(loc.firstDayOfWeekIndex + i) % 7],
+                      loc.narrowWeekdays[i],
                       style: const TextStyle(fontSize: 12),
                     ),
                   ),
@@ -119,7 +99,7 @@ class CalendarMonthGrid extends StatelessWidget {
           physics: const NeverScrollableScrollPhysics(),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 7,
-            mainAxisExtent: math.max(48, 36 * scale),
+            mainAxisExtent: math.max(60, 44 * scale),
           ),
           itemCount: count,
           itemBuilder: (context, index) {
@@ -128,34 +108,59 @@ class CalendarMonthGrid extends StatelessWidget {
             final date = DateTime(selectedDay.year, selectedDay.month, number);
             final selected = number == selectedDay.day;
             final current = DateUtils.isSameDay(date, today);
+            final marked = hasOrders?.call(date) ?? false;
             return Semantics(
               selected: selected,
               button: true,
               label:
-                  '${loc.formatFullDate(date)}${current ? ', ${tr(context, 'Today')}' : ''}',
+                  '${loc.formatFullDate(date)}${current ? ', ${tr(context, 'Today')}' : ''}${marked ? ', ${tr(context, 'Has orders')}' : ''}',
               onTap: () => onDateChanged(date),
               child: ExcludeSemantics(
-                child: TextButton(
-                  key: ValueKey('calendar-day-$number'),
-                  onPressed: () => onDateChanged(date),
-                  style: TextButton.styleFrom(
-                    padding: EdgeInsets.zero,
-                    minimumSize: Size.zero,
-                    foregroundColor: selected
-                        ? Colors.white
-                        : PelinesColors.textPrimary,
-                    backgroundColor: selected
-                        ? PelinesColors.brandPrimary
-                        : null,
-                    shape: const CircleBorder(),
-                    side: current && !selected
-                        ? const BorderSide(color: PelinesColors.brandPrimary)
-                        : null,
-                  ),
-                  child: Text(
-                    loc.formatDecimal(number),
-                    style: const TextStyle(fontSize: 12),
-                  ),
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: TextButton(
+                        key: ValueKey('calendar-day-$number'),
+                        onPressed: () => onDateChanged(date),
+                        style: TextButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          minimumSize: Size.zero,
+                          foregroundColor: selected
+                              ? Colors.white
+                              : PelinesColors.textPrimary,
+                          backgroundColor: selected
+                              ? PelinesColors.brandPrimary
+                              : null,
+                          shape: const CircleBorder(),
+                          side: current && !selected
+                              ? const BorderSide(
+                                  color: PelinesColors.brandPrimary,
+                                )
+                              : null,
+                        ),
+                        child: Text(
+                          loc.formatDecimal(number),
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ),
+                    ),
+                    SizedBox(
+                      height: 10,
+                      child: marked
+                          ? Center(
+                              child: Container(
+                                key: ValueKey('calendar-month-dot-$number'),
+                                width: 6,
+                                height: 6,
+                                decoration: const BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: PelinesColors.brandPrimary,
+                                ),
+                              ),
+                            )
+                          : null,
+                    ),
+                  ],
                 ),
               ),
             );

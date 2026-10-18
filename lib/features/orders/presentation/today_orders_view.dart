@@ -118,7 +118,12 @@ class TodayOrdersViewState extends ConsumerState<TodayOrdersView> {
                         onPressed: refresh,
                         child: Text('${state.refreshError}'),
                       ),
-                    Expanded(child: TodoStatusBoard(orders: state.orders)),
+                    Expanded(
+                      child: TodoStatusBoard(
+                        orders: state.orders,
+                        showChannel: true,
+                      ),
+                    ),
                   ],
                 ),
               );

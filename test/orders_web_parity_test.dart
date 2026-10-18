@@ -379,6 +379,31 @@ void main() {
         language: language,
       );
       expect(find.byKey(const Key('upcoming-filters')), findsOneWidget);
+      final sort = find.byKey(const Key('upcoming-sort'));
+      final filters = find.byKey(const Key('upcoming-filters'));
+      for (final control in [sort, filters]) {
+        expect(
+          tester.widget<OutlinedButton>(control).style!.shape!.resolve({}),
+          isA<StadiumBorder>(),
+        );
+        expect(tester.getSize(control).height, greaterThanOrEqualTo(48));
+      }
+      expect(
+        tester.getSize(sort).width,
+        closeTo(tester.getSize(filters).width, .01),
+      );
+      if (width - 32 >= 320 * scale) {
+        expect(
+          tester.getRect(sort).center.dy,
+          closeTo(tester.getRect(filters).center.dy, 1),
+        );
+      } else {
+        expect(
+          tester.getRect(filters).top,
+          greaterThanOrEqualTo(tester.getRect(sort).bottom),
+        );
+      }
+      expect(find.byIcon(Icons.search), findsOneWidget);
       expect(find.byType(ChoiceChip), findsNothing);
       expect(find.byType(PelinesFilterBar), findsNothing);
       await tester.scrollUntilVisible(
@@ -404,6 +429,15 @@ void main() {
           ),
         );
         expect(header, findsOneWidget);
+        final badge = tester.widget<PelinesStateBadge>(
+          find.byKey(Key('todo-column-heading-$status')),
+        );
+        final tab = tester.widget<OutlinedButton>(
+          find.byKey(Key('todo-tab-$status')),
+        );
+        expect(badge.background, tab.style!.backgroundColor!.resolve({}));
+        expect(badge.foreground, tab.style!.foregroundColor!.resolve({}));
+        expect(badge.dot, isTrue);
         expect(
           find.descendant(of: header, matching: find.textContaining(' · 1')),
           findsOneWidget,

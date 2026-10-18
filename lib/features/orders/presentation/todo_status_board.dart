@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../app/l10n/admin_localizations.dart';
-import '../../../app/theme/pelines_order_badges.dart';
+import '../../../app/theme/pelines_components.dart';
 import '../../../app/theme/pelines_tokens.dart';
 import '../models/order_models.dart';
 import 'order_preview_card.dart';
@@ -19,6 +19,22 @@ String todoStatusLabel(OrderStatus status) => switch (status) {
   OrderStatus.preparing => 'Preparing',
   OrderStatus.ready => 'Ready',
   _ => '',
+};
+
+(Color, Color) _boardColors(OrderStatus status) => switch (status) {
+  OrderStatus.pending => (
+    PelinesBoardColors.waitingText,
+    PelinesBoardColors.waitingBackground,
+  ),
+  OrderStatus.confirmed => (
+    PelinesBoardColors.confirmedText,
+    PelinesBoardColors.confirmedBackground,
+  ),
+  OrderStatus.preparing => (
+    PelinesBoardColors.preparingText,
+    PelinesBoardColors.preparingBackground,
+  ),
+  _ => (PelinesBoardColors.readyText, PelinesBoardColors.readyBackground),
 };
 
 /// One loaded operational snapshot, four persistent columns. Tabs only scroll.
@@ -82,12 +98,21 @@ class _TodoStatusBoardState extends State<TodoStatusBoard> {
                       child: OutlinedButton(
                         key: Key('todo-tab-${status.name}'),
                         style: OutlinedButton.styleFrom(
-                          minimumSize: const Size(48, 48),
+                          minimumSize: const Size(48, 36),
+                          tapTargetSize: MaterialTapTargetSize.padded,
+                          visualDensity: VisualDensity.standard,
+                          backgroundColor: _boardColors(status).$2,
+                          foregroundColor: _boardColors(status).$1,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 6,
+                          ),
+                          shape: const StadiumBorder(),
                           side: BorderSide(
                             color: _selected == index
                                 ? PelinesColors.textPrimary
-                                : PelinesColors.border,
-                            width: _selected == index ? 2 : 1,
+                                : Colors.transparent,
+                            width: 2,
                           ),
                         ),
                         onPressed: () async {
@@ -101,10 +126,13 @@ class _TodoStatusBoardState extends State<TodoStatusBoard> {
                           );
                           if (mounted) setState(() => _selected = index);
                         },
-                        child: PelinesOrderBadges.status(
-                          status: status,
-                          label:
-                              '${tr(context, todoStatusLabel(status))} · ${grouped[status]!.length}',
+                        child: Text(
+                          '${tr(context, todoStatusLabel(status))} · ${grouped[status]!.length}',
+                          style: TextStyle(
+                            fontWeight: _selected == index
+                                ? FontWeight.w700
+                                : FontWeight.w600,
+                          ),
                         ),
                       ),
                     ),
@@ -142,8 +170,13 @@ class _TodoStatusBoardState extends State<TodoStatusBoard> {
                           children: [
                             Semantics(
                               header: true,
-                              child: PelinesOrderBadges.status(
-                                status: status,
+                              child: PelinesStateBadge(
+                                key: ValueKey(
+                                  'todo-column-heading-${status.name}',
+                                ),
+                                foreground: _boardColors(status).$1,
+                                background: _boardColors(status).$2,
+                                dot: true,
                                 label:
                                     '${tr(context, status == OrderStatus.pending ? 'Waiting Approval' : todoStatusLabel(status)).toUpperCase()} · ${grouped[status]!.length}',
                               ),

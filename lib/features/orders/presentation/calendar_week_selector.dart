@@ -91,9 +91,7 @@ class CalendarWeekSelector extends StatelessWidget {
                                       DateUtils.isSameDay(date, selectedDay)
                                       ? PelinesColors.brandPrimary
                                       : null,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
+                                  shape: const StadiumBorder(),
                                 ),
                                 onPressed: () => onChanged(date),
                                 child: Column(

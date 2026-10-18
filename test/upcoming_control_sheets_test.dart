@@ -16,13 +16,16 @@ Future<void> mount(
   WidgetTester tester, {
   double width = 390,
   double scale = 1,
+  double height = 850,
+  double keyboard = 0,
+  double bottomSafe = 0,
   String language = 'en',
   OrderType? type,
   UpcomingFilters filters = const UpcomingFilters(),
   ValueChanged<UpcomingTypeSelection?>? onType,
   ValueChanged<UpcomingFilters?>? onFilters,
 }) async {
-  await tester.binding.setSurfaceSize(Size(width, 850));
+  await tester.binding.setSurfaceSize(Size(width, height));
   addTearDown(() => tester.binding.setSurfaceSize(null));
   await tester.pumpWidget(
     MaterialApp(
@@ -36,8 +39,12 @@ Future<void> mount(
         GlobalCupertinoLocalizations.delegate,
       ],
       builder: (context, child) => MediaQuery(
-        data: MediaQuery.of(context)
-            .copyWith(textScaler: TextScaler.linear(scale)),
+        data: MediaQuery.of(context).copyWith(
+          textScaler: TextScaler.linear(scale),
+          viewInsets: EdgeInsets.only(bottom: keyboard),
+          padding: EdgeInsets.only(bottom: bottomSafe),
+          viewPadding: EdgeInsets.only(bottom: bottomSafe),
+        ),
         child: child!,
       ),
       home: Scaffold(
@@ -47,7 +54,11 @@ Future<void> mount(
               TextButton(
                 key: const Key('upcoming-sort'),
                 onPressed: () async {
-                  final result = await showUpcomingSort(context, type);
+                  final result = await showUpcomingSort(
+                    context,
+                    type,
+                    polished: true,
+                  );
                   onType?.call(result);
                 },
                 child: const Text('Open sort'),
@@ -77,6 +88,47 @@ OrderStatus? selectedStatus(WidgetTester tester) => tester
     .groupValue;
 
 void main() {
+  for (final language in ['en', 'es']) {
+    for (final keyboard in [0.0, 180.0]) {
+      testWidgets(
+        'short sheet scrolls to Apply with safe area $language/$keyboard',
+        (tester) async {
+          await mount(
+            tester,
+            width: 320,
+            height: keyboard == 0 ? 320 : 500,
+            scale: 2,
+            language: language,
+            keyboard: keyboard,
+            bottomSafe: 24,
+          );
+          for (final control in ['sort', 'filters']) {
+            await upcomingTap(tester, 'upcoming-$control');
+            await upcomingTap(
+              tester,
+              control == 'sort'
+                  ? 'upcoming-type-catering'
+                  : 'upcoming-status-delivered',
+            );
+            await tester.ensureVisible(
+              find.byKey(const Key('upcoming-sheet-apply')),
+            );
+            await tester.pumpAndSettle();
+            final apply = find.byKey(const Key('upcoming-sheet-apply'));
+            expect(apply.hitTestable(), findsOneWidget);
+            expect(
+              tester.getRect(apply).bottom,
+              lessThanOrEqualTo((keyboard == 0 ? 320 : 500) - keyboard - 24),
+            );
+            expect(tester.takeException(), isNull);
+            await upcomingTap(tester, 'upcoming-sheet-apply');
+            expect(find.byType(BottomSheet), findsNothing);
+          }
+        },
+      );
+    }
+  }
+
   testWidgets(
     'Sort has only real types, red radio, isolated draft and Apply All',
     (tester) async {
@@ -186,6 +238,29 @@ void main() {
         await mount(tester, width: width, scale: 2, language: language);
         for (final control in ['sort', 'filters']) {
           await upcomingTap(tester, 'upcoming-$control');
+          final sheet = tester.widget<BottomSheet>(find.byType(BottomSheet));
+          expect(sheet.backgroundColor, PelinesColors.card);
+          expect(
+            (sheet.shape! as RoundedRectangleBorder).borderRadius,
+            const BorderRadius.vertical(top: Radius.circular(32)),
+          );
+          final footerRect = tester.getRect(
+            find.byKey(const Key('upcoming-sheet-apply')),
+          );
+          if (control == 'filters') {
+            for (final bound in ['from', 'to']) {
+              final button = tester.widget<OutlinedButton>(
+                find.byKey(Key('upcoming-$bound')),
+              );
+              expect(button.style!.shape!.resolve({}), isA<StadiumBorder>());
+            }
+            final heading = find.text(language == 'es' ? 'Filtros' : 'Filters');
+            final reset = find.byKey(const Key('upcoming-filter-reset'));
+            expect(
+              tester.getRect(reset).left,
+              greaterThanOrEqualTo(tester.getRect(heading).right),
+            );
+          }
           expect(
             tester
                 .getSize(find.byKey(const Key('upcoming-sheet-scroll')))
@@ -215,6 +290,10 @@ void main() {
                 .getSize(find.byKey(const Key('upcoming-sheet-apply')))
                 .height,
             greaterThanOrEqualTo(48),
+          );
+          expect(
+            tester.getRect(find.byKey(const Key('upcoming-sheet-apply'))),
+            footerRect,
           );
           await upcomingTap(tester, 'upcoming-sheet-apply');
           expect(tester.takeException(), isNull);

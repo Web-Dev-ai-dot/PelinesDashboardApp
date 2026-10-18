@@ -56,7 +56,7 @@ class _UpcomingOrdersViewState extends State<UpcomingOrdersView> {
   }
 
   Future<void> _sort() async {
-    final result = await showUpcomingSort(context, _type);
+    final result = await showUpcomingSort(context, _type, polished: true);
     if (result != null && mounted && result.type != _type) {
       setState(() => _type = result.type);
     }
@@ -99,39 +99,59 @@ class _UpcomingOrdersViewState extends State<UpcomingOrdersView> {
                       key: const Key('orders-search'),
                       controller: _search,
                       variant: PelinesInputVariant.search,
-                      label: tr(context, 'Search customer, event or order #'),
+                      hint: tr(context, 'Search customer, event or order #'),
                       onChanged: (_) => setState(() {}),
                     ),
                     const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 12,
-                      runSpacing: 8,
-                      children: [
-                        OutlinedButton.icon(
-                          key: const Key('upcoming-sort'),
-                          style: OutlinedButton.styleFrom(
-                            minimumSize: const Size(48, 48),
+                    LayoutBuilder(
+                      builder: (context, controls) {
+                        final buttons = <Widget>[
+                          OutlinedButton.icon(
+                            key: const Key('upcoming-sort'),
+                            style: OutlinedButton.styleFrom(
+                              minimumSize: const Size(48, 48),
+                              shape: const StadiumBorder(),
+                            ),
+                            onPressed: _sort,
+                            icon: Icon(
+                              _type == null
+                                  ? Icons.sort
+                                  : Icons.check_circle_outline,
+                            ),
+                            label: Text(tr(context, 'Sort by')),
                           ),
-                          onPressed: _sort,
-                          icon: Icon(
-                            _type == null
-                                ? Icons.sort
-                                : Icons.check_circle_outline,
+                          OutlinedButton.icon(
+                            key: const Key('upcoming-filters'),
+                            style: OutlinedButton.styleFrom(
+                              minimumSize: const Size(48, 48),
+                              shape: const StadiumBorder(),
+                            ),
+                            onPressed: _filter,
+                            icon: Icon(
+                              _filters.isDefault
+                                  ? Icons.tune
+                                  : Icons.filter_alt,
+                            ),
+                            label: Text(tr(context, 'Filters')),
                           ),
-                          label: Text(tr(context, 'Sort by')),
-                        ),
-                        OutlinedButton.icon(
-                          key: const Key('upcoming-filters'),
-                          style: OutlinedButton.styleFrom(
-                            minimumSize: const Size(48, 48),
-                          ),
-                          onPressed: _filter,
-                          icon: Icon(
-                            _filters.isDefault ? Icons.tune : Icons.filter_alt,
-                          ),
-                          label: Text(tr(context, 'Filters')),
-                        ),
-                      ],
+                        ];
+                        final scale =
+                            MediaQuery.textScalerOf(context).scale(14) / 14;
+                        final paired = controls.maxWidth >= 320 * scale;
+                        return Wrap(
+                          spacing: 12,
+                          runSpacing: 8,
+                          children: [
+                            for (final button in buttons)
+                              SizedBox(
+                                width: paired
+                                    ? (controls.maxWidth - 12) / 2
+                                    : controls.maxWidth,
+                                child: button,
+                              ),
+                          ],
+                        );
+                      },
                     ),
                   ],
                 ),

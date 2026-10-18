@@ -294,6 +294,7 @@ Future<_Harness> _pump(
   String language = 'en',
   bool realToday = false,
   bool preloaded = false,
+  TargetPlatform? platform,
 }) async {
   final repo = _Repo();
   final container = ProviderContainer(
@@ -328,7 +329,9 @@ Future<_Harness> _pump(
           AdminLocalizations.delegate,
           ...GlobalMaterialLocalizations.delegates,
         ],
-        theme: AppTheme.light,
+        theme: platform == null
+            ? AppTheme.light
+            : AppTheme.light.copyWith(platform: platform),
         builder: (context, child) => MediaQuery(
           data: MediaQuery.of(context)
               .copyWith(textScaler: TextScaler.linear(scale)),
@@ -352,6 +355,65 @@ Future<_Harness> _pump(
 }
 
 void main() {
+  for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
+    for (final language in ['en', 'es']) {
+      for (final scale in [1.0, 2.0]) {
+        testWidgets(
+          '6A phone $platform/$language/$scale footer stays visible',
+          (tester) async {
+            tester.view.devicePixelRatio = 1;
+            tester.view.physicalSize = const Size(390, 844);
+            tester.view.padding = const FakeViewPadding(top: 47, bottom: 34);
+            addTearDown(tester.view.resetDevicePixelRatio);
+            addTearDown(tester.view.resetPhysicalSize);
+            addTearDown(tester.view.resetPadding);
+            final h = await _pump(
+              tester,
+              platform: platform,
+              language: language,
+              scale: scale,
+              cancel: true,
+            );
+            h.repo.orders['TUA-2607-0005'] = _detail(
+              'TUA-2607-0005',
+              rich: true,
+              itemCount: 20,
+              fulfillment: 'pickup',
+            );
+            await h.emit(tester);
+            final summary = find.byKey(const Key('alert-order-summary'));
+            expect(
+              tester.widget<Text>(summary).data,
+              contains('TUA-2607-0005'),
+            );
+            expect(find.byKey(const Key('alert-order-number')), findsNothing);
+            expect(find.byKey(const Key('alert-refresh')), findsNothing);
+            expect(
+              find.text(
+                AdminLocalizations.of(tester.element(summary)).text('ASAP'),
+              ),
+              findsOneWidget,
+            );
+            final footer = find.byKey(const Key('alert-footer'));
+            final before = tester.getRect(footer);
+            await tester.ensureVisible(find.byKey(const Key('alert-total')));
+            await tester.pumpAndSettle();
+            expect(tester.getRect(footer), before);
+            expect(
+              find.byKey(const Key('alert-accept')).hitTestable(),
+              findsOneWidget,
+            );
+            expect(
+              find.byKey(const Key('cancel-order-action')).hitTestable(),
+              findsOneWidget,
+            );
+            expect(h.repo.patches, 0);
+            expect(tester.takeException(), isNull);
+          },
+        );
+      }
+    }
+  }
   for (final width in [390.0, 768.0, 1366.0]) {
     testWidgets('B.1 silent resolution after content scroll at $width', (
       tester,
@@ -456,7 +518,8 @@ void main() {
         h.repo.orders['A'] = _detail('A', status: OrderStatus.confirmed);
         // Detail-only refresh proves the board is reconciled by completion.
         h.repo.failList = failRefresh;
-        await tester.tap(find.byKey(const Key('alert-refresh')));
+        h.container.read(appResumeTickProvider.notifier).resumed();
+        await tester.pump();
         await tester.pumpAndSettle();
         await tester.pump(const Duration(seconds: 2));
         await tester.pumpAndSettle();
@@ -470,7 +533,9 @@ void main() {
           expect(
             find.descendant(
               of: find.byKey(const Key('todo-column-confirmed')),
-              matching: find.text('A'),
+              matching: find.textContaining(
+                RegExp(r'(^A$|Order A ?|Orden A ?)'),
+              ),
             ),
             findsOneWidget,
           );
@@ -564,7 +629,8 @@ void main() {
       h.repo.orders['A'] = _detail('A', status: OrderStatus.confirmed);
       await h.emit(tester);
       h.repo.orders['A'] = _detail('A', status: status);
-      await tester.tap(find.byKey(const Key('alert-refresh')));
+      h.container.read(appResumeTickProvider.notifier).resumed();
+      await tester.pump();
       await tester.pumpAndSettle();
       await tester.pump(const Duration(seconds: 5));
       expect(find.byKey(const Key('new-order-bottom-sheet')), findsOneWidget);
@@ -678,7 +744,8 @@ void main() {
       await h.emit(tester);
       final stale = Completer<OrderDetail>();
       h.repo.detailResponses.add(stale.future);
-      await tester.tap(find.byKey(const Key('alert-refresh')));
+      h.container.read(appResumeTickProvider.notifier).resumed();
+      await tester.pump();
       await tester.pump();
       await h.container.read(todayOrdersProvider.notifier).refresh();
       await tester.pump();
@@ -729,17 +796,26 @@ void main() {
       await h.emit(tester);
       expect(h.unseen, ['B', 'C']);
       expect(find.byKey(const Key('new-order-bottom-sheet')), findsNothing);
-      expect(find.text('B'), findsNothing);
+      expect(
+        find.textContaining(RegExp(r'(^B$|Order B ?|Orden B ?)')),
+        findsNothing,
+      );
       await tester.pump(const Duration(seconds: 2));
       await tester.pumpAndSettle();
-      expect(find.text('B'), findsOneWidget);
+      expect(
+        find.textContaining(RegExp(r'(^B$|Order B ?|Orden B ?)')),
+        findsOneWidget,
+      );
       await tester.pump(const Duration(seconds: 2));
       expect(h.unseen, ['B', 'C']);
       await tester.tap(find.byKey(const Key('alert-defer')));
       await tester.pumpAndSettle();
       await tester.pump(const Duration(seconds: 2));
       await tester.pumpAndSettle();
-      expect(find.text('C'), findsOneWidget);
+      expect(
+        find.textContaining(RegExp(r'(^C$|Order C ?|Orden C ?)')),
+        findsOneWidget,
+      );
       expect(h.repo.patches, 0);
     },
   );
@@ -772,6 +848,28 @@ void main() {
           );
           await h.emit(tester);
           final sheet = find.byKey(const Key('new-order-bottom-sheet'));
+          expect(find.byKey(const Key('alert-order-number')), findsNothing);
+          expect(find.text('1 of 1'), findsNothing);
+          expect(find.text('Waiting'), findsNothing);
+          expect(find.text('En espera'), findsNothing);
+          expect(find.byKey(const Key('alert-refresh')), findsNothing);
+          expect(find.byKey(const Key('alert-order-summary')), findsOneWidget);
+          final details = find.byKey(const Key('alert-customer-context'));
+          for (final icon in [
+            Icons.person_outline,
+            Icons.location_on_outlined,
+            Icons.schedule,
+            Icons.receipt_long_outlined,
+          ]) {
+            expect(
+              find.descendant(of: details, matching: find.byIcon(icon)),
+              findsOneWidget,
+            );
+          }
+          expect(
+            find.text(delivery ? '123 Main St, Troutdale' : 'Troutdale'),
+            findsOneWidget,
+          );
           final rect = tester.getRect(sheet);
           expect(rect.top, greaterThan(24));
           expect(rect.bottom, closeTo(900, 1));
@@ -792,7 +890,7 @@ void main() {
           );
           await tester.tapAt(Offset(width / 2, rect.top / 2));
           await tester.drag(
-            find.byKey(const Key('alert-order-number')),
+            find.byKey(const Key('alert-order-summary')),
             const Offset(0, 220),
           );
           await tester.binding.handlePopRoute();
@@ -833,9 +931,16 @@ void main() {
           );
           expect(find.text(r'$30.00'), findsOneWidget);
           final total = find.byKey(const Key('alert-total'));
+          final footerBefore = tester.getRect(
+            find.byKey(const Key('alert-footer')),
+          );
           await tester.ensureVisible(total);
           await tester.pumpAndSettle();
-          expect(total.hitTestable(), findsOneWidget);
+          expect(
+            tester.getRect(find.byKey(const Key('alert-footer'))),
+            footerBefore,
+          );
+          expect(find.text(r'$30.00').hitTestable(), findsOneWidget);
           for (final key in [
             'alert-accept',
             'cancel-order-action',
@@ -988,17 +1093,26 @@ void main() {
       await tester.pumpAndSettle();
       expect(h.unseen, ['B', 'C']);
       await tester.pump(const Duration(seconds: 1));
-      expect(find.text('A'), findsOneWidget);
+      expect(
+        find.textContaining(RegExp(r'(^A$|Order A ?|Orden A ?)')),
+        findsOneWidget,
+      );
       expect(h.sound.plays, 1);
       await tester.pump(const Duration(seconds: 1));
       await tester.pumpAndSettle();
-      expect(find.text('B'), findsOneWidget);
+      expect(
+        find.textContaining(RegExp(r'(^B$|Order B ?|Orden B ?)')),
+        findsOneWidget,
+      );
       expect(h.sound.plays, 2);
       await tester.tap(find.byKey(const Key('alert-defer')));
       await tester.pumpAndSettle();
       await tester.pump(const Duration(seconds: 2));
       await tester.pumpAndSettle();
-      expect(find.text('C'), findsOneWidget);
+      expect(
+        find.textContaining(RegExp(r'(^C$|Order C ?|Orden C ?)')),
+        findsOneWidget,
+      );
       expect(h.sound.plays, 3);
       expect(h.repo.patches, 0);
     },
@@ -1411,7 +1525,10 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('todo-tab-pending')));
     await tester.pumpAndSettle();
-    expect(find.text('A'), findsOneWidget);
+    expect(
+      find.textContaining(RegExp(r'(^A$|Order A ?|Orden A ?)')),
+      findsOneWidget,
+    );
     expect(
       find.descendant(
         of: find.byKey(const Key('todo-tab-pending')),
@@ -1481,7 +1598,10 @@ void main() {
         expect(h.unseen, ['B']);
         await tester.pump(const Duration(seconds: 2));
         await tester.pumpAndSettle();
-        expect(find.text('B'), findsOneWidget);
+        expect(
+          find.textContaining(RegExp(r'(^B$|Order B ?|Orden B ?)')),
+          findsOneWidget,
+        );
       },
     );
   }
@@ -1514,7 +1634,10 @@ void main() {
         expect(h.repo.orders['A']!.paymentStatus, PaymentStatus.paid);
         await tester.tap(find.byKey(const Key('todo-tab-pending')));
         await tester.pumpAndSettle();
-        expect(find.text('A'), findsOneWidget);
+        expect(
+          find.textContaining(RegExp(r'(^A$|Order A ?|Orden A ?)')),
+          findsOneWidget,
+        );
         expect(
           find.descendant(
             of: find.byKey(const Key('todo-tab-pending')),
@@ -1528,7 +1651,10 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.byKey(const Key('new-order-bottom-sheet')), findsNothing);
         expect(h.repo.patches, 0);
-        expect(find.text('A'), findsOneWidget);
+        expect(
+          find.textContaining(RegExp(r'(^A$|Order A ?|Orden A ?)')),
+          findsOneWidget,
+        );
       },
     );
   }
@@ -1545,7 +1671,10 @@ void main() {
     expect(h.unseen, ['B']);
     await tester.pump(const Duration(seconds: 2));
     await tester.pumpAndSettle();
-    expect(find.text('B'), findsOneWidget);
+    expect(
+      find.textContaining(RegExp(r'(^B$|Order B ?|Orden B ?)')),
+      findsOneWidget,
+    );
     expect(find.byKey(const Key('new-order-bottom-sheet')), findsOneWidget);
     expect(
       h.repo.orders.values.every(
@@ -1574,12 +1703,15 @@ void main() {
       await tester.pumpAndSettle();
       expect(h.repo.orders['A']!.status, OrderStatus.confirmed);
       expect(find.byKey(const Key('new-order-bottom-sheet')), findsNothing);
-      expect(find.text('A'), findsOneWidget);
+      expect(
+        find.textContaining(RegExp(r'(^A$|Order A ?|Orden A ?)')),
+        findsOneWidget,
+      );
       expect(find.text('Waiting · 0'), findsOneWidget);
       expect(
         find.descendant(
           of: find.byKey(const Key('todo-column-confirmed')),
-          matching: find.text('A'),
+          matching: find.textContaining(RegExp(r'(^A$|Order A ?|Orden A ?)')),
         ),
         findsOneWidget,
       );
@@ -1601,7 +1733,7 @@ void main() {
       expect(
         find.descendant(
           of: find.byKey(const Key('todo-column-confirmed')),
-          matching: find.text('A'),
+          matching: find.textContaining(RegExp(r'(^A$|Order A ?|Orden A ?)')),
         ),
         findsNothing,
       );
@@ -1609,7 +1741,10 @@ void main() {
       await tester.ensureVisible(preparing);
       await tester.tap(preparing);
       await tester.pumpAndSettle();
-      expect(find.text('A'), findsOneWidget);
+      expect(
+        find.textContaining(RegExp(r'(^A$|Order A ?|Orden A ?)')),
+        findsOneWidget,
+      );
       expect(
         find.descendant(
           of: find.byKey(const Key('order-primary-action')),
@@ -1712,7 +1847,8 @@ void main() {
     await tester.pumpAndSettle();
     await h.emit(tester);
     expect(h.unseen, ['A']);
-    await tester.tap(find.byKey(const Key('alert-refresh')));
+    h.container.read(appResumeTickProvider.notifier).resumed();
+    await tester.pump();
     await tester.pumpAndSettle();
     expect(h.unseen, ['A']);
     expect(find.byKey(const Key('new-order-bottom-sheet')), findsOneWidget);
@@ -1902,15 +2038,18 @@ void main() {
         h.repo.orders['B'] = _detail('B');
         await h.emit(tester);
         expect(find.byKey(const Key('new-order-bottom-sheet')), findsOneWidget);
-        expect(find.text('1 of 2'), findsOneWidget);
+        expect(find.text('1 of 2'), findsNothing);
         expect(find.byKey(const Key('alert-accept')), findsNothing);
         expect(h.repo.patches, 0);
         await tester.tap(find.byKey(const Key('alert-acknowledge')));
         await tester.pumpAndSettle();
         await tester.pump(const Duration(seconds: 2));
         await tester.pumpAndSettle();
-        expect(find.text('B'), findsOneWidget);
-        expect(find.text('1 of 1'), findsOneWidget);
+        expect(
+          find.textContaining(RegExp(r'(^B$|Order B ?|Orden B ?)')),
+          findsOneWidget,
+        );
+        expect(find.text('1 of 1'), findsNothing);
         expect(find.byKey(const Key('alert-accept')), findsOneWidget);
       },
     );
@@ -1924,8 +2063,11 @@ void main() {
       await h.emit(tester);
       h.repo.orders['B'] = _detail('B');
       await h.emit(tester);
-      expect(find.text('A'), findsOneWidget);
-      expect(find.text('1 of 2'), findsOneWidget);
+      expect(
+        find.textContaining(RegExp(r'(^A$|Order A ?|Orden A ?)')),
+        findsOneWidget,
+      );
+      expect(find.text('1 of 2'), findsNothing);
       await tester.tap(find.byKey(const Key('cancel-order-action')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('cancel-order-keep')));
@@ -1939,7 +2081,10 @@ void main() {
       expect(h.unseen, ['B']);
       await tester.pump(const Duration(seconds: 2));
       await tester.pumpAndSettle();
-      expect(find.text('B'), findsOneWidget);
+      expect(
+        find.textContaining(RegExp(r'(^B$|Order B ?|Orden B ?)')),
+        findsOneWidget,
+      );
     },
   );
 
@@ -1975,14 +2120,11 @@ void main() {
         final cancel = tester.getRect(
           find.byKey(const Key('cancel-order-action')),
         );
-        final refresh = tester.getRect(find.byKey(const Key('alert-refresh')));
+        expect(find.byKey(const Key('alert-refresh')), findsNothing);
         expect(accept.bottom, lessThan(cancel.top));
-        expect(cancel.bottom, lessThan(refresh.top));
         expect(accept.width, cancel.width);
-        expect(cancel.width, refresh.width);
         expect(accept.height, greaterThanOrEqualTo(56));
         expect(cancel.height, greaterThanOrEqualTo(56));
-        expect(refresh.height, greaterThanOrEqualTo(56));
         expect(
           find.byKey(const Key('alert-accept')).hitTestable(),
           findsOneWidget,

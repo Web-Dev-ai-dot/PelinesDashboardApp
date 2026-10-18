@@ -68,12 +68,10 @@ class _OrdersCalendarScreenState extends ConsumerState<OrdersCalendarScreen> {
           style: PelinesTypography.pageTitle(Theme.of(context).textTheme),
         ),
         actions: <Widget>[
-          IconButton(
-            tooltip: tr(context, 'Refresh'),
+          AdminHeaderRefresh(
             onPressed: location.value == null
                 ? null
                 : ref.read(calendarOrdersProvider.notifier).refresh,
-            icon: const Icon(Icons.refresh),
           ),
         ],
       ),
@@ -119,33 +117,62 @@ class _OrdersCalendarScreenState extends ConsumerState<OrdersCalendarScreen> {
         onChanged: (value) => setState(() => _search = value),
       ),
       const SizedBox(height: 12),
-      Wrap(
-        spacing: 12,
-        runSpacing: 8,
-        children: [
-          OutlinedButton.icon(
-            key: const Key('calendar-sort'),
-            style: OutlinedButton.styleFrom(minimumSize: const Size(48, 48)),
-            icon: Icon(_type == null ? Icons.sort : Icons.check_circle_outline),
-            label: Text(tr(context, 'Sort by')),
-            onPressed: () async {
-              final result = await showUpcomingSort(context, _type);
-              if (mounted && result != null) {
-                setState(() => _type = result.type);
-              }
-            },
-          ),
-          OutlinedButton.icon(
-            key: const Key('calendar-filter-button'),
-            style: OutlinedButton.styleFrom(minimumSize: const Size(48, 48)),
-            icon: Icon(_applied.isDefault ? Icons.tune : Icons.filter_alt),
-            label: Text(tr(context, 'Filters')),
-            onPressed: () async {
-              final result = await showCalendarFilters(context, _applied);
-              if (mounted && result != null) setState(() => _applied = result);
-            },
-          ),
-        ],
+      LayoutBuilder(
+        builder: (context, controls) {
+          final buttons = <Widget>[
+            OutlinedButton.icon(
+              key: const Key('calendar-sort'),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(48, 48),
+                shape: const StadiumBorder(),
+              ),
+              icon: Icon(
+                _type == null ? Icons.sort : Icons.check_circle_outline,
+              ),
+              label: Text(tr(context, 'Sort by')),
+              onPressed: () async {
+                final result = await showUpcomingSort(
+                  context,
+                  _type,
+                  polished: true,
+                );
+                if (mounted && result != null) {
+                  setState(() => _type = result.type);
+                }
+              },
+            ),
+            OutlinedButton.icon(
+              key: const Key('calendar-filter-button'),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(48, 48),
+                shape: const StadiumBorder(),
+              ),
+              icon: Icon(_applied.isDefault ? Icons.tune : Icons.filter_alt),
+              label: Text(tr(context, 'Filters')),
+              onPressed: () async {
+                final result = await showCalendarFilters(context, _applied);
+                if (mounted && result != null) {
+                  setState(() => _applied = result);
+                }
+              },
+            ),
+          ];
+          final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+          final paired = controls.maxWidth >= 320 * scale;
+          return Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            children: [
+              for (final button in buttons)
+                SizedBox(
+                  width: paired
+                      ? (controls.maxWidth - 12) / 2
+                      : controls.maxWidth,
+                  child: button,
+                ),
+            ],
+          );
+        },
       ),
     ],
   );
@@ -168,6 +195,8 @@ class _OrdersCalendarScreenState extends ConsumerState<OrdersCalendarScreen> {
           CalendarMonthGrid(
             selectedDay: _selectedDay,
             today: PelinesTime.now(),
+            hasOrders: (date) =>
+                originalGrouped[_localDayKey(date)]?.isNotEmpty ?? false,
             onDateChanged: (value) => setState(() => _selectedDay = value),
           ),
           Padding(
@@ -264,24 +293,48 @@ class _OrdersCalendarScreenState extends ConsumerState<OrdersCalendarScreen> {
                 const SizedBox(height: 12),
                 _filters(),
                 const SizedBox(height: 24),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (final view in ['Today', 'Week', 'Month'])
-                      ChoiceChip(
-                        key: Key('calendar-view-$view'),
-                        label: Text(tr(context, view)),
-                        selected: _view == view,
-                        selectedColor: PelinesColors.brandPrimary,
-                        labelStyle: TextStyle(
-                          color: _view == view
-                              ? Colors.white
-                              : PelinesColors.textPrimary,
-                        ),
-                        onSelected: (_) => setState(() => _view = view),
-                      ),
-                  ],
+                Container(
+                  key: const Key('calendar-view-segments'),
+                  decoration: BoxDecoration(
+                    color: PelinesColors.mutedSurface,
+                    borderRadius: BorderRadius.circular(PelinesRadius.pill),
+                  ),
+                  padding: const EdgeInsets.all(4),
+                  child: IntrinsicHeight(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (final view in ['Today', 'Week', 'Month'])
+                          Expanded(
+                            child: Semantics(
+                              selected: _view == view,
+                              child: TextButton(
+                                key: Key('calendar-view-$view'),
+                                style: TextButton.styleFrom(
+                                  minimumSize: const Size(48, 48),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                    vertical: 8,
+                                  ),
+                                  shape: const StadiumBorder(),
+                                  backgroundColor: _view == view
+                                      ? PelinesColors.brandPrimary
+                                      : Colors.transparent,
+                                  foregroundColor: _view == view
+                                      ? Colors.white
+                                      : PelinesColors.textPrimary,
+                                ),
+                                onPressed: () => setState(() => _view = view),
+                                child: Text(
+                                  tr(context, view),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 16),
                 if (_view == 'Week')

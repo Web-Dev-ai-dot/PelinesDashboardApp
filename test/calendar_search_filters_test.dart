@@ -115,9 +115,11 @@ Future<void> _mount(
   _Repo repo, {
   double width = 390,
   double scale = 1,
+  double height = 1400,
+  double keyboard = 0,
   String lang = 'en',
 }) async {
-  tester.view.physicalSize = Size(width, 1400);
+  tester.view.physicalSize = Size(width, height);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
@@ -136,8 +138,10 @@ Future<void> _mount(
           ...GlobalMaterialLocalizations.delegates,
         ],
         builder: (context, child) => MediaQuery(
-          data: MediaQuery.of(context)
-              .copyWith(textScaler: TextScaler.linear(scale)),
+          data: MediaQuery.of(context).copyWith(
+            textScaler: TextScaler.linear(scale),
+            viewInsets: EdgeInsets.only(bottom: keyboard),
+          ),
           child: child!,
         ),
         home: const OrdersCalendarScreen(),
@@ -160,11 +164,84 @@ Future<void> _search(WidgetTester tester, String value) async {
 Future<void> _select(WidgetTester tester, String key, String value) async {
   final type = key == 'calendar-type';
   await upcomingTap(tester, type ? 'calendar-sort' : 'calendar-filter-button');
+  final sheet = tester.widget<BottomSheet>(find.byType(BottomSheet));
+  expect(sheet.showDragHandle, isTrue);
+  expect(sheet.backgroundColor, PelinesColors.card);
+  expect(
+    (sheet.shape! as RoundedRectangleBorder).borderRadius,
+    const BorderRadius.vertical(top: Radius.circular(32)),
+  );
   await upcomingTap(tester, 'upcoming-${type ? 'type' : 'status'}-$value');
   await upcomingTap(tester, 'upcoming-sheet-apply');
 }
 
 void main() {
+  testWidgets('Calendar shares short-height sheet shell without future dates', (
+    tester,
+  ) async {
+    final repo = _Repo();
+    await _mount(
+      tester,
+      repo,
+      width: 320,
+      height: 500,
+      keyboard: 180,
+      scale: 2,
+      lang: 'es',
+    );
+    await _select(tester, 'calendar-type', 'online');
+    await _select(tester, 'calendar-status', 'pending');
+    expect(repo.calls, 1);
+    expect(find.byType(BottomSheet), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final lang in ['en', 'es']) {
+    testWidgets(
+      'Month canonical dots survive filters; Sunday first and selected circle $lang',
+      (tester) async {
+        final repo = _Repo(includeAsap: true);
+        await _mount(tester, repo, width: 320, scale: 2, lang: lang);
+        await upcomingTap(tester, 'calendar-view-Month');
+        CalendarMonthGrid grid() =>
+            tester.widget<CalendarMonthGrid>(find.byType(CalendarMonthGrid));
+        final initial = grid().selectedDay;
+        final dot = find.byKey(ValueKey('calendar-month-dot-${initial.day}'));
+        expect(dot, findsOneWidget);
+        expect(grid().hasOrders!(initial), isTrue);
+        final selected = tester.widget<TextButton>(
+          find.byKey(ValueKey('calendar-day-${initial.day}')),
+        );
+        expect(selected.style!.shape!.resolve({}), isA<CircleBorder>());
+        expect(
+          selected.style!.backgroundColor!.resolve({}),
+          PelinesColors.brandPrimary,
+        );
+        expect(selected.style!.foregroundColor!.resolve({}), Colors.white);
+        await _search(tester, 'absent');
+        await _select(tester, 'calendar-type', 'online');
+        await _select(tester, 'calendar-status', 'ready');
+        expect(dot, findsOneWidget);
+        expect(grid().hasOrders!(initial), isTrue);
+        expect(find.byType(OrderPreviewCard), findsNothing);
+        expect(repo.calls, 1);
+        grid().onDateChanged(DateTime(2026, 3, 8));
+        await tester.pumpAndSettle();
+        expect(
+          tester.getRect(find.byKey(const Key('calendar-day-1'))).left,
+          tester.getRect(find.byKey(const Key('calendar-day-8'))).left,
+        );
+        expect(
+          tester.getRect(find.byKey(const Key('calendar-day-7'))).left,
+          greaterThan(
+            tester.getRect(find.byKey(const Key('calendar-day-1'))).left,
+          ),
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
   testWidgets(
     'Week selects one day; canonical dots survive composed filters and drafts',
     (tester) async {
@@ -274,9 +351,11 @@ void main() {
         );
         expect(
           tester
-              .widget<ChoiceChip>(find.byKey(const Key('calendar-view-Week')))
-              .selected,
-          isTrue,
+              .widget<TextButton>(find.byKey(const Key('calendar-view-Week')))
+              .style!
+              .backgroundColor!
+              .resolve({}),
+          PelinesColors.brandPrimary,
         );
         for (final date in calendarWeek(selector.selectedDay)) {
           await upcomingTap(tester, 'calendar-week-day-${date.weekday}');
@@ -304,55 +383,43 @@ void main() {
       });
     }
   }
-  testWidgets(
-    'phone Month and Year share a row and popup selection updates grid',
-    (tester) async {
-      await _mount(tester, _Repo(), width: 390);
-      await upcomingTap(tester, 'calendar-view-Month');
-      final selected = tester
-          .widget<CalendarMonthGrid>(find.byType(CalendarMonthGrid))
-          .selectedDay;
-      final month = find.byKey(ValueKey('calendar-Month-${selected.month}'));
-      final year = find.byKey(ValueKey('calendar-Year-${selected.year}'));
-      expect(tester.getTopLeft(month).dy, tester.getTopLeft(year).dy);
-      await tester.ensureVisible(month);
-      await tester.pumpAndSettle();
-      await tester.tap(month);
-      await tester.pumpAndSettle();
-      final nextMonth = selected.month == 12 ? 11 : selected.month + 1;
-      await tester.tap(
-        find
-            .text(
-              DateFormat.MMMM('en').format(DateTime(selected.year, nextMonth)),
-            )
-            .last,
-      );
-      await tester.pumpAndSettle();
-      expect(
-        find.byKey(ValueKey('calendar-grid-${selected.year}-$nextMonth')),
-        findsOneWidget,
-      );
-      await tester.ensureVisible(year);
-      await tester.pumpAndSettle();
-      await tester.tap(year);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('${selected.year + 1}').last);
-      await tester.pumpAndSettle();
-      expect(
-        find.byKey(ValueKey('calendar-grid-${selected.year + 1}-$nextMonth')),
-        findsOneWidget,
-      );
-      expect(tester.takeException(), isNull);
-    },
-  );
-  for (final width in [320.0, 768.0]) {
+  for (final width in [320.0, 768.0, 1400.0]) {
     for (final lang in ['en', 'es']) {
-      testWidgets('only Month Year dropdowns without KPIs $width/$lang/2x', (
+      testWidgets('month arrows and title without KPIs $width/$lang/2x', (
         tester,
       ) async {
-        await _mount(tester, _Repo(), width: width, scale: 2, lang: lang);
+        final repo = _Repo();
+        await _mount(tester, repo, width: width, scale: 2, lang: lang);
+        final segmentRect = tester.getRect(
+          find.byKey(const Key('calendar-view-segments')),
+        );
+        expect(
+          segmentRect.width,
+          closeTo(
+            tester.getSize(find.byKey(const Key('calendar-filters'))).width,
+            .01,
+          ),
+        );
+        final widths = [
+          for (final view in ['Today', 'Week', 'Month'])
+            tester.getSize(find.byKey(Key('calendar-view-$view'))).width,
+        ];
+        expect(widths[0], closeTo(widths[1], .01));
+        expect(widths[1], closeTo(widths[2], .01));
+        expect(
+          widths.reduce((a, b) => a + b),
+          closeTo(segmentRect.width - 8, .01),
+        );
         for (final view in ['Today', 'Week', 'Month']) {
           await upcomingTap(tester, 'calendar-view-$view');
+          final active = tester.widget<TextButton>(
+            find.byKey(Key('calendar-view-$view')),
+          );
+          expect(
+            active.style!.backgroundColor!.resolve({}),
+            PelinesColors.brandPrimary,
+          );
+          expect(active.style!.foregroundColor!.resolve({}), Colors.white);
           expect(find.byKey(const Key('calendar-today-kpi')), findsNothing);
           expect(find.byKey(const Key('calendar-revenue-kpi')), findsNothing);
           expect(
@@ -366,13 +433,44 @@ void main() {
             findsNothing,
           );
         }
+        CalendarMonthGrid grid() =>
+            tester.widget<CalendarMonthGrid>(find.byType(CalendarMonthGrid));
+        for (final entry in [
+          (DateTime(2024, 1, 31), 'next', DateTime(2024, 2, 29)),
+          (DateTime(2025, 1, 31), 'next', DateTime(2025, 2, 28)),
+          (DateTime(2024, 12, 31), 'next', DateTime(2025, 1, 31)),
+          (DateTime(2025, 1, 31), 'previous', DateTime(2024, 12, 31)),
+          (DateTime(2024, 3, 31), 'previous', DateTime(2024, 2, 29)),
+          (DateTime(2025, 3, 30), 'next', DateTime(2025, 4, 30)),
+        ]) {
+          grid().onDateChanged(entry.$1);
+          await tester.pumpAndSettle();
+          await upcomingTap(tester, 'calendar-${entry.$2}-month');
+          expect(grid().selectedDay, entry.$3);
+          expect(
+            find.byKey(
+              ValueKey('calendar-grid-${entry.$3.year}-${entry.$3.month}'),
+            ),
+            findsOneWidget,
+          );
+          expect(
+            find.text(DateFormat.yMMMM(lang).format(entry.$3)),
+            findsOneWidget,
+          );
+          expect(
+            find.text(DateFormat.yMMMMEEEEd(lang).format(entry.$3)),
+            findsOneWidget,
+          );
+          expect(tester.takeException(), isNull);
+        }
+        expect(repo.calls, 1);
         final picker = find.byType(CalendarMonthGrid);
         expect(picker, findsOneWidget);
-        expect(find.byType(DropdownButtonFormField<int>), findsNWidgets(2));
+        expect(find.byType(DropdownButtonFormField<int>), findsNothing);
         expect(find.byType(CalendarDatePicker), findsNothing);
         final loc = MaterialLocalizations.of(tester.element(picker));
-        expect(find.byTooltip(loc.nextMonthTooltip), findsNothing);
-        expect(find.byTooltip(loc.previousMonthTooltip), findsNothing);
+        expect(find.byTooltip(loc.nextMonthTooltip), findsOneWidget);
+        expect(find.byTooltip(loc.previousMonthTooltip), findsOneWidget);
         await calendarPeriod(tester, lang == 'en' ? 'Year' : 'Año', 2028);
         await calendarPeriod(tester, lang == 'en' ? 'Month' : 'Mes', 2);
         expect(
@@ -380,7 +478,7 @@ void main() {
           findsOneWidget,
         );
         expect(
-          find.text(DateFormat.MMMM(lang).format(DateTime(2028, 2))),
+          find.text(DateFormat.yMMMM(lang).format(DateTime(2028, 2))),
           findsOneWidget,
         );
         await upcomingTap(tester, 'calendar-day-29');
@@ -439,9 +537,11 @@ void main() {
     expect(find.byKey(const Key('calendar-revenue-kpi')), findsNothing);
     expect(
       tester
-          .widget<ChoiceChip>(find.byKey(const Key('calendar-view-Today')))
-          .selected,
-      isTrue,
+          .widget<TextButton>(find.byKey(const Key('calendar-view-Today')))
+          .style!
+          .backgroundColor!
+          .resolve({}),
+      PelinesColors.brandPrimary,
     );
     expect(find.byType(CalendarMonthGrid), findsNothing);
     expect(find.byKey(const Key('todo-board-scroll')), findsNothing);
@@ -494,9 +594,11 @@ void main() {
         await upcomingTap(tester, 'calendar-view-Week');
         expect(
           tester
-              .widget<ChoiceChip>(find.byKey(const Key('calendar-view-Week')))
-              .selected,
-          isTrue,
+              .widget<TextButton>(find.byKey(const Key('calendar-view-Week')))
+              .style!
+              .backgroundColor!
+              .resolve({}),
+          PelinesColors.brandPrimary,
         );
         expect(find.text('ORD-one'), findsOneWidget);
         await upcomingTap(tester, 'calendar-view-Month');
@@ -622,6 +724,26 @@ void main() {
           ),
           findsOneWidget,
         );
+        final sort = find.byKey(const Key('calendar-sort'));
+        final filters = find.byKey(const Key('calendar-filter-button'));
+        expect(
+          tester.getSize(sort).width,
+          closeTo(tester.getSize(filters).width, .01),
+        );
+        for (final button in [sort, filters]) {
+          expect(
+            tester.widget<OutlinedButton>(button).style!.shape!.resolve({}),
+            isA<StadiumBorder>(),
+          );
+        }
+        if (size.$1 - 32 >= 320 * size.$2) {
+          expect(tester.getRect(sort).top, tester.getRect(filters).top);
+        } else {
+          expect(
+            tester.getRect(filters).top,
+            greaterThanOrEqualTo(tester.getRect(sort).bottom),
+          );
+        }
         await _select(tester, 'calendar-type', 'catering');
         await _search(tester, 'absent');
         expect(

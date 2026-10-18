@@ -57,6 +57,7 @@ class _AlertSheetLayout extends StatelessWidget {
           if (constraints.maxHeight <
               300 * MediaQuery.textScalerOf(context).scale(1)) {
             return SingleChildScrollView(
+              key: const Key('alert-sheet-scroll'),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [header, content, const Divider(height: 1), actions],
@@ -66,8 +67,18 @@ class _AlertSheetLayout extends StatelessWidget {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              header,
-              Expanded(child: SingleChildScrollView(child: content)),
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: constraints.maxHeight * .45,
+                ),
+                child: SingleChildScrollView(child: header),
+              ),
+              Expanded(
+                child: SingleChildScrollView(
+                  key: const Key('alert-content-scroll'),
+                  child: content,
+                ),
+              ),
               const Divider(height: 1),
               actions,
             ],
@@ -453,55 +464,72 @@ class _NewOrderDecisionState extends ConsumerState<_NewOrderDecision>
         !_completed && !busy && !_requiresRefresh && (safe || missing);
     return _AlertSheetLayout(
       header: Padding(
+        key: const Key('alert-header'),
         padding: const EdgeInsets.all(PelinesSpacing.md),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    tr(context, 'New order received'),
-                    style: PelinesTypography.sectionTitle(
-                      Theme.of(context).textTheme,
+            Row(
+              children: [
+                Expanded(
+                  child: Semantics(
+                    header: true,
+                    child: Text(
+                      tr(context, 'New order received'),
+                      style: PelinesTypography.sectionTitle(
+                        Theme.of(context).textTheme,
+                      ),
                     ),
                   ),
-                  Text('1 ${tr(context, 'of')} ${widget.count}'),
-                ],
+                ),
+                IconButton(
+                  key: const Key('alert-mute'),
+                  tooltip: tr(context, 'Mute'),
+                  constraints: const BoxConstraints(
+                    minWidth: 48,
+                    minHeight: 48,
+                  ),
+                  icon: const Icon(Icons.volume_off_outlined, size: 20),
+                  onPressed: _feedback.mute,
+                ),
+                IconButton(
+                  key: const Key('alert-defer'),
+                  tooltip: tr(context, 'Decide later'),
+                  constraints: const BoxConstraints(
+                    minWidth: 48,
+                    minHeight: 48,
+                  ),
+                  icon: const Icon(Icons.close, size: 20),
+                  onPressed: canDefer
+                      ? () {
+                          // Acknowledge this local alert only. Never resolve
+                          // an order or hide an in-flight/uncertain mutation.
+                          final current = ref.read(
+                            orderMutationProvider(widget.orderId),
+                          );
+                          if (_completed ||
+                              _acting ||
+                              _loading ||
+                              _requiresRefresh ||
+                              current.isBusy ||
+                              current.phase == OrderMutationPhase.error ||
+                              ref
+                                  .read(orderNotesProvider(widget.orderId))
+                                  .isBusy) {
+                            return;
+                          }
+                          unawaited(_finish());
+                        }
+                      : null,
+                ),
+              ],
+            ),
+            if (order != null)
+              Text(
+                '${tr(context, 'Order')} ${order.orderNumber} · ${tr(context, 'respond to accept or decline')}',
+                key: const Key('alert-order-summary'),
+                style: const TextStyle(color: PelinesColors.textSecondary),
               ),
-            ),
-            IconButton(
-              key: const Key('alert-mute'),
-              tooltip: tr(context, 'Mute'),
-              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-              icon: const Icon(Icons.volume_off_outlined, size: 20),
-              onPressed: _feedback.mute,
-            ),
-            IconButton(
-              key: const Key('alert-defer'),
-              tooltip: tr(context, 'Decide later'),
-              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-              icon: const Icon(Icons.close, size: 20),
-              onPressed: canDefer
-                  ? () {
-                      // Acknowledge this local alert only. Never resolve
-                      // an order or hide an in-flight/uncertain mutation.
-                      final current = ref.read(
-                        orderMutationProvider(widget.orderId),
-                      );
-                      if (_completed ||
-                          _acting ||
-                          _loading ||
-                          _requiresRefresh ||
-                          current.isBusy ||
-                          current.phase == OrderMutationPhase.error ||
-                          ref.read(orderNotesProvider(widget.orderId)).isBusy) {
-                        return;
-                      }
-                      unawaited(_finish());
-                    }
-                  : null,
-            ),
           ],
         ),
       ),
@@ -514,11 +542,6 @@ class _NewOrderDecisionState extends ConsumerState<_NewOrderDecision>
               if (_loading || mutation.isBusy) const LinearProgressIndicator(),
               if (mutation.isBusy) Text(tr(context, 'Verifying order update…')),
               if (order != null) ...[
-                Text(
-                  '${tr(context, 'Order')} ${order.orderNumber} · ${tr(context, 'respond to accept or decline')}',
-                  style: const TextStyle(color: PelinesColors.textSecondary),
-                ),
-                const SizedBox(height: 16),
                 NewOrderParityContent(
                   order: order,
                   locationName: widget.location.name,
@@ -560,6 +583,7 @@ class _NewOrderDecisionState extends ConsumerState<_NewOrderDecision>
         ),
       ),
       actions: Padding(
+        key: const Key('alert-footer'),
         padding: const EdgeInsets.all(PelinesSpacing.md),
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -612,14 +636,15 @@ class _NewOrderDecisionState extends ConsumerState<_NewOrderDecision>
                     }
                   },
                 ),
-              TextButton(
-                key: const Key('alert-refresh'),
-                style: TextButton.styleFrom(
-                  minimumSize: const Size.fromHeight(56),
+              if (_error != null || _requiresRefresh)
+                TextButton(
+                  key: const Key('alert-refresh'),
+                  style: TextButton.styleFrom(
+                    minimumSize: const Size.fromHeight(56),
+                  ),
+                  onPressed: busy || _completed ? null : _refresh,
+                  child: Text(tr(context, 'Refresh')),
                 ),
-                onPressed: busy || _completed ? null : _refresh,
-                child: Text(tr(context, 'Refresh')),
-              ),
             ];
             final wide =
                 constraints.maxWidth >=

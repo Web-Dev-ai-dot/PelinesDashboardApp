@@ -26,6 +26,7 @@ import '../../../app/theme/app_theme.dart';
 import 'cancel_order_action.dart';
 import 'todo_print_action.dart';
 import 'pickup_instructions.dart';
+import '../../locations/presentation/pelines_location_context.dart';
 import 'new_order_alert.dart';
 
 class OrderDetailScreen extends ConsumerStatefulWidget {
@@ -238,46 +239,86 @@ class _DetailBody extends ConsumerWidget {
                     label: Text(tr(context, 'Back to orders')),
                   ),
                 ),
-                Text(
-                  tr(context, 'Order').toUpperCase(),
-                  style: PelinesTypography.smallLabel,
-                ),
-                Text(
-                  order.orderNumber,
-                  key: const Key('detail-order-number'),
-                  style: PelinesTypography.pageTitle(
-                    Theme.of(context).textTheme,
-                  )?.copyWith(fontSize: 44),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  '${tr(context, 'Placed')}: ${PelinesTime.formatDateTime(order.createdAt)} · ${tr(context, 'Pacific time')}',
-                ),
-                OrderInfoField(
-                  label: tr(context, 'Origin'),
-                  value: _locationDescription(order),
-                ),
-                TodoPrintAction(
-                  key: ValueKey('detail-print-${order.id}'),
-                  order: _summary(order),
-                ),
-                const SizedBox(height: 16),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    PelinesOrderBadges.fulfillment(
-                      fulfillment: order.fulfillmentType,
-                      label: tr(
-                        context,
-                        fulfillmentLabel(order.fulfillmentType),
+                PelinesCard(
+                  key: const Key('detail-header-card'),
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        tr(context, 'Order').toUpperCase(),
+                        style: PelinesTypography.smallLabel,
                       ),
-                    ),
-                    PelinesOrderBadges.type(
-                      type: order.orderType,
-                      label: tr(context, orderTypeLabel(order.orderType)),
-                    ),
-                  ],
+                      Text(
+                        order.orderNumber,
+                        key: const Key('detail-order-number'),
+                        style: PelinesTypography.pageTitle(
+                          Theme.of(context).textTheme,
+                        )?.copyWith(fontSize: 32),
+                      ),
+                      const SizedBox(height: 8),
+                      _DetailHeaderLine(
+                        icon: Icons.calendar_today_outlined,
+                        text: PelinesTime.formatDateTime(order.createdAt),
+                      ),
+                      const SizedBox(height: 14),
+                      _DetailHeaderLine(
+                        icon: Icons.location_on_outlined,
+                        text: _locationDescription(order),
+                      ),
+                      const SizedBox(height: 12),
+                      Align(
+                        alignment: AlignmentDirectional.centerStart,
+                        child: IntrinsicWidth(
+                          child: OutlinedButtonTheme(
+                            data: OutlinedButtonThemeData(
+                              style: OutlinedButton.styleFrom(
+                                backgroundColor: PelinesColors.mutedSurface,
+                                foregroundColor: PelinesColors.textPrimary,
+                                disabledBackgroundColor:
+                                    PelinesColors.mutedSurface,
+                                disabledForegroundColor:
+                                    PelinesColors.textSecondary,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 24,
+                                  vertical: 18,
+                                ),
+                                textStyle: const TextStyle(
+                                  fontFamily: PelinesTypography.bodyFamily,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                shape: const StadiumBorder(),
+                                side: BorderSide.none,
+                              ),
+                            ),
+                            child: TodoPrintAction(
+                              key: ValueKey('detail-print-${order.id}'),
+                              order: _summary(order),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          PelinesOrderBadges.fulfillment(
+                            fulfillment: order.fulfillmentType,
+                            label: tr(
+                              context,
+                              fulfillmentLabel(order.fulfillmentType),
+                            ),
+                          ),
+                          PelinesOrderBadges.type(
+                            type: order.orderType,
+                            label: tr(context, orderTypeLabel(order.orderType)),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
                 if (!order.paymentStatus.isOperationallyPaid &&
                     !(cancellationEnabled &&
@@ -440,6 +481,7 @@ class _DetailBody extends ConsumerWidget {
                   ),
                   children: [
                     OrderInfoField(
+                      compact: true,
                       label: tr(
                         context,
                         order.fulfillmentType == FulfillmentType.delivery
@@ -451,17 +493,20 @@ class _DetailBody extends ConsumerWidget {
                     ),
                     if (order.fulfillmentType == FulfillmentType.pickup)
                       OrderInfoField(
+                        compact: true,
                         label: tr(context, 'Pickup Location'),
                         value: _locationDescription(order),
                         icon: Icons.location_on_outlined,
                       ),
                     if (order.fulfillmentType == FulfillmentType.delivery)
                       OrderInfoField(
+                        compact: true,
                         label: tr(context, 'Delivery address'),
                         value: _address(order.deliveryAddress),
                         icon: Icons.local_shipping_outlined,
                       ),
                     OrderInfoField(
+                      compact: true,
                       label: tr(
                         context,
                         order.fulfillmentType == FulfillmentType.pickup
@@ -474,34 +519,29 @@ class _DetailBody extends ConsumerWidget {
                     if (order.orderType == OrderType.catering) ...[
                       if (_mapString(order.eventDetails, 'eventName') != '—')
                         OrderInfoField(
+                          compact: true,
                           label: tr(context, 'Event name'),
                           value: _mapString(order.eventDetails, 'eventName'),
                         ),
                       if (order.eventDetails?['attendees'] is num)
                         OrderInfoField(
+                          compact: true,
                           label: tr(context, 'Attendees'),
                           value: _mapValue(order.eventDetails, 'attendees'),
                         ),
                     ],
-                    if (pickupNotes.includeUtensils != null)
-                      OrderInfoField(
-                        key: const Key('detail-pickup-utensils'),
-                        icon: Icons.restaurant_outlined,
-                        label: tr(context, 'Include forks, napkins, etc.'),
-                        value: tr(
-                          context,
-                          pickupNotes.includeUtensils! ? 'Yes' : 'No',
-                        ),
-                      ),
                     if (order.fulfillmentType == FulfillmentType.pickup)
                       Container(
                         key: const Key('detail-pickup-instructions'),
-                        margin: const EdgeInsets.only(top: 16),
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: PelinesColors.mutedSurface,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: PelinesColors.border),
+                        margin: const EdgeInsets.only(top: 8, bottom: 8),
+                        padding: const EdgeInsets.only(left: 12),
+                        decoration: const BoxDecoration(
+                          border: Border(
+                            left: BorderSide(
+                              color: PelinesColors.brandPrimary,
+                              width: 3,
+                            ),
+                          ),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -520,6 +560,17 @@ class _DetailBody extends ConsumerWidget {
                           ],
                         ),
                       ),
+                    if (pickupNotes.includeUtensils != null)
+                      OrderInfoField(
+                        compact: true,
+                        key: const Key('detail-pickup-utensils'),
+                        icon: Icons.restaurant_outlined,
+                        label: tr(context, 'Include forks, napkins, etc.'),
+                        value: tr(
+                          context,
+                          pickupNotes.includeUtensils! ? 'Yes' : 'No',
+                        ),
+                      ),
                   ],
                 ),
                 _Section(
@@ -528,7 +579,12 @@ class _DetailBody extends ConsumerWidget {
                   children: [
                     if (order.items.isEmpty)
                       Text(tr(context, 'No items recorded')),
-                    for (final item in order.items) OrderParityItem(item: item),
+                    for (final item in order.items)
+                      OrderParityItem(
+                        item: item,
+                        compact: true,
+                        inlineAmounts: true,
+                      ),
                     const Divider(height: 32),
                     _MoneyRow(tr(context, 'Subtotal'), order.subtotalCents),
                     if (order.discountCents != 0)
@@ -555,9 +611,36 @@ class _DetailBody extends ConsumerWidget {
                       color: PelinesColors.brandPrimary,
                     ),
                     _MoneyRow(
-                      tr(context, 'Total'),
+                      tr(context, 'Total').toUpperCase(),
                       order.totalCents,
                       emphasized: true,
+                    ),
+                    const SizedBox(height: 12),
+                    Column(
+                      key: const Key('detail-payment'),
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (!(order.paymentStatus.isOperationallyPaid &&
+                            order.cardBrand?.trim().isNotEmpty == true &&
+                            order.cardLast4?.trim().isNotEmpty == true))
+                          _Row(
+                            tr(context, 'Payment'),
+                            order.paymentStatus == PaymentStatus.unknown
+                                ? order.rawPaymentStatus ??
+                                      tr(context, 'Unknown payment')
+                                : tr(
+                                    context,
+                                    paymentStatusLabel(order.paymentStatus),
+                                  ),
+                          ),
+                        if (order.paymentStatus.isOperationallyPaid &&
+                            order.cardBrand?.trim().isNotEmpty == true &&
+                            order.cardLast4?.trim().isNotEmpty == true)
+                          Text(
+                            '${tr(context, 'Paid with')} ${order.cardBrand} ${tr(context, 'ending in')} ${order.cardLast4}',
+                            key: const Key('detail-paid-card'),
+                          ),
+                      ],
                     ),
                   ],
                 ),
@@ -592,24 +675,6 @@ class _DetailBody extends ConsumerWidget {
                   )
                 else
                   _InternalNotesEditor(order: order),
-                _Section(
-                  title: tr(context, 'Payment'),
-                  children: [
-                    _Row(
-                      tr(context, 'Status'),
-                      cancellationEnabled
-                          ? order.rawPaymentStatus ?? order.paymentStatus.name
-                          : order.paymentStatus.name,
-                    ),
-                    if (order.paymentStatus.isOperationallyPaid &&
-                        order.cardBrand?.trim().isNotEmpty == true &&
-                        order.cardLast4?.trim().isNotEmpty == true)
-                      Text(
-                        '${tr(context, 'Paid with')} ${order.cardBrand} ${tr(context, 'ending in')} ${order.cardLast4}',
-                        key: const Key('detail-paid-card'),
-                      ),
-                  ],
-                ),
                 if (order.printedAt != null || order.deliveredAt != null)
                   _Section(
                     title: tr(context, 'Operational'),
@@ -637,11 +702,29 @@ class _DetailBody extends ConsumerWidget {
   String _locationName(OrderDetail order) => _mapString(order.location, 'name');
 
   String _locationDescription(OrderDetail order) {
-    final address = _mapString(order.location, 'address').trim();
+    final address =
+        compactLocationStreet(_mapString(order.location, 'address'))?.trim() ??
+        '';
     return address.isEmpty || address == '—'
         ? _locationName(order)
-        : '${_locationName(order)}\n$address';
+        : '${_locationName(order)} · $address';
   }
+}
+
+/// Matching metrics keep both header rows aligned, including wrapped text.
+class _DetailHeaderLine extends StatelessWidget {
+  const _DetailHeaderLine({required this.icon, required this.text});
+  final IconData icon;
+  final String text;
+  @override
+  Widget build(BuildContext context) => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Icon(icon, size: 20, color: PelinesColors.textPrimary),
+      const SizedBox(width: 10),
+      Expanded(child: Text(text)),
+    ],
+  );
 }
 
 class _InternalNotesEditor extends ConsumerStatefulWidget {
@@ -880,8 +963,9 @@ class _Section extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
     key: sectionKey,
-    padding: const EdgeInsets.only(top: 24),
+    padding: const EdgeInsets.only(top: 16),
     child: PelinesCard(
+      padding: const EdgeInsets.all(16),
       child: Container(
         padding: accent ? const EdgeInsets.only(left: 16) : EdgeInsets.zero,
         decoration: accent
@@ -897,9 +981,9 @@ class _Section extends StatelessWidget {
             Text(
               title,
               style: PelinesTypography.sectionTitle(Theme.of(context).textTheme)
-                  ?.copyWith(fontSize: 26),
+                  ?.copyWith(fontSize: 22),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 12),
             ...children,
           ],
         ),
@@ -952,8 +1036,7 @@ class _MoneyRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.symmetric(vertical: PelinesSpacing.xxs),
-    child: PelinesLabelValueRow(
-      alignValueEnd: true,
+    child: OrderInlineValueRow(
       label: Text(
         label,
         style: emphasized

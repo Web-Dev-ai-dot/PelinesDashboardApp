@@ -34,7 +34,31 @@ class HistoricalOrdersContent extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) => PelinesAdaptiveTable<OrderSummary>(
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+      if (constraints.maxWidth >= 840 * scale) return _table(context);
+      return Material(
+        key: const Key('history-shared-surface'),
+        color: PelinesColors.card,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: PelinesColors.border),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          children: [
+            for (final (index, order) in orders.indexed) ...[
+              if (index > 0) const Divider(height: 1),
+              _compactRow(context, order),
+            ],
+          ],
+        ),
+      );
+    },
+  );
+
+  Widget _table(BuildContext context) => PelinesAdaptiveTable<OrderSummary>(
     key: const Key('historical-adaptive-table'),
     rows: orders,
     empty: const SizedBox.shrink(),
@@ -86,54 +110,85 @@ class HistoricalOrdersContent extends StatelessWidget {
         cell: (o) => _view(context, o),
       ),
     ],
-    cardBuilder: (context, order) => PelinesCard(
-      key: ValueKey('history-card-${order.id}'),
-      variant: PelinesCardVariant.compact,
-      child: InkWell(
-        onTap: () => context.push('/app/orders/${order.id}'),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              order.orderNumber,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _type(context, order),
-                _fulfillment(context, order),
-                _status(context, order),
-                _payment(context, order),
-              ],
-            ),
-            const SizedBox(height: 16),
-            _Customer(order: order),
-            const SizedBox(height: 12),
-            Text(
-              _date(context, order),
-              style: const TextStyle(color: PelinesColors.textSecondary),
-            ),
-            const SizedBox(height: 12),
-            PelinesLabelValueRow(
-              alignValueEnd: true,
-              label: Text(
-                '${order.itemCount} ${tr(context, order.itemCount == 1 ? 'item' : 'items')}',
+    cardBuilder: _compactRow,
+  );
+
+  Widget _compactRow(BuildContext context, OrderSummary order) => InkWell(
+    key: ValueKey('history-row-${order.id}'),
+    onTap: () => context.push('/app/orders/${order.id}'),
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+          final info = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                order.orderNumber,
+                style: const TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-              value: Text(
+              const SizedBox(height: 4),
+              _Customer(order: order),
+              const SizedBox(height: 6),
+              Text(
+                '${_date(context, order)} · ${tr(context, orderTypeLabel(order.orderType))}',
+                style: const TextStyle(color: PelinesColors.textSecondary),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                tr(
+                  context,
+                  completed
+                      ? fulfillmentLabelForCompletion(order.fulfillmentType)
+                      : fulfillmentLabel(order.fulfillmentType),
+                ),
+                style: const TextStyle(color: PelinesColors.textSecondary),
+              ),
+              const SizedBox(height: 6),
+              _payment(context, order),
+            ],
+          );
+          final summary = Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
                 money(order.totalCents),
                 style: const TextStyle(
                   fontSize: 20,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
-            ),
-            const SizedBox(height: 12),
-            _view(context, order),
-          ],
-        ),
+              const SizedBox(height: 6),
+              _status(context, order),
+              const SizedBox(height: 6),
+              Icon(Icons.chevron_right, semanticLabel: tr(context, 'View')),
+            ],
+          );
+          return constraints.maxWidth >= 280 * scale
+              ? Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: info),
+                    const SizedBox(width: 16),
+                    summary,
+                  ],
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    info,
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: AlignmentDirectional.centerEnd,
+                      child: summary,
+                    ),
+                  ],
+                );
+        },
       ),
     ),
   );
@@ -153,13 +208,39 @@ class HistoricalOrdersContent extends StatelessWidget {
         fulfillment: o.fulfillmentType,
         label: tr(c, fulfillmentLabel(o.fulfillmentType)),
       );
-  Widget _status(BuildContext c, OrderSummary o) => PelinesOrderBadges.status(
-    status: o.status,
-    label: tr(c, statusLabel(o.status, o.fulfillmentType, o.rawStatus)),
+  Widget _status(BuildContext c, OrderSummary o) => PelinesStateBadge(
+    label: tr(c, completed ? 'Completed' : 'Cancelled'),
+    foreground: completed
+        ? PelinesColors.successForeground
+        : PelinesColors.destructive,
+    background: completed
+        ? PelinesColors.successBackground
+        : PelinesColors.brandPrimarySoft,
+    icon: completed ? Icons.check_circle_outline : Icons.cancel_outlined,
   );
-  Widget _payment(BuildContext c, OrderSummary o) => PelinesOrderBadges.payment(
-    payment: o.paymentStatus,
-    label: tr(c, paymentStatusLabel(o.paymentStatus)),
+  Widget _payment(BuildContext c, OrderSummary o) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      PelinesOrderBadges.payment(
+        payment: o.paymentStatus,
+        label: tr(c, paymentStatusLabel(o.paymentStatus)),
+      ),
+      if (!completed && o.paymentStatus == PaymentStatus.paid) ...[
+        const SizedBox(height: 6),
+        SizedBox(
+          width: 220,
+          child: Text(
+            tr(c, 'Payment remains paid; refund not confirmed.'),
+            key: ValueKey('history-refund-warning-${o.id}'),
+            style: const TextStyle(
+              color: PelinesColors.destructive,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    ],
   );
 }
 

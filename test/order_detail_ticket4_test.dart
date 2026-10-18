@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'package:pelines_admin_app/app/theme/app_theme.dart';
+import 'package:pelines_admin_app/app/theme/pelines_tokens.dart';
 import 'package:pelines_admin_app/core/time/pelines_time.dart';
 import 'package:pelines_admin_app/features/locations/models/location.dart';
 import 'package:pelines_admin_app/features/locations/providers/locations_providers.dart';
@@ -152,6 +153,209 @@ Future<void> _mount(
 }
 
 void main() {
+  setUpAll(() async {
+    final font = FontLoader(PelinesTypography.bodyFamily)
+      ..addFont(
+        rootBundle.load(
+          'assets/fonts/work_sans/WorkSans-VariableFont_wght.ttf',
+        ),
+      );
+    await font.load();
+  });
+  for (final language in ['en', 'es']) {
+    for (final size in [
+      (390.0, 1.0),
+      (768.0, 1.0),
+      (1400.0, 1.0),
+      (320.0, 2.0),
+    ]) {
+      testWidgets('6B compact hierarchy/payment $language/$size', (
+        tester,
+      ) async {
+        final data = _data()
+          ..['source'] = 'web'
+          ..['notes'] =
+              'Included items (forks, napkins, etc.): yes\nCustomer note intact'
+          ..['location'] = {
+            'name': 'Tualatin',
+            'address': '7670 SW Nyberg St, Tualatin, OR 97062',
+          };
+        final repo = _Repo(data);
+        await _mount(
+          tester,
+          repo,
+          width: size.$1,
+          scale: size.$2,
+          language: language,
+        );
+        expect(find.text('Tualatin · 7670 SW Nyberg St'), findsNWidgets(2));
+        final instructions = find.byKey(
+          const Key('detail-pickup-instructions'),
+        );
+        final utensils = find.byKey(const Key('detail-pickup-utensils'));
+        await tester.ensureVisible(instructions);
+        await tester.pumpAndSettle();
+        expect(
+          tester.getRect(utensils).top,
+          greaterThanOrEqualTo(tester.getRect(instructions).bottom),
+        );
+        final box =
+            tester.widget<Container>(instructions).decoration! as BoxDecoration;
+        expect((box.border! as Border).left.color, PelinesColors.brandPrimary);
+        final section = find.byKey(const Key('detail-items-totals'));
+        final payment = find.byKey(const Key('detail-payment'));
+        expect(
+          find.descendant(
+            of: payment,
+            matching: find.text(language == 'es' ? 'Pago' : 'Payment'),
+          ),
+          findsNothing,
+        );
+        expect(
+          find.descendant(
+            of: payment,
+            matching: find.text(language == 'es' ? 'Pagado' : 'Paid'),
+          ),
+          findsNothing,
+        );
+        final printButton = find.byKey(Key('todo-print-${repo.json['id']}'));
+        final header = find.byKey(const Key('detail-header-card'));
+        expect(
+          tester.getRect(printButton).left,
+          closeTo(tester.getRect(header).left + 16, 1),
+        );
+        expect(
+          find.descendant(
+            of: header,
+            matching: find.byKey(const Key('detail-back')),
+          ),
+          findsNothing,
+        );
+        expect(
+          find.descendant(
+            of: header,
+            matching: find.byIcon(Icons.calendar_today_outlined),
+          ),
+          findsOneWidget,
+        );
+        final headerText = tester
+            .widgetList<Text>(
+              find.descendant(of: header, matching: find.byType(Text)),
+            )
+            .map((t) => t.data ?? '')
+            .join(' ');
+        expect(
+          headerText.toUpperCase(),
+          isNot(contains(language == 'es' ? 'ORIGEN' : 'ORIGIN')),
+        );
+        expect(
+          headerText,
+          isNot(contains(language == 'es' ? 'Realizada:' : 'Placed:')),
+        );
+        final calendar = find.descendant(
+          of: header,
+          matching: find.byIcon(Icons.calendar_today_outlined),
+        );
+        final locationIcon = find.descendant(
+          of: header,
+          matching: find.byIcon(Icons.location_on_outlined),
+        );
+        expect(tester.widget<Icon>(calendar).size, 20);
+        expect(tester.widget<Icon>(locationIcon).size, 20);
+        expect(tester.widget<Icon>(calendar).color, PelinesColors.textPrimary);
+        expect(
+          tester.widget<Icon>(locationIcon).color,
+          PelinesColors.textPrimary,
+        );
+        expect(
+          tester.getRect(calendar).left,
+          tester.getRect(locationIcon).left,
+        );
+        final dateText = find.text(
+          PelinesTime.formatDateTime(
+            DateTime.parse(data['createdAt'] as String),
+          ),
+        );
+        final locationText = find.descendant(
+          of: header,
+          matching: find.text('Tualatin · 7670 SW Nyberg St'),
+        );
+        expect(
+          tester.getRect(dateText).left,
+          tester.getRect(locationText).left,
+        );
+        expect(
+          tester.getRect(locationIcon).top - tester.getRect(dateText).bottom,
+          closeTo(14, 1),
+        );
+        expect(
+          headerText,
+          isNot(
+            contains(language == 'es' ? 'Hora del Pacífico' : 'Pacific time'),
+          ),
+        );
+        final theme = OutlinedButtonTheme.of(tester.element(printButton))
+            .style!;
+        expect(theme.backgroundColor!.resolve({}), PelinesColors.mutedSurface);
+        expect(theme.foregroundColor!.resolve({}), PelinesColors.textPrimary);
+        expect(theme.shape!.resolve({}), isA<StadiumBorder>());
+        if (size.$2 == 1) {
+          expect(tester.getSize(printButton).width, lessThan(size.$1 - 32));
+        }
+        expect(find.descendant(of: section, matching: payment), findsOneWidget);
+        expect(
+          find.descendant(
+            of: section,
+            matching: find.byKey(const Key('detail-paid-card')),
+          ),
+          findsOneWidget,
+        );
+        final total = find.text(language == 'es' ? 'TOTAL' : 'TOTAL');
+        await tester.ensureVisible(total);
+        await tester.pumpAndSettle();
+        final amount = find.text(r'$58.00');
+        if (size.$2 == 1) {
+          expect(
+            tester.getRect(total).center.dy,
+            closeTo(tester.getRect(amount).center.dy, 4),
+          );
+          expect(
+            tester.getRect(total).right,
+            lessThan(tester.getRect(amount).left),
+          );
+        }
+        expect(
+          tester.getRect(payment).top,
+          greaterThan(tester.getRect(total).top),
+        );
+        expect(find.text('Customer note intact'), findsOneWidget);
+        expect(find.textContaining('Extra: Cheese'), findsOneWidget);
+        expect(repo.writes, 0);
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
+  for (final fields in [
+    <String, dynamic>{'cardBrand': null},
+    <String, dynamic>{'cardLast4': null},
+    <String, dynamic>{'cardBrand': '', 'cardLast4': ''},
+  ]) {
+    testWidgets('6B incomplete card data uses actual payment status $fields', (
+      tester,
+    ) async {
+      final repo = _Repo(_data()..addAll(fields));
+      await _mount(tester, repo);
+      expect(find.byKey(const Key('detail-paid-card')), findsNothing);
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('detail-payment')),
+          matching: find.text('Paid'),
+        ),
+        findsOneWidget,
+      );
+      expect(repo.writes, 0);
+    });
+  }
   for (final language in ['en', 'es']) {
     for (final width in [390.0, 800.0]) {
       for (final name in <String?>['Tualatin', 'Troutdale', null]) {
@@ -413,44 +617,50 @@ void main() {
       );
     }
   }
-  testWidgets('header, Pacific dates, canonical items/totals and intact notes', (
-    tester,
-  ) async {
-    final repo = _Repo(_data());
-    await _mount(tester, repo);
-    expect(find.byKey(const Key('detail-order-number')), findsOneWidget);
-    expect(
-      find.textContaining(
-        'Placed: ${PelinesTime.formatDateTime(DateTime.parse(repo.json['createdAt'] as String))}',
-      ),
-      findsOneWidget,
-    );
-    expect(find.text('Troutdale\n123 Real Street'), findsNWidgets(2));
-    expect(find.text('Customer'), findsNWidgets(2));
-    expect(find.text('customer@example.test'), findsOneWidget);
-    expect(find.text('555-0100'), findsOneWidget);
-    expect(find.text('PICKUP TIME'), findsOneWidget);
-    expect(find.textContaining('7:30'), findsOneWidget);
-    expect(find.text('3× Tacos'), findsOneWidget);
-    expect(find.textContaining('Extra: Cheese'), findsOneWidget);
-    expect(find.text('Note: No onions'), findsOneWidget);
-    for (final amount in [
-      r'$43.21',
-      r'$2.34',
-      r'$3.45',
-      r'-$1.23',
-      r'$4.56',
-      r'$5.67',
-      r'$58.00',
-    ]) {
-      expect(find.text(amount), findsWidgets);
-    }
-    expect(find.text(r'$29.97'), findsNothing); // Do not recompute line totals.
-    expect(find.text(repo.json['notes'] as String), findsOneWidget);
-    expect(find.text('Paid with visa ending in 4242'), findsOneWidget);
-    expect(find.textContaining('Include forks/napkins'), findsNothing);
-    expect(repo.writes, 0);
-  });
+  testWidgets(
+    'header, Pacific dates, canonical items/totals and intact notes',
+    (tester) async {
+      final repo = _Repo(_data());
+      await _mount(tester, repo);
+      expect(find.byKey(const Key('detail-order-number')), findsOneWidget);
+      expect(
+        find.textContaining(
+          PelinesTime.formatDateTime(
+            DateTime.parse(repo.json['createdAt'] as String),
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Troutdale · 123 Real Street'), findsNWidgets(2));
+      expect(find.text('Customer'), findsNWidgets(2));
+      expect(find.text('customer@example.test'), findsOneWidget);
+      expect(find.text('555-0100'), findsOneWidget);
+      expect(find.text('PICKUP TIME'), findsOneWidget);
+      expect(find.textContaining('7:30'), findsOneWidget);
+      expect(find.text('3× Tacos'), findsOneWidget);
+      expect(find.textContaining('Extra: Cheese'), findsOneWidget);
+      expect(find.text('Note: No onions'), findsOneWidget);
+      for (final amount in [
+        r'$43.21',
+        r'$2.34',
+        r'$3.45',
+        r'-$1.23',
+        r'$4.56',
+        r'$5.67',
+        r'$58.00',
+      ]) {
+        expect(find.text(amount), findsWidgets);
+      }
+      expect(
+        find.text(r'$29.97'),
+        findsNothing,
+      ); // Do not recompute line totals.
+      expect(find.text(repo.json['notes'] as String), findsOneWidget);
+      expect(find.text('Paid with visa ending in 4242'), findsOneWidget);
+      expect(find.textContaining('Include forks/napkins'), findsNothing);
+      expect(repo.writes, 0);
+    },
+  );
 
   testWidgets(
     'Copy phone uses clipboard with accessible feedback, without mutation',
