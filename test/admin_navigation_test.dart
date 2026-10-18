@@ -295,11 +295,11 @@ Future<void> _showDestination(WidgetTester tester, String name) async {
   await tester.pumpAndSettle();
   final button = find.byKey(Key('nav-$name'));
   if (find.byKey(const Key('admin-rail')).evaluate().isNotEmpty &&
-      name != 'orders') {
+      !['orders', 'analytics'].contains(name)) {
     final group =
         ['upcoming', 'calendar', 'completed', 'cancelled'].contains(name)
         ? 'orders'
-        : ['analytics', 'account'].contains(name)
+        : name == 'account'
         ? name
         : 'store';
     if (button.evaluate().isEmpty) {
@@ -323,7 +323,7 @@ Future<void> _showDestination(WidgetTester tester, String name) async {
           'cancelled',
         ].contains(name)
         ? 'orders'
-        : ['analytics', 'account'].contains(name)
+        : name == 'account'
         ? name
         : 'store';
     final header = find.byKey(Key('nav-group-$group'));
@@ -447,7 +447,6 @@ void main() {
           );
           const groups = {
             'orders': ['upcoming', 'calendar', 'completed', 'cancelled'],
-            'analytics': ['analytics'],
             'store': [
               'menu',
               'regularMenu',
@@ -465,7 +464,7 @@ void main() {
           for (final id in [
             'orders',
             'group-orders',
-            'group-analytics',
+            'analytics',
             'group-store',
             'group-account',
           ]) {
@@ -713,7 +712,7 @@ void main() {
   for (final width in [390.0, 1180.0]) {
     for (final language in ['en', 'es']) {
       testWidgets(
-        'Analytics and Account groups toggle without navigating at $width/$language',
+        'Account group toggles without navigating at $width/$language',
         (tester) async {
           await tester.binding.setSurfaceSize(Size(width, 1000));
           addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -729,7 +728,7 @@ void main() {
             await tester.tap(find.byKey(const Key('admin-open-drawer')));
             await tester.pumpAndSettle();
           }
-          for (final name in ['analytics', 'account']) {
+          for (final name in ['account']) {
             final header = find.byKey(Key('nav-group-$name'));
             final child = find.byKey(Key('nav-$name'));
             final scroll = find
@@ -764,9 +763,7 @@ void main() {
               findsOneWidget,
             );
             expect(child, findsOneWidget);
-            final label = name == 'analytics'
-                ? (language == 'es' ? 'Analíticas' : 'Analytics')
-                : (language == 'es' ? 'Mi perfil' : 'My Profile');
+            final label = language == 'es' ? 'Mi perfil' : 'My Profile';
             expect(
               find.descendant(of: child, matching: find.text(label)),
               findsOneWidget,
@@ -804,6 +801,87 @@ void main() {
           }
         },
       );
+    }
+  }
+  for (final width in [390.0, 768.0, 1366.0]) {
+    for (final language in ['en', 'es']) {
+      for (final collapsed in [false, true]) {
+        testWidgets(
+          'Analytics direct navigation $width/$language/$collapsed 2x',
+          (tester) async {
+            await tester.binding.setSurfaceSize(Size(width, 1000));
+            addTearDown(() => tester.binding.setSurfaceSize(null));
+            final router = _router();
+            addTearDown(router.dispose);
+            await _pump(
+              tester,
+              router,
+              scale: 2,
+              navigationStore: _NavigationStore()..value = collapsed,
+              languageStore: _LanguageStore()..value = language,
+            );
+            Future<void> openDrawer() async {
+              if (width < 600) {
+                expect(find.byKey(const Key('admin-sidebar')), findsNothing);
+                expect(find.byKey(const Key('admin-rail')), findsNothing);
+                await tester.tap(find.byKey(const Key('admin-open-drawer')));
+                await tester.pumpAndSettle();
+              }
+            }
+
+            await openDrawer();
+            await _showDestination(tester, 'analytics');
+            final item = find.byKey(const Key('nav-analytics'));
+            expect(find.byKey(const Key('nav-group-analytics')), findsNothing);
+            expect(
+              find.byKey(const Key('nav-submenu-analytics')),
+              findsNothing,
+            );
+            expect(find.byKey(const Key('nav-flyout-analytics')), findsNothing);
+            expect(
+              find.descendant(
+                of: item,
+                matching: find.byIcon(AdminDestination.analytics.icon),
+              ),
+              findsOneWidget,
+            );
+            for (final icon in [Icons.expand_more, Icons.expand_less]) {
+              expect(
+                find.descendant(of: item, matching: find.byIcon(icon)),
+                findsNothing,
+              );
+            }
+            final label = language == 'es' ? 'Analíticas' : 'Analytics';
+            if (width >= 600 && collapsed) {
+              expect(tester.widget<IconButton>(item).tooltip, label);
+            } else {
+              expect(
+                find.descendant(of: item, matching: find.text(label)),
+                findsOneWidget,
+              );
+            }
+            await tester.tap(item);
+            await tester.pumpAndSettle();
+            expect(
+              router.routeInformationProvider.value.uri.path,
+              '/app/analytics',
+            );
+            if (width < 600) {
+              expect(find.byType(Drawer).hitTestable(), findsNothing);
+            }
+            await openDrawer();
+            await _showDestination(tester, 'analytics');
+            final selected = find.byWidgetPredicate(
+              (w) => w is Semantics && w.properties.selected == true,
+            );
+            expect(
+              find.descendant(of: selected, matching: item),
+              findsOneWidget,
+            );
+            expect(tester.takeException(), isNull);
+          },
+        );
+      }
     }
   }
   test('location locality never displays a street or invents a state', () {
@@ -844,14 +922,25 @@ void main() {
         await tester.tap(find.byKey(const Key('admin-open-drawer')));
         await tester.pumpAndSettle();
         expect(tester.getSize(find.byType(Drawer)).width, 280);
-        expect(tester.getSize(find.byKey(const Key('admin-logo'))).height, 40);
+        final logo = find.byKey(const Key('admin-logo'));
+        final close = find.byKey(const Key('admin-close-drawer'));
+        final drawerRect = tester.getRect(find.byType(Drawer));
+        final logoRect = tester.getRect(logo);
+        final closeRect = tester.getRect(close);
+        expect(logoRect.height, 48);
+        expect(tester.widget<Image>(logo).fit, BoxFit.contain);
+        expect(logoRect.center.dx, drawerRect.center.dx);
+        expect(closeRect.left, greaterThanOrEqualTo(logoRect.right));
+        expect(drawerRect.right - closeRect.right, 12);
+        expect(closeRect.width, greaterThanOrEqualTo(48));
+        expect(closeRect.height, greaterThanOrEqualTo(48));
         expect(find.text('Pelines Troutdale'), findsOneWidget);
         expect(find.text('Troutdale, OR'), findsOneWidget);
         expect(find.text('123 Main St, Troutdale, OR 97060'), findsNothing);
         final keys = [
           'nav-orders',
           'nav-group-orders',
-          'nav-group-analytics',
+          'nav-analytics',
           'nav-group-store',
           'nav-group-account',
         ];
@@ -1061,6 +1150,13 @@ void main() {
         }
         expect(find.byKey(const Key('admin-logo')), findsOneWidget);
         if (width >= 900) {
+          final logo = find.byKey(const Key('admin-logo'));
+          expect(tester.getSize(logo).height, 72);
+          expect(tester.widget<Image>(logo).fit, BoxFit.contain);
+          expect(
+            tester.getCenter(logo).dx,
+            tester.getCenter(find.byKey(const Key('admin-sidebar'))).dx,
+          );
           expect(find.text('employee@pelines.test'), findsOneWidget);
           expect(find.byKey(const Key('nav-group-orders')), findsOneWidget);
           expect(find.byKey(const Key('nav-printing')), findsNothing);
@@ -1073,6 +1169,7 @@ void main() {
           await tester.tap(find.byKey(const Key('admin-toggle-navigation')));
           await tester.pumpAndSettle();
           expect(tester.getSize(find.byKey(const Key('admin-rail'))).width, 76);
+          expect(tester.getSize(logo).height, 32);
         }
         expect(tester.takeException(), isNull);
       },
@@ -1267,7 +1364,10 @@ void main() {
               ? tr(tester.element(item), 'My Profile')
               : destination.localizedLabel(tester.element(item));
           if (find.byKey(const Key('admin-rail')).evaluate().isNotEmpty &&
-              destination == AdminDestination.orders) {
+              [
+                AdminDestination.orders,
+                AdminDestination.analytics,
+              ].contains(destination)) {
             expect(find.byTooltip(label), findsOneWidget);
           } else {
             expect(

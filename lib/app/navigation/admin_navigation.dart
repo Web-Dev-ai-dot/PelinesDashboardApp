@@ -890,7 +890,7 @@ class _AdminDestinationListState extends ConsumerState<_AdminDestinationList> {
       return _railIcon(
         destination.name,
         label,
-        Icons.checklist_outlined,
+        todo ? Icons.checklist_outlined : destination.icon,
         selected,
         navigate,
       );
@@ -1092,25 +1092,33 @@ class _AdminDestinationListState extends ConsumerState<_AdminDestinationList> {
             children: [
               if (widget.phone)
                 SizedBox(
-                  height: 56,
+                  width: double.infinity,
+                  height: 64,
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
-                      Image.asset(
-                        'assets/branding/pelines_logo.png',
-                        key: const Key('admin-logo'),
-                        height: 40,
-                        width: 112,
-                        fit: BoxFit.contain,
-                        semanticLabel: 'Pelines Tequila and Mezcal',
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 60),
+                        child: Image.asset(
+                          'assets/branding/pelines_logo.png',
+                          key: const Key('admin-logo'),
+                          height: 48,
+                          width: 136,
+                          fit: BoxFit.contain,
+                          semanticLabel: 'Pelines Tequila and Mezcal',
+                        ),
                       ),
                       Positioned(
-                        right: 0,
-                        top: 0,
+                        right: 12,
+                        top: 8,
                         child: IconButton(
                           key: const Key('admin-close-drawer'),
                           tooltip: tr(context, 'Close navigation'),
                           onPressed: widget.onClose,
+                          constraints: const BoxConstraints(
+                            minWidth: 48,
+                            minHeight: 48,
+                          ),
                           icon: const Icon(Icons.close, size: 18),
                         ),
                       ),
@@ -1157,7 +1165,7 @@ class _AdminDestinationListState extends ConsumerState<_AdminDestinationList> {
                         child: Image.asset(
                           'assets/branding/pelines_logo.png',
                           key: const Key('admin-logo'),
-                          height: widget.rail ? 32 : 64,
+                          height: widget.rail ? 32 : 72,
                           fit: BoxFit.contain,
                           semanticLabel: 'Pelines Tequila and Mezcal',
                         ),
@@ -1184,12 +1192,7 @@ class _AdminDestinationListState extends ConsumerState<_AdminDestinationList> {
                         Icons.receipt_long_outlined,
                         orders,
                       ),
-                      _group(
-                        'analytics',
-                        'Analytics',
-                        AdminDestination.analytics.icon,
-                        [AdminDestination.analytics],
-                      ),
+                      _destination(AdminDestination.analytics),
                       _group(
                         'store',
                         'Store',
