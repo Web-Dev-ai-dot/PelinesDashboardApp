@@ -59,6 +59,9 @@ Discount _discount(String id, String? location) => Discount(
 );
 
 class _Repo implements PromotionsRepository {
+  @override
+  Future<void> deletePromotion(String id) => throw UnimplementedError();
+
   bool fail = false, empty = false;
   Completer<void>? hold;
   @override
@@ -199,13 +202,16 @@ void main() {
           findsOneWidget,
         );
         expect(find.byKey(const Key('add-promotion')), findsOneWidget);
+        await tester.scrollUntilVisible(
+          find.text('CODE-local'),
+          250,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await tester.pumpAndSettle();
         expect(find.text('CODE-local'), findsOneWidget);
         expect(find.text('CODE-hidden'), findsNothing);
-        if (size.$1 == 1400) {
-          expect(find.byType(DataTable), findsWidgets);
-        } else {
-          expect(find.byKey(const Key('promotion-card-local')), findsOneWidget);
-        }
+        expect(find.byType(DataTable), findsNothing);
+        expect(find.byKey(const Key('promotion-card-local')), findsOneWidget);
         await tester.scrollUntilVisible(
           find.text('CODE-global'),
           300,
@@ -216,7 +222,7 @@ void main() {
         expect(tester.takeException(), isNull);
         router.go('/app/promotions/global');
         await tester.pumpAndSettle();
-        expect(find.byKey(const Key('edit-promotion')), findsNothing);
+        expect(find.byKey(const Key('edit-promotion')), findsOneWidget);
         expect(find.byKey(const Key('promotion-active-action')), findsNothing);
         expect(tester.takeException(), isNull);
       });

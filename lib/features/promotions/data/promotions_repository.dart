@@ -9,6 +9,7 @@ abstract interface class PromotionsRepository {
   Future<Discount> createPromotion(Map<String, dynamic> body);
   Future<Discount> updatePromotion(String id, Map<String, dynamic> patch);
   Future<Discount> setActive(String id, bool isActive);
+  Future<void> deletePromotion(String id);
 }
 
 class ApiPromotionsRepository implements PromotionsRepository {
@@ -59,6 +60,23 @@ class ApiPromotionsRepository implements PromotionsRepository {
   @override
   Future<Discount> setActive(String id, bool isActive) async {
     return updatePromotion(id, <String, dynamic>{'isActive': isActive});
+  }
+
+  @override
+  Future<void> deletePromotion(String id) async {
+    try {
+      // Existing admin DELETE contract returns no entity; accept an empty body.
+      await _client.dio.delete<dynamic>('discounts/$id');
+    } on DioException catch (error) {
+      if (error.response?.statusCode == 409) {
+        throw ApiException(
+          message: 'This promotion could not be deleted. It may be in use.',
+          statusCode: 409,
+          cause: error,
+        );
+      }
+      throw _apiError(error, 'delete this promotion');
+    }
   }
 
   Future<Discount> _write(Future<Response<dynamic>> Function() request) async {

@@ -139,7 +139,7 @@ class _Details extends ConsumerWidget {
       children: <Widget>[
         PelinesStateBadge(
           label: global
-              ? tr(context, 'All locations · Read-only')
+              ? tr(context, 'All locations')
               : '${location.name} · Editable',
           foreground: global
               ? PelinesColors.textSecondary
@@ -147,7 +147,7 @@ class _Details extends ConsumerWidget {
           background: global
               ? PelinesColors.mutedSurface
               : PelinesColors.brandPrimarySoft,
-          icon: global ? Icons.lock_outline : Icons.edit_outlined,
+          icon: global ? Icons.public : Icons.edit_outlined,
         ),
         const SizedBox(height: PelinesSpacing.md),
         Text(
@@ -192,21 +192,18 @@ class _Details extends ConsumerWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Icon(Icons.lock_outline, color: PelinesColors.textSecondary),
+                  Icon(Icons.public, color: PelinesColors.textSecondary),
                   SizedBox(width: PelinesSpacing.sm),
                   Expanded(
                     child: Text(
-                      tr(
-                        context,
-                        'This promotion applies to all locations and can only be managed from the desktop dashboard.',
-                      ),
+                      tr(context, 'This promotion applies to all locations.'),
                     ),
                   ),
                 ],
               ),
             ),
           ),
-        if (manageable) ...<Widget>[
+        if (manageable || global) ...<Widget>[
           OutlinedButton.icon(
             style: PelinesControlStyles.button(PelinesButtonVariant.secondary),
             key: const Key('edit-promotion'),
@@ -217,20 +214,21 @@ class _Details extends ConsumerWidget {
             label: Text(tr(context, 'Edit Promotion')),
           ),
           const SizedBox(height: 10),
-          FilledButton(
-            style: PelinesControlStyles.button(PelinesButtonVariant.primary),
-            key: const Key('promotion-active-action'),
-            onPressed: operation.isBusy
-                ? null
-                : () => _confirmAndSave(context, ref),
-            child: Text(
-              operation.isBusy
-                  ? tr(context, 'Checking…')
-                  : discount.isActive
-                  ? tr(context, 'Deactivate promotion')
-                  : tr(context, 'Activate promotion'),
+          if (manageable)
+            FilledButton(
+              style: PelinesControlStyles.button(PelinesButtonVariant.primary),
+              key: const Key('promotion-active-action'),
+              onPressed: operation.isBusy
+                  ? null
+                  : () => _confirmAndSave(context, ref),
+              child: Text(
+                operation.isBusy
+                    ? tr(context, 'Checking…')
+                    : discount.isActive
+                    ? tr(context, 'Deactivate promotion')
+                    : tr(context, 'Activate promotion'),
+              ),
             ),
-          ),
           if (operation.isBusy)
             const Padding(
               padding: EdgeInsets.only(top: 12),

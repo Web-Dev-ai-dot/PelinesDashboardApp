@@ -154,6 +154,112 @@ class PromotionMutationController extends Notifier<PromotionMutationState> {
     );
   }
 
+  Future<void> delete({
+    required String discountId,
+    required String locationId,
+    required DateTime originalUpdatedAt,
+    bool global = false,
+  }) async {
+    if (state.isBusy) return;
+    if (!_deleteContext(locationId)) {
+      _locationChanged();
+      return;
+    }
+    final repository = ref.read(promotionsRepositoryProvider);
+    state = const PromotionMutationState(
+      phase: PromotionMutationPhase.preflight,
+    );
+    try {
+      final values = await repository.getDiscounts();
+      if (!ref.mounted) return;
+      _adopt(values);
+      if (!_deleteContext(locationId)) {
+        _locationChanged();
+        return;
+      }
+      final canonical = _find(values, discountId);
+      if (canonical == null) {
+        state = const PromotionMutationState(
+          phase: PromotionMutationPhase.success,
+          message: 'This promotion no longer exists.',
+        );
+        return;
+      }
+      if (canonical.locationId != (global ? null : locationId)) {
+        state = const PromotionMutationState(
+          phase: PromotionMutationPhase.error,
+          message: 'This promotion can no longer be managed for this location.',
+        );
+        return;
+      }
+      if (canonical.updatedAt != originalUpdatedAt.toUtc()) {
+        state = const PromotionMutationState(
+          phase: PromotionMutationPhase.conflict,
+          message: 'This promotion was changed elsewhere.',
+        );
+        return;
+      }
+    } catch (error) {
+      if (ref.mounted) {
+        state = PromotionMutationState(
+          phase: PromotionMutationPhase.error,
+          message: _message(error, 'The promotion could not be checked.'),
+        );
+      }
+      return;
+    }
+    state = const PromotionMutationState(
+      phase: PromotionMutationPhase.submitting,
+    );
+    try {
+      await repository.deletePromotion(discountId);
+    } catch (error) {
+      if (!ref.mounted) return;
+      final reconcile =
+          _ambiguous(error) ||
+          (error is ApiException &&
+              (error.statusCode == 404 || (error.statusCode ?? 0) >= 500));
+      if (!reconcile) {
+        state = PromotionMutationState(
+          phase: PromotionMutationPhase.error,
+          message: _message(error, 'The promotion could not be deleted.'),
+        );
+        return;
+      }
+    }
+    if (!ref.mounted) return;
+    state = const PromotionMutationState(
+      phase: PromotionMutationPhase.reconciling,
+    );
+    try {
+      final values = await repository.getDiscounts();
+      if (!ref.mounted) return;
+      _adopt(values);
+      if (!_deleteContext(locationId)) {
+        _locationChanged();
+        return;
+      }
+      state = _find(values, discountId) == null
+          ? const PromotionMutationState(phase: PromotionMutationPhase.success)
+          : const PromotionMutationState(
+              phase: PromotionMutationPhase.error,
+              message: 'The deletion could not be confirmed. Refresh before trying again.',
+            );
+    } catch (_) {
+      if (ref.mounted) {
+        state = const PromotionMutationState(
+          phase: PromotionMutationPhase.error,
+          message: 'The deletion could not be confirmed. Refresh before trying again.',
+        );
+      }
+    }
+  }
+
+  bool _deleteContext(String id) {
+    final current = ref.read(currentLocationProvider);
+    return !current.isLoading && !current.hasError && current.value?.id == id;
+  }
+
   Future<void> _reconcile(
     PromotionsRepository repository,
     String discountId,
@@ -325,6 +431,7 @@ class PromotionFormMutationController
     required String locationId,
     required DateTime originalUpdatedAt,
     required Map<String, dynamic> desired,
+    bool global = false,
   }) async {
     if (state.isBusy) return;
     if (!_sameLocation(locationId)) return _locationChanged();
@@ -346,7 +453,7 @@ class PromotionFormMutationController
     if (canonical == null) {
       return _setFormError('This promotion no longer exists.');
     }
-    if (canonical.locationId != locationId) {
+    if (canonical.locationId != (global ? null : locationId)) {
       return _setFormError(
         'This promotion can no longer be edited for this location.',
       );
@@ -360,7 +467,7 @@ class PromotionFormMutationController
     }
     final Map<String, dynamic> patch = partialPromotionPatch(
       discountEditableBody(canonical),
-      desired,
+      {...desired}..remove('locationId'),
     );
     if (patch.isEmpty) {
       state = PromotionFormMutationState(
@@ -378,10 +485,10 @@ class PromotionFormMutationController
       if (!_ambiguousFormError(error)) {
         return _error(error, 'The promotion could not be saved.');
       }
-      await _reconcileEdit(repository, discountId, locationId, patch);
+      await _reconcileEdit(repository, discountId, locationId, patch, global);
       return;
     }
-    await _reconcileEdit(repository, discountId, locationId, patch);
+    await _reconcileEdit(repository, discountId, locationId, patch, global);
   }
 
   Future<void> _reconcileCreate(
@@ -429,6 +536,7 @@ class PromotionFormMutationController
     String id,
     String locationId,
     Map<String, dynamic> patch,
+    bool global,
   ) async {
     state = const PromotionFormMutationState(
       phase: PromotionFormPhase.reconciling,
@@ -441,7 +549,7 @@ class PromotionFormMutationController
       if (canonical == null) {
         return _setFormError('This promotion no longer exists.');
       }
-      if (canonical.locationId != locationId) {
+      if (canonical.locationId != (global ? null : locationId)) {
         return _setFormError(
           'This promotion can no longer be edited for this location.',
         );

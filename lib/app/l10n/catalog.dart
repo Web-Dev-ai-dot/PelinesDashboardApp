@@ -1,5 +1,32 @@
 // English source messages and their Spanish UI translations. Backend values are never catalog keys.
 const spanishCatalog = <String, String>{
+  "This promotion applies to all locations.":
+      "Esta promoción se aplica a todas las sucursales.",
+  "Modify global promotion": "Modificar promoción global",
+  "Changes will affect all locations where this promotion applies.": "Los cambios afectarán a todas las sucursales donde esta promoción sea aplicable.",
+  "Delete global promotion": "Eliminar promoción global",
+  "This promotion will no longer be available for future use at all locations. This action cannot be undone.": "Esta promoción dejará de estar disponible para usos futuros en todas las sucursales. Esta acción no se puede deshacer.",
+  "Create and manage discount codes and promotional pricing.":
+      "Crea y administra códigos de descuento y precios promocionales.",
+  "Generate code": "Generar código",
+  "Generate code is not available yet (T05).":
+      "La generación de códigos aún no está disponible (T05).",
+  "Create discount code": "Crear código de descuento",
+  "Discount Codes": "Códigos de descuento",
+  "{count} total": "{count} en total",
+  "Type": "Tipo",
+  "Value": "Valor",
+  "Redemptions": "Canjes",
+  "Delete discount code?": "¿Eliminar código de descuento?",
+  "Customers will no longer be able to use this discount code.":
+      "Los clientes ya no podrán utilizar este código de descuento.",
+  "Promotion deleted.": "Promoción eliminada.",
+  "The promotion could not be deleted.": "No se pudo eliminar la promoción.",
+  "This promotion could not be deleted. It may be in use.":
+      "No se pudo eliminar la promoción. Puede estar en uso.",
+  "The deletion could not be confirmed. Refresh before trying again.": "No se pudo confirmar la eliminación. Actualiza antes de intentarlo de nuevo.",
+  "The Pelines server could not delete this promotion.":
+      "El servidor de Pelines no pudo eliminar esta promoción.",
   "Edit holiday": "Editar festivo",
   "Delete holiday?": "¿Eliminar festivo?",
   "This deletion will be saved immediately.": "La eliminación se guardará inmediatamente.",

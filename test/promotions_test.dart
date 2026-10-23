@@ -227,7 +227,7 @@ void main() {
     expect(find.text('OTHER'), findsNothing);
   });
 
-  testWidgets('global detail is read-only and uses required explanation', (
+  testWidgets('global detail identifies scope and permits edit', (
     WidgetTester tester,
   ) async {
     final ProviderContainer container = await _readyContainer(
@@ -249,7 +249,7 @@ void main() {
     expect(find.text('Usage claimed'), findsOneWidget);
     expect(find.textContaining('created but not completed'), findsOneWidget);
     expect(
-      find.textContaining('can only be managed from the desktop'),
+      find.text('This promotion applies to all locations.'),
       findsOneWidget,
     );
     expect(find.byKey(const Key('promotion-active-action')), findsNothing);
@@ -459,6 +459,9 @@ class _FixedLocationController extends CurrentLocationController {
 }
 
 class _FakePromotionsRepository implements PromotionsRepository {
+  @override
+  Future<void> deletePromotion(String id) => throw UnimplementedError();
+
   _FakePromotionsRepository(this.current, {this.afterPatch, this.patchError});
   List<Discount> current;
   final List<Discount>? afterPatch;

@@ -442,7 +442,7 @@ void main() {
     },
   );
 
-  testWidgets('edit shows usage claimed while global edit is blocked', (
+  testWidgets('edit shows usage claimed and global scope', (
     WidgetTester tester,
   ) async {
     final Discount local = _discount();
@@ -478,11 +478,11 @@ void main() {
         .read(promotionsProvider.notifier)
         .adoptCanonical(repository.current);
     await tester.pumpAndSettle();
+    expect(find.text('All locations'), findsWidgets);
     expect(
       find.text('This promotion cannot be edited from mobile.'),
-      findsOneWidget,
+      findsNothing,
     );
-    expect(find.byKey(const Key('promotion-form-save')), findsNothing);
   });
 }
 
@@ -528,6 +528,9 @@ class _LocationController extends CurrentLocationController {
 }
 
 class _WriteRepository implements PromotionsRepository {
+  @override
+  Future<void> deletePromotion(String id) => throw UnimplementedError();
+
   _WriteRepository(
     this.current, {
     this.afterWrite,

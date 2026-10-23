@@ -57,7 +57,8 @@ class PromotionFormScreen extends ConsumerWidget {
                 ),
               );
             }
-            if (discount.locationId != location.id) {
+            if (discount.locationId != null &&
+                discount.locationId != location.id) {
               return Scaffold(
                 body: Center(
                   child: Padding(
@@ -106,6 +107,8 @@ class _PromotionFormState extends ConsumerState<_PromotionForm> {
   DateTime? _startDate;
   DateTime? _endDate;
   bool _attempted = false;
+  bool _confirming = false;
+  bool get _global => _editing && widget.initial!.locationId == null;
 
   bool get _editing => widget.initial != null;
 
@@ -199,11 +202,21 @@ class _PromotionFormState extends ConsumerState<_PromotionForm> {
       },
       child: Scaffold(
         appBar: AdminAppBar(
-          title: Text(
-            _editing
-                ? tr(context, 'Edit Promotion')
-                : tr(context, 'Add Promotion'),
-            style: PelinesTypography.pageTitle(Theme.of(context).textTheme),
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _editing
+                    ? tr(context, 'Edit Promotion')
+                    : tr(context, 'Add Promotion'),
+                style: PelinesTypography.pageTitle(Theme.of(context).textTheme),
+              ),
+              if (_global)
+                Text(
+                  tr(context, 'All locations'),
+                  style: Theme.of(context).textTheme.labelMedium,
+                ),
+            ],
           ),
           leading: IconButton(
             onPressed: operation.isBusy ? null : _leave,
@@ -215,7 +228,9 @@ class _PromotionFormState extends ConsumerState<_PromotionForm> {
           children: <Widget>[
             PelinesReadOnlyField(
               label: tr(context, 'Location'),
-              value: widget.location.name,
+              value: _global
+                  ? tr(context, 'All locations')
+                  : widget.location.name,
             ),
             const SizedBox(height: PelinesSpacing.lg),
             _textField(
@@ -360,7 +375,11 @@ class _PromotionFormState extends ConsumerState<_PromotionForm> {
             FilledButton(
               style: PelinesControlStyles.button(PelinesButtonVariant.primary),
               key: const Key('promotion-form-save'),
-              onPressed: operation.isBusy || !_dirty || !validation.isValid
+              onPressed:
+                  operation.isBusy ||
+                      _confirming ||
+                      !_dirty ||
+                      !validation.isValid
                   ? null
                   : _save,
               child: Text(
@@ -436,17 +455,51 @@ class _PromotionFormState extends ConsumerState<_PromotionForm> {
   );
 
   Future<void> _save() async {
+    if (_confirming || ref.read(promotionFormMutationProvider).isBusy) return;
     setState(() => _attempted = true);
     final Map<String, dynamic>? body = _validation.body;
     if (body == null) return;
+    final original = widget.initial;
+    final global = _global;
+    final contextLocation = widget.location.id;
+    if (global) {
+      setState(() => _confirming = true);
+      final confirmed =
+          await showDialog<bool>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: Text(tr(context, 'Modify global promotion')),
+              content: Text(
+                '${widget.initial!.code}\n\n${tr(context, 'Changes will affect all locations where this promotion applies.')}',
+              ),
+              actions: [
+                TextButton(
+                  key: const Key('global-save-cancel'),
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: Text(tr(context, 'Cancel')),
+                ),
+                FilledButton(
+                  key: const Key('global-save-confirm'),
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: Text(tr(context, 'Save Changes')),
+                ),
+              ],
+            ),
+          ) ??
+          false;
+      if (!mounted) return;
+      setState(() => _confirming = false);
+      if (!confirmed) return;
+    }
     final PromotionFormMutationController controller = ref.read(
       promotionFormMutationProvider.notifier,
     );
     if (_editing) {
       await controller.edit(
-        discountId: widget.initial!.id,
-        locationId: widget.location.id,
-        originalUpdatedAt: widget.initial!.updatedAt,
+        discountId: original!.id,
+        locationId: contextLocation,
+        originalUpdatedAt: original.updatedAt,
+        global: global,
         desired: body,
       );
     } else {
