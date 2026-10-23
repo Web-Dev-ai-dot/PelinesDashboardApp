@@ -4,42 +4,67 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/l10n/admin_localizations.dart';
 import '../../../app/theme/app_theme.dart';
 import '../../../app/theme/pelines_settings_content.dart';
-import '../models/auto_accept.dart';
+import '../../../app/theme/pelines_tokens.dart';
 import '../models/auto_cancellation.dart';
 import '../models/location.dart';
-import '../providers/auto_cancellation_controller.dart';
+import '../models/pickup_service_preferences.dart';
+import '../models/pickup_service_settings.dart';
 import '../providers/locations_providers.dart';
+import '../providers/pickup_preferences_controller.dart'
+    show PickupPreferencesPhase;
+import '../providers/pickup_service_controller.dart';
 import '../providers/service_preferences_write_lock.dart';
-import 'auto_accept_screen.dart';
-import 'operations_parity_widgets.dart';
-import 'pickup_preferences_editor.dart';
 
 class PickupServiceCard extends ConsumerStatefulWidget {
   const PickupServiceCard({
     required this.location,
     required this.kind,
+    this.onDirtyChanged,
     super.key,
   });
   final Location location;
   final PickupOrderKind kind;
+  final ValueChanged<bool>? onDirtyChanged;
   @override
   ConsumerState<PickupServiceCard> createState() => _PickupServiceCardState();
 }
 
 class _PickupServiceCardState extends ConsumerState<PickupServiceCard> {
-  final _value = TextEditingController();
-  AutoCancellationRule? _initial;
-  late Location _baseline;
-  bool _enabled = true, _saving = false, _confirming = false;
+  final _minimum = TextEditingController(),
+      _capacity = TextEditingController(),
+      _duration = TextEditingController();
+  PickupServiceSettings? _initial;
+  bool _accept = true, _autoAccept = false, _cancel = false;
+  bool _saving = false, _failed = false, _confirming = false;
   AutoCancellationUnit _unit = AutoCancellationUnit.minutes;
-  String? _formatError, _message;
-  bool _failed = false;
-  String get _kind => widget.kind.name;
+  String? _message, _formatError;
+  bool get _regular => widget.kind == PickupOrderKind.regular;
+  String get _prefix => 'pickup-${widget.kind.name}';
+  bool get _busy => _saving || ref.read(servicePreferencesWriteProvider);
   bool get _dirty =>
-      _initial != null &&
-      (_enabled != _initial!.enabled ||
-          _value.text != _initial!.value.toString() ||
-          _unit != _initial!.unit);
+      _initial != null && (_draft == null || !_draft!.sameAs(_initial!));
+  PickupServiceSettings? get _draft {
+    final minimum = PickupServicePreferences.minimumFromText(_minimum.text);
+    final capacity = PickupServicePreferences.capacityFromText(_capacity.text);
+    final duration = RegExp(r'^-?\d+$').hasMatch(_duration.text.trim())
+        ? int.tryParse(_duration.text.trim())
+        : null;
+    if (minimum == null || capacity == null || duration == null) return null;
+    return PickupServiceSettings(
+      preferences: PickupServicePreferences(
+        accept: _accept,
+        minimum: minimum,
+        capacity: capacity,
+      ),
+      autoAccept: _autoAccept,
+      cancellation: AutoCancellationRule(
+        enabled: _cancel,
+        value: duration,
+        unit: _unit,
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -49,105 +74,203 @@ class _PickupServiceCardState extends ConsumerState<PickupServiceCard> {
   @override
   void didUpdateWidget(covariant PickupServiceCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!_dirty && !_saving) _load(widget.location);
+    if (oldWidget.location.id != widget.location.id ||
+        (!_dirty && !_saving && !_failed)) {
+      _load(widget.location);
+    }
   }
 
   void _load(Location location) {
-    _baseline = location;
     _formatError = null;
     try {
-      _initial = AutoCancellationRule.fromJson(
+      _initial = PickupServiceSettings.fromJson(
         location.servicePrefsJson,
         widget.kind,
       );
-      _enabled = _initial!.enabled;
-      _unit = _initial!.unit;
-      _value.text = _initial!.value.toString();
-    } on UnsupportedAutoCancellationFormat catch (error) {
+      _accept = _initial!.preferences.accept;
+      _minimum.text = _initial!.preferences.minimumText;
+      _capacity.text = _initial!.preferences.capacity.toString();
+      _autoAccept = _initial!.autoAccept;
+      _cancel = _initial!.cancellation.enabled;
+      _duration.text = _initial!.cancellation.value.toString();
+      _unit = _initial!.cancellation.unit;
+    } catch (error) {
       _initial = null;
       _formatError = error.toString();
     }
   }
 
-  @override
-  void dispose() {
-    _value.dispose();
-    super.dispose();
+  void _changed(VoidCallback change) {
+    setState(() {
+      change();
+      _message = null;
+    });
+    widget.onDirtyChanged?.call(_dirty);
   }
 
   @override
+  void dispose() {
+    _minimum.dispose();
+    _capacity.dispose();
+    _duration.dispose();
+    super.dispose();
+  }
+
+  Widget _toggle(
+    String key,
+    String title,
+    String description,
+    bool value,
+    ValueChanged<bool> change,
+  ) => SwitchListTile(
+    key: Key(key),
+    contentPadding: EdgeInsets.zero,
+    title: Text(tr(context, title)),
+    subtitle: Text(tr(context, description)),
+    value: value,
+    onChanged: _busy || _failed ? null : change,
+  );
+  Widget _input(
+    String key,
+    String label,
+    TextEditingController controller, {
+    bool money = false,
+    bool enabled = true,
+    String? helper,
+    String? error,
+  }) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Text(tr(context, label), style: Theme.of(context).textTheme.titleSmall),
+      const SizedBox(height: PelinesSpacing.xs),
+      Semantics(
+        label: tr(context, label),
+        child: TextField(
+          key: Key(key),
+          controller: controller,
+          enabled: !_busy && !_failed && enabled,
+          keyboardType: TextInputType.numberWithOptions(decimal: money),
+          onChanged: (_) => _changed(() {}),
+          decoration: PelinesControlStyles.input().copyWith(
+            prefixText: money ? '\$ ' : null,
+            helperText: helper == null ? null : tr(context, helper),
+            helperMaxLines: 4,
+            errorText: error == null ? null : tr(context, error),
+            errorMaxLines: 4,
+          ),
+        ),
+      ),
+    ],
+  );
+
+  @override
   Widget build(BuildContext context) {
-    final busy = _saving || ref.watch(servicePreferencesWriteProvider);
-    final title = widget.kind == PickupOrderKind.regular
-        ? 'Regular Orders'
-        : 'Catering Orders';
+    ref.watch(servicePreferencesWriteProvider);
+    final suffix = widget.kind.name;
+    final kind = _regular ? 'regular' : 'catering';
     return PelinesSettingsCard(
-      key: Key('pickup-$_kind-card'),
-      title: tr(context, title),
+      key: Key('pickup-$suffix-card'),
+      title: tr(context, _regular ? 'Regular Orders' : 'Catering Orders'),
       children: [
-        PickupPreferencesEditor(
-          kind: widget.kind,
-          location: widget.location,
-          autoAccept: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(tr(context, 'Auto Accept'), style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 8),
-              _autoAccept(context, busy),
-            ],
+        const Divider(height: 24),
+        if (_formatError != null)
+          Text(
+            tr(context, _formatError!),
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          )
+        else ...[
+          _toggle(
+            '$_prefix-accept',
+            _regular ? 'Accept regular orders' : 'Accept catering orders',
+            _regular
+                ? 'When off, customers will not be able to place regular pickup orders.'
+                : 'When off, customers will not be able to place catering orders.',
+            _accept,
+            (value) => _changed(() => _accept = value),
           ),
-        ),
-        const Divider(height: 32),
-        Text(
-          tr(context, 'Auto Cancel'),
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
-        const SizedBox(height: 8),
-        Text(
-          tr(
-            context,
+          const Divider(height: 32),
+          _toggle(
+            'auto-accept-$kind-switch',
+            _regular
+                ? 'Auto-accept regular orders'
+                : 'Auto-accept catering orders',
+            'When on, paid orders are automatically confirmed. When off, orders must be manually accepted by the restaurant.',
+            _autoAccept,
+            (value) => _changed(() => _autoAccept = value),
+          ),
+          const SizedBox(height: 20),
+          _input(
+            '$_prefix-minimum',
+            _regular
+                ? 'Minimum purchase — regular orders (\$)'
+                : 'Minimum purchase — catering orders (\$)',
+            _minimum,
+            money: true,
+            helper: '0 = No minimum',
+            error:
+                PickupServicePreferences.minimumFromText(_minimum.text) == null
+                ? PickupServicePreferences.minimumError
+                : null,
+          ),
+          const SizedBox(height: 20),
+          _input(
+            '$_prefix-capacity',
+            _regular
+                ? 'Daily capacity — regular orders per day'
+                : 'Daily capacity — catering orders per delivery date',
+            _capacity,
+            helper: '0 = No daily limit',
+            error:
+                PickupServicePreferences.capacityFromText(_capacity.text) ==
+                    null
+                ? PickupServicePreferences.capacityError
+                : null,
+          ),
+          if (!_regular) ...[
+            const SizedBox(height: 8),
+            Text(
+              tr(
+                context,
+                'Counted by the delivery date, not by the date the order was placed.',
+              ),
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+          const Divider(height: 40),
+          _toggle(
+            'auto-cancel-$kind-enabled',
+            _regular
+                ? 'Enable auto-cancel for regular orders'
+                : 'Enable auto-cancel for catering orders',
             'The scheduler checks every minute. Changes may automatically cancel existing pending orders.',
+            _cancel,
+            (value) => _changed(() => _cancel = value),
           ),
-        ),
-        if (widget.kind == PickupOrderKind.catering) ...[
+          const SizedBox(height: 16),
+          _input(
+            'auto-cancel-$kind-value',
+            _regular
+                ? 'Cancel regular orders after'
+                : 'Cancel catering orders after',
+            _duration,
+            enabled: _cancel,
+            error: !_cancel
+                ? null
+                : int.tryParse(_duration.text.trim()) == null
+                ? 'Enter a whole number.'
+                : _draft?.cancellation.validate(widget.kind),
+          ),
           const SizedBox(height: 12),
           Text(
             tr(
               context,
-              'The cancellation window starts when the order was created, not at the scheduled event time.',
+              'If an order is not accepted within this time, it will be automatically cancelled.',
             ),
-            style: TextStyle(color: Theme.of(context).colorScheme.error),
+            style: Theme.of(context).textTheme.bodySmall,
           ),
-        ],
-        if (_formatError != null) ...[
           const SizedBox(height: 16),
-          Text(
-            tr(context, _formatError!),
-            style: TextStyle(color: Theme.of(context).colorScheme.error),
-          ),
-        ] else ...[
-          SwitchListTile(
-            key: Key('auto-cancel-$_kind-enabled'),
-            contentPadding: EdgeInsets.zero,
-            title: Text(tr(context, 'Auto-cancel enabled')),
-            value: _enabled,
-            onChanged: busy
-                ? null
-                : (value) => setState(() => _enabled = value),
-          ),
-          TextField(
-            key: Key('auto-cancel-$_kind-value'),
-            controller: _value,
-            enabled: !busy && _enabled,
-            keyboardType: TextInputType.number,
-            decoration: PelinesControlStyles.input(
-              label: tr(context, 'Cancel orders after'),
-            ),
-            onChanged: (_) => setState(() {}),
-          ),
-          const SizedBox(height: 12),
           DropdownButtonFormField<AutoCancellationUnit>(
-            key: Key('auto-cancel-$_kind-unit-${_unit.name}'),
+            key: Key('auto-cancel-$kind-unit-${_unit.name}'),
             initialValue: _unit,
             isExpanded: true,
             decoration: PelinesControlStyles.input(
@@ -167,238 +290,153 @@ class _PickupServiceCardState extends ConsumerState<PickupServiceCard> {
                   ),
                 ),
             ],
-            onChanged: busy || !_enabled
+            onChanged: _busy || _failed || !_cancel
                 ? null
                 : (value) {
-                    if (value != null) setState(() => _unit = value);
+                    if (value != null) _changed(() => _unit = value);
                   },
           ),
-          const SizedBox(height: 16),
-          OutlinedButton(
-            key: Key('auto-cancel-$_kind-cancel'),
-            style: PelinesControlStyles.button(PelinesButtonVariant.secondary),
-            onPressed: busy || !_dirty
-                ? null
-                : () => setState(() {
-                    _load(widget.location);
-                    _message = null;
-                  }),
-            child: Text(tr(context, 'Cancel')),
-          ),
-          const SizedBox(height: 12),
-          FilledButton(
-            key: Key('auto-cancel-$_kind-save'),
-            style: PelinesControlStyles.button(PelinesButtonVariant.primary),
-            onPressed: busy || !_dirty ? null : _save,
-            child: Text(
-              tr(context, _saving && !_confirming ? 'Saving…' : 'Save'),
+          if (!_regular) ...[
+            const SizedBox(height: 12),
+            Text(
+              tr(
+                context,
+                'The cancellation window starts when the order was created, not at the scheduled event time.',
+              ),
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+          const Divider(height: 40),
+          Align(
+            alignment: AlignmentDirectional.centerEnd,
+            child: FilledButton(
+              key: Key('$_prefix-save'),
+              style: PelinesControlStyles.button(PelinesButtonVariant.primary),
+              onPressed:
+                  _busy ||
+                      _failed ||
+                      !_dirty ||
+                      _draft == null ||
+                      _draft!.validate(widget.kind) != null
+                  ? null
+                  : _save,
+              child: Text(
+                tr(context, _saving ? 'Saving…' : 'Save changes'),
+                textAlign: TextAlign.center,
+              ),
             ),
           ),
+          if (_dirty && !_failed)
+            TextButton(
+              key: Key('$_prefix-cancel'),
+              onPressed: _busy
+                  ? null
+                  : () {
+                      _changed(() => _load(widget.location));
+                    },
+              child: Text(tr(context, 'Cancel')),
+            ),
         ],
         if (_saving && !_confirming)
           const Padding(
             padding: EdgeInsets.only(top: 12),
             child: LinearProgressIndicator(),
           ),
-        if (_message != null) ...[
-          const SizedBox(height: 12),
-          Text(
-            tr(context, _message!),
-            key: Key('auto-cancel-$_kind-message'),
-            style: TextStyle(
-              color: _failed ? Theme.of(context).colorScheme.error : null,
+        if (_message != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Semantics(
+              liveRegion: true,
+              child: Text(
+                tr(context, _message!),
+                key: Key('$_prefix-message'),
+                style: TextStyle(
+                  color: _failed ? Theme.of(context).colorScheme.error : null,
+                ),
+              ),
             ),
           ),
-          if (_failed)
-            OutlinedButton(
-              key: Key('auto-cancel-$_kind-reload'),
-              style: PelinesControlStyles.button(
-                PelinesButtonVariant.secondary,
-              ),
-              onPressed: busy ? null : _reload,
-              child: Text(tr(context, 'Reload')),
-            ),
-        ],
+        if (_failed || _formatError != null)
+          OutlinedButton(
+            key: Key('$_prefix-reload'),
+            style: PelinesControlStyles.button(PelinesButtonVariant.secondary),
+            onPressed: _busy ? null : _reload,
+            child: Text(tr(context, 'Reload')),
+          ),
       ],
     );
   }
 
-  Widget _autoAccept(BuildContext context, bool busy) {
-    try {
-      final settings = AutoAcceptSettings.fromJson(
-        widget.location.servicePrefsJson,
-      );
-      final regular = widget.kind == PickupOrderKind.regular;
-      final enabled = regular ? settings.regular : settings.catering;
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          OperationsStatus(enabled: enabled),
-          const SizedBox(height: 8),
-          Text(
-            tr(
-              context,
-              enabled
-                  ? 'Automatically accepted after payment'
-                  : 'Manual acceptance',
+  Future<bool> _confirm(String title, String message, String key) async =>
+      await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          scrollable: true,
+          title: Text(tr(context, title)),
+          content: Text(tr(context, message)),
+          actions: [
+            TextButton(
+              key: Key('$key-cancel'),
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: Text(tr(context, 'Cancel')),
             ),
-          ),
-          const SizedBox(height: 12),
-          OutlinedButton(
-            key: Key('edit-auto-accept-$_kind'),
-            style: PelinesControlStyles.button(PelinesButtonVariant.secondary),
-            onPressed: busy
-                ? null
-                : () => Navigator.push<void>(
-                    context,
-                    MaterialPageRoute<void>(
-                      builder: (_) => AutoAcceptScreen(
-                        location: widget.location,
-                        scope: regular
-                            ? AutoAcceptScope.regular
-                            : AutoAcceptScope.catering,
-                      ),
-                    ),
-                  ),
-            child: Text(tr(context, 'Edit auto-accept')),
-          ),
-        ],
-      );
-    } on UnsupportedAutoAcceptFormat catch (error) {
-      return Text(
-        tr(context, error.toString()),
-        style: TextStyle(color: Theme.of(context).colorScheme.error),
-      );
-    }
-  }
-
-  Future<void> _reload() async {
-    if (_saving) return;
-    setState(() => _saving = true);
-    try {
-      final canonical = await ref
-          .read(locationsRepositoryProvider)
-          .getLocation(widget.location.id);
-      if (!mounted) return;
-      if (ref.read(currentLocationProvider).value?.id != canonical.id) return;
-      ref.read(locationsProvider.notifier).adoptCanonical(canonical);
-      ref.read(currentLocationProvider.notifier).adoptCanonical(canonical);
-      setState(() {
-        _load(canonical);
-        _message = null;
-      });
-    } catch (_) {
-      if (mounted) {
-        setState(() {
-          _message = 'The auto-cancel change could not be confirmed. Reload before retrying.';
-          _failed = true;
-        });
-      }
-    } finally {
-      if (mounted) setState(() => _saving = false);
-    }
-  }
+            FilledButton(
+              key: Key(key),
+              style: PelinesControlStyles.button(PelinesButtonVariant.primary),
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: Text(tr(context, 'Apply changes')),
+            ),
+          ],
+        ),
+      ) ??
+      false;
 
   Future<void> _save() async {
-    if (_saving ||
-        ref.read(servicePreferencesWriteProvider) ||
-        _initial == null) {
-      return;
-    }
-    final value = RegExp(r'^-?\d+$').hasMatch(_value.text.trim())
-        ? int.tryParse(_value.text.trim())
-        : null;
-    if (value == null) {
-      setState(() {
-        _message = 'Enter a whole number.';
-        _failed = true;
-      });
-      return;
-    }
-    final rule = AutoCancellationRule(
-      enabled: _enabled,
-      value: value,
-      unit: _unit,
-    );
-    final validation = rule.validate(widget.kind);
-    if (validation != null) {
-      setState(() {
-        _message = validation;
-        _failed = true;
-      });
-      return;
-    }
+    final draft = _draft;
+    if (_busy || _failed || draft == null || _initial == null) return;
+    final id = widget.location.id;
     setState(() {
       _saving = true;
-      _confirming = rule.requiresConfirmation(_initial!);
-      _message = null;
+      _confirming =
+          draft.autoAccept != _initial!.autoAccept ||
+          draft.cancellation.requiresConfirmation(_initial!.cancellation);
     });
     try {
-      if (rule.requiresConfirmation(_initial!)) {
-        final confirmed = await showDialog<bool>(
-          context: context,
-          builder: (dialogContext) => AlertDialog(
-            scrollable: true,
-            title: Text(tr(context, 'Apply auto-cancellation changes?')),
-            content: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(widget.location.name),
-                Text(
-                  tr(
-                    context,
-                    widget.kind == PickupOrderKind.regular
-                        ? 'Regular Orders'
-                        : 'Catering Orders',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  tr(
-                    context,
-                    'Existing pending orders may be automatically cancelled after this change. Paid orders may be refunded.',
-                  ),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                key: Key('auto-cancel-$_kind-confirm-cancel'),
-                onPressed: () => Navigator.pop(dialogContext, false),
-                child: Text(tr(context, 'Cancel')),
-              ),
-              FilledButton(
-                key: Key('auto-cancel-$_kind-confirm'),
-                style: PelinesControlStyles.button(
-                  PelinesButtonVariant.primary,
-                ),
-                onPressed: () => Navigator.pop(dialogContext, true),
-                child: Text(tr(context, 'Apply changes')),
-              ),
-            ],
-          ),
+      if (draft.autoAccept != _initial!.autoAccept) {
+        final ok = await _confirm(
+          draft.autoAccept
+              ? 'Enable automatic acceptance?'
+              : 'Use manual acceptance?',
+          draft.autoAccept
+              ? (_regular
+                    ? 'Paid regular orders can move directly to Confirmed without manual review.'
+                    : 'Paid catering orders can move directly to Confirmed without manual review. This may commit the restaurant to new catering orders before staff reviews them.')
+              : 'Paid orders processed after this change will remain Pending until staff accepts them.',
+          'auto-accept-${widget.kind.name}-confirm',
         );
-        if (confirmed != true || !mounted) return;
-        setState(() => _confirming = false);
+        if (!ok || !mounted) return;
       }
+      if (draft.cancellation.requiresConfirmation(_initial!.cancellation)) {
+        final ok = await _confirm(
+          'Apply auto-cancellation changes?',
+          'Existing pending orders may be automatically cancelled after this change. Paid orders may be refunded.',
+          'auto-cancel-${widget.kind.name}-confirm',
+        );
+        if (!ok || !mounted) return;
+      }
+      setState(() => _confirming = false);
       final result = await ref
-          .read(autoCancellationProvider(widget.kind).notifier)
-          .save(
-            locationId: _baseline.id,
-            originalUpdatedAt: _baseline.updatedAt,
-            original: _initial!,
-            rule: rule,
-          );
-      if (!mounted) return;
+          .read(pickupServiceProvider(widget.kind).notifier)
+          .save(locationId: id, original: _initial!, settings: draft);
+      if (!mounted || widget.location.id != id) return;
       setState(() {
         _message = result.message;
-        _failed = result.phase != AutoCancellationPhase.success;
+        _failed = result.phase != PickupPreferencesPhase.success;
         if (!_failed) {
-          final canonical = ref.read(currentLocationProvider).value;
-          if (canonical?.id == _baseline.id) _load(canonical!);
+          _load(ref.read(currentLocationProvider).value ?? widget.location);
         }
       });
+      widget.onDirtyChanged?.call(_dirty);
     } finally {
       if (mounted) {
         setState(() {
@@ -406,6 +444,44 @@ class _PickupServiceCardState extends ConsumerState<PickupServiceCard> {
           _confirming = false;
         });
       }
+    }
+  }
+
+  Future<void> _reload() async {
+    if (_busy) return;
+    if (_dirty &&
+        !await _confirm(
+          'Discard changes?',
+          'Your unsaved changes will be lost.',
+          '$_prefix-discard',
+        )) {
+      return;
+    }
+    if (!mounted) return;
+    final id = widget.location.id;
+    setState(() => _saving = true);
+    try {
+      final canonical = await ref
+          .read(locationsRepositoryProvider)
+          .getLocation(id);
+      if (!mounted || ref.read(currentLocationProvider).value?.id != id) return;
+      ref.read(locationsProvider.notifier).adoptCanonical(canonical);
+      ref.read(currentLocationProvider.notifier).adoptCanonical(canonical);
+      setState(() {
+        _load(canonical);
+        _failed = false;
+        _message = null;
+      });
+      widget.onDirtyChanged?.call(false);
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _failed = true;
+          _message = 'The service preference change could not be confirmed. Reload before retrying.';
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
   }
 }

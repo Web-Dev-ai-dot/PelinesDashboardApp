@@ -1,5 +1,8 @@
 import 'package:dio/dio.dart';
 
+import 'pickup_service_repository.dart';
+import '../models/pickup_service_settings.dart';
+
 import '../../../core/api/api_client.dart';
 import '../../../core/api/api_exception.dart';
 import '../models/location.dart';
@@ -64,7 +67,8 @@ class ApiLocationsRepository
     implements
         LocationsRepository,
         AutoCancellationRepository,
-        PickupPreferencesRepository {
+        PickupPreferencesRepository,
+        PickupServiceRepository {
   ApiLocationsRepository(this._client);
 
   final ApiClient _client;
@@ -349,6 +353,41 @@ class ApiLocationsRepository
       () => _client.dio.patch<dynamic>(
         'locations/$locationId',
         data: <String, dynamic>{'servicePrefsJson': next},
+      ),
+    );
+  }
+
+  @override
+  Future<Location> savePickupService({
+    required String locationId,
+    required PickupOrderKind kind,
+    required PickupServiceSettings original,
+    required PickupServiceSettings settings,
+    required bool Function() canWrite,
+  }) async {
+    final validation = settings.validate(kind);
+    if (validation != null) throw ArgumentError(validation);
+    final canonical = await getLocation(locationId);
+    if (!canWrite()) {
+      throw const ApiException(
+        message: 'The selected location changed. No change was sent.',
+      );
+    }
+    // Another card may have saved since this draft began. Rebase only when
+    // this entire order-type group is unchanged, preserving canonical JSON.
+    if (!PickupServiceSettings.fromJson(
+      canonical.servicePrefsJson,
+      kind,
+    ).sameAs(original)) {
+      throw LocationSettingsConflict(canonical);
+    }
+    if (settings.sameAs(original)) return canonical;
+    final next = settings.mergeInto(canonical.servicePrefsJson, original, kind);
+    // Same existing endpoint/JSON contract; no server-side conditional write.
+    return _locationRequest(
+      () => _client.dio.patch<dynamic>(
+        'locations/$locationId',
+        data: {'servicePrefsJson': next},
       ),
     );
   }
