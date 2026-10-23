@@ -1,5 +1,24 @@
 // English source messages and their Spanish UI translations. Backend values are never catalog keys.
 const spanishCatalog = <String, String>{
+  'Configure flat-fee delivery per location.':
+      'Configura la entrega con tarifa fija por sucursal.',
+  'Regular Orders — Delivery': 'Pedidos regulares — Entrega',
+  'Catering Orders — Delivery': 'Pedidos de catering — Entrega',
+  'Offer flat-fee delivery on regular (non-catering) orders for this location.': 'Ofrece entrega con tarifa fija en pedidos regulares (no catering) para esta sucursal.',
+  'Offer delivery on catering orders for this location.':
+      'Ofrece entrega en pedidos de catering para esta sucursal.',
+  'When off, customers can only choose pickup for regular orders.': 'Si está desactivado, los clientes solo podrán recoger los pedidos regulares.',
+  'When off, customers can only choose pickup for catering orders.': 'Si está desactivado, los clientes solo podrán recoger los pedidos de catering.',
+  'Delivery cost': 'Costo de entrega',
+  'Flat delivery cost added to the order total at checkout.':
+      'Costo fijo de entrega que se añade al total del pedido al pagar.',
+  'Flat delivery cost added to the catering order total at checkout.': 'Costo fijo de entrega que se añade al total del pedido de catering al pagar.',
+  'Your unsaved delivery settings will be lost.':
+      'Se perderán los cambios de entrega sin guardar.',
+  'Delivery settings saved.': 'Configuración de entrega guardada.',
+  'Enable catering delivery for {location}?': '¿Activar entrega de catering para {location}?',
+  'Disable catering delivery for {location}?': '¿Desactivar entrega de catering para {location}?',
+
   "Turn ordering on or off and manage service preferences, including acceptance, automatic acceptance, minimum purchase, daily capacity and automatic cancellation for this location.": "Activa o desactiva los pedidos y administra su aceptación, aceptación automática, compra mínima, capacidad diaria y cancelación automática para esta sucursal.",
   "ORDER AVAILABILITY": "DISPONIBILIDAD DE PEDIDOS",
   "Accepting orders — {location}": "Aceptación de pedidos — {location}",

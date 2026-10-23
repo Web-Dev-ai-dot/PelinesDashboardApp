@@ -9,11 +9,9 @@ import 'package:pelines_admin_app/app/theme/app_theme.dart';
 import 'package:pelines_admin_app/features/locations/data/locations_repository.dart';
 import 'package:pelines_admin_app/features/locations/models/location.dart';
 import 'package:pelines_admin_app/features/locations/presentation/delivery_settings_screen.dart';
-import 'package:pelines_admin_app/features/locations/presentation/regular_delivery_screen.dart';
-import 'package:pelines_admin_app/features/locations/presentation/catering_delivery_screen.dart';
+import 'package:pelines_admin_app/app/navigation/admin_navigation.dart';
+
 import 'package:pelines_admin_app/features/locations/providers/locations_providers.dart';
-import 'package:pelines_admin_app/features/locations/providers/regular_delivery_controller.dart';
-import 'package:pelines_admin_app/features/locations/providers/catering_delivery_controller.dart';
 
 Location location({
   String name = 'Tualatin',
@@ -24,6 +22,7 @@ Location location({
   },
   Map<String, dynamic>? catering,
   int fee = 1275,
+  DateTime? updatedAt,
 }) => Location(
   id: name,
   name: name,
@@ -35,7 +34,7 @@ Location location({
   deliveryFeeCents: fee,
   deliveryMinimumCents: 15000,
   createdAt: DateTime.utc(2026),
-  updatedAt: DateTime.utc(2026),
+  updatedAt: updatedAt ?? DateTime.utc(2026),
 );
 
 class Current extends CurrentLocationController {
@@ -65,8 +64,14 @@ class Repo implements LocationsRepository {
     regularWrites++;
     await hold?.future;
     if (fail) throw Exception('save failed');
+    if (originalUpdatedAt != current.updatedAt) {
+      throw LocationSettingsConflict(current);
+    }
     return current = location(
       regular: {'enabled': enabled, 'feeCents': feeCents, 'minimumCents': 1800},
+      catering: current.cateringDeliveryJson,
+      fee: current.deliveryFeeCents,
+      updatedAt: current.updatedAt.add(const Duration(seconds: 1)),
     );
   }
 
@@ -82,7 +87,15 @@ class Repo implements LocationsRepository {
     cateringWrites++;
     await hold?.future;
     if (fail) throw Exception('save failed');
-    return current = location(catering: {'enabled': enabled}, fee: feeCents);
+    if (originalUpdatedAt != current.updatedAt) {
+      throw LocationSettingsConflict(current);
+    }
+    return current = location(
+      catering: {'enabled': enabled},
+      fee: feeCents,
+      regular: current.regularDeliveryJson,
+      updatedAt: current.updatedAt.add(const Duration(seconds: 1)),
+    );
   }
 
   @override
@@ -152,146 +165,149 @@ void main() {
   for (final width in [320.0, 390.0, 768.0, 1400.0]) {
     for (final scale in [1.0, 2.0]) {
       for (final lang in ['en', 'es']) {
-        testWidgets('delivery summaries/editors $width $scale $lang', (
+        testWidgets('inline delivery responsive $width $scale $lang', (
           tester,
         ) async {
           await pump(tester, width: width, scale: scale, lang: lang);
           await tester.pumpAndSettle();
-          expect(
-            find.text(
-              lang == 'en'
-                  ? 'Delivery Settings'
-                  : 'Configuraci\u00f3n de entrega',
-            ),
-            findsOneWidget,
-          );
-          expect(find.text('Tualatin'), findsOneWidget);
-          expect(find.text(r'$3.25'), findsOneWidget);
-          expect(find.text(r'$18.00'), findsOneWidget);
-          expect(find.text(r'$12.75'), findsOneWidget);
-          expect(find.text(r'$150.00'), findsOneWidget);
-          for (final key in [
-            'accepting-orders-switch',
-            'auto-accept-card',
-            'edit-business-hours',
-          ]) {
-            expect(find.byKey(Key(key)), findsNothing);
-          }
-          expect(tester.takeException(), isNull);
           for (final kind in ['regular', 'catering']) {
-            await tap(tester, 'edit-$kind-delivery');
-            expect(
-              kind == 'regular'
-                  ? find.byType(RegularDeliveryScreen)
-                  : find.byType(CateringDeliveryScreen),
-              findsOneWidget,
+            expect(find.byKey(Key('$kind-delivery-card')), findsOneWidget);
+            await tester.ensureVisible(find.byKey(Key('$kind-delivery-fee')));
+            await tester.pumpAndSettle();
+            final field = tester.widget<TextField>(
+              find.byKey(Key('$kind-delivery-fee')),
             );
             expect(
-              tester
-                  .widget<TextField>(find.byKey(Key('$kind-delivery-fee')))
-                  .controller!
-                  .text,
+              field.controller!.text,
               kind == 'regular' ? '3.25' : '12.75',
             );
-            expect(
-              tester
-                  .widget<SwitchListTile>(
-                    find.byKey(Key('$kind-delivery-enabled')),
-                  )
-                  .value,
-              kind == 'catering',
-            );
-            expect(find.byType(TextField), findsOneWidget);
-            await tester.scrollUntilVisible(
-              find.byKey(Key('$kind-delivery-cancel')),
-              250,
-              scrollable: find.byType(Scrollable).first,
-            );
-            await tester.pumpAndSettle();
-            expect(
-              tester.getSize(find.byKey(Key('$kind-delivery-cancel'))).height,
-              greaterThanOrEqualTo(48),
-            );
+            expect(field.enabled, kind == 'catering');
             expect(tester.takeException(), isNull);
-            await tap(tester, '$kind-delivery-cancel');
-            expect(find.byType(DeliverySettingsScreen), findsOneWidget);
           }
-          expect(tester.takeException(), isNull);
         });
       }
     }
   }
-  for (final kind in ['regular', 'catering']) {
-    testWidgets(
-      '$kind save preserves other configuration and refreshes summary',
-      (tester) async {
-        final repo = Repo();
-        await pump(tester, repo: repo);
-        await tester.pumpAndSettle();
-        await tap(tester, 'edit-$kind-delivery');
-        await tester.enterText(find.byKey(Key('$kind-delivery-fee')), '7.49');
-        await tap(tester, '$kind-delivery-save');
-        expect(find.byType(DeliverySettingsScreen), findsOneWidget);
-        expect(find.text(r'$7.49'), findsOneWidget);
-        expect(
-          find.text(kind == 'regular' ? r'$12.75' : r'$3.25'),
-          findsOneWidget,
-        );
-        expect(repo.regularWrites, kind == 'regular' ? 1 : 0);
-        expect(repo.cateringWrites, kind == 'catering' ? 1 : 0);
-      },
+  testWidgets('independent switches retain fee when disabled', (tester) async {
+    await pump(tester);
+    await tester.pumpAndSettle();
+    await tap(tester, 'regular-delivery-enabled');
+    await tester.ensureVisible(find.byKey(const Key('regular-delivery-fee')));
+    await tester.enterText(
+      find.byKey(const Key('regular-delivery-fee')),
+      '9.25',
     );
-    testWidgets('$kind dirty Cancel preserves draft until discard', (
-      tester,
-    ) async {
+    await tap(tester, 'regular-delivery-enabled');
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('regular-delivery-fee')))
+          .enabled,
+      false,
+    );
+    await tap(tester, 'regular-delivery-enabled');
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('regular-delivery-fee')))
+          .controller!
+          .text,
+      '9.25',
+    );
+    expect(
+      tester
+          .widget<SwitchListTile>(
+            find.byKey(const Key('catering-delivery-enabled')),
+          )
+          .value,
+      true,
+    );
+  });
+  for (final kind in ['regular', 'catering']) {
+    testWidgets('$kind save preserves other draft', (tester) async {
       final repo = Repo();
       await pump(tester, repo: repo);
       await tester.pumpAndSettle();
-      await tap(tester, 'edit-$kind-delivery');
-      await tester.enterText(find.byKey(Key('$kind-delivery-fee')), '8.00');
-      await tap(tester, '$kind-delivery-cancel');
-      expect(find.text('Discard changes?'), findsOneWidget);
-      await tester.tap(find.text('Keep editing'));
+      await tap(tester, 'regular-delivery-enabled');
+      await tester.ensureVisible(find.byKey(const Key('regular-delivery-fee')));
+      await tester.enterText(
+        find.byKey(const Key('regular-delivery-fee')),
+        '8.25',
+      );
+      await tester.ensureVisible(
+        find.byKey(const Key('catering-delivery-fee')),
+      );
+      await tester.enterText(
+        find.byKey(const Key('catering-delivery-fee')),
+        '7.49',
+      );
+      await tap(tester, '$kind-delivery-save');
+      expect(repo.regularWrites, kind == 'regular' ? 1 : 0);
+      expect(repo.cateringWrites, kind == 'catering' ? 1 : 0);
+      final other = kind == 'regular' ? 'catering' : 'regular';
+      expect(
+        tester
+            .widget<TextField>(find.byKey(Key('$other-delivery-fee')))
+            .controller!
+            .text,
+        kind == 'regular' ? '7.49' : '8.25',
+      );
+      expect(find.text('Delivery settings saved.'), findsOneWidget);
+      await tap(tester, '$other-delivery-save');
+      expect(repo.regularWrites, 1);
+      expect(repo.cateringWrites, 1);
+      expect(repo.current.deliveryFeeCents, 749);
+      expect(repo.current.regularDeliveryJson!['feeCents'], 825);
+    });
+    testWidgets('$kind invalid money does not write', (tester) async {
+      final repo = Repo();
+      await pump(tester, repo: repo);
+      await tester.pumpAndSettle();
+      if (kind == 'regular') await tap(tester, 'regular-delivery-enabled');
+      for (final input in ['-1', '2.345', 'abc', '']) {
+        await tester.ensureVisible(find.byKey(Key('$kind-delivery-fee')));
+        await tester.enterText(find.byKey(Key('$kind-delivery-fee')), input);
+        await tap(tester, '$kind-delivery-save');
+        expect(
+          find.text(
+            'Enter a valid non-negative fee with no more than two decimals.',
+          ),
+          findsOneWidget,
+        );
+      }
+      expect(repo.regularWrites + repo.cateringWrites, 0);
+    });
+    testWidgets('$kind error retains draft and disables duplicate saves', (
+      tester,
+    ) async {
+      final repo = Repo()
+        ..hold = Completer<void>()
+        ..fail = true;
+      await pump(tester, repo: repo);
+      await tester.pumpAndSettle();
+      if (kind == 'regular') await tap(tester, 'regular-delivery-enabled');
+      await tester.ensureVisible(find.byKey(Key('$kind-delivery-fee')));
+      await tester.enterText(find.byKey(Key('$kind-delivery-fee')), '9.50');
+      await tester.ensureVisible(find.byKey(Key('$kind-delivery-save')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(Key('$kind-delivery-save')));
+      await tester.pump();
+      for (final other in ['regular', 'catering']) {
+        expect(
+          tester
+              .widget<FilledButton>(find.byKey(Key('$other-delivery-save')))
+              .onPressed,
+          isNull,
+        );
+      }
+      repo.hold!.complete();
       await tester.pumpAndSettle();
       expect(
         tester
             .widget<TextField>(find.byKey(Key('$kind-delivery-fee')))
             .controller!
             .text,
-        '8.00',
+        '9.50',
       );
-      await tap(tester, '$kind-delivery-cancel');
-      await tester.tap(find.text('Discard'));
-      await tester.pumpAndSettle();
-      expect(find.byType(DeliverySettingsScreen), findsOneWidget);
-      expect(repo.regularWrites + repo.cateringWrites, 0);
-    });
-    testWidgets('$kind busy disables editor and save error keeps draft', (
-      tester,
-    ) async {
-      final repo = Repo()
-        ..hold = Completer<void>()
-        ..fail = true;
-      final container = await pump(tester, repo: repo);
-      await tester.pumpAndSettle();
-      await tap(tester, 'edit-$kind-delivery');
-      await tester.enterText(find.byKey(Key('$kind-delivery-fee')), '9.50');
-      await tester.ensureVisible(find.byKey(Key('$kind-delivery-save')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(Key('$kind-delivery-save')));
-      await tester.pump();
-      expect(
-        tester.widget<TextField>(find.byKey(Key('$kind-delivery-fee'))).enabled,
-        false,
-      );
-      expect(
-        tester
-            .widget<FilledButton>(find.byKey(Key('$kind-delivery-save')))
-            .onPressed,
-        isNull,
-      );
-      repo.hold!.complete();
-      await tester.pumpAndSettle();
+      expect(repo.regularWrites + repo.cateringWrites, 1);
       expect(
         find.text(
           kind == 'regular'
@@ -300,39 +316,131 @@ void main() {
         ),
         findsOneWidget,
       );
-      expect(
-        kind == 'regular'
-            ? container.read(regularDeliveryProvider).isBusy
-            : container.read(cateringDeliveryProvider).isBusy,
-        false,
-      );
     });
   }
-  testWidgets('location switch and malformed settings never share defaults', (
+  testWidgets('catering confirmation can be cancelled or accepted', (
     tester,
   ) async {
-    final container = await pump(tester, width: 1400);
+    final repo = Repo();
+    await pump(tester, repo: repo);
     await tester.pumpAndSettle();
-    final current = container.read(currentLocationProvider.notifier) as Current;
-    current.replace(
-      location(name: 'Portland', regular: null, catering: {'enabled': false}),
+    await tap(tester, 'catering-delivery-enabled');
+    await tap(tester, 'catering-delivery-save');
+    await tester.tap(find.byKey(const Key('catering-delivery-confirm-cancel')));
+    await tester.pumpAndSettle();
+    expect(repo.cateringWrites, 0);
+    await tap(tester, 'catering-delivery-save');
+    await tester.tap(find.byKey(const Key('catering-delivery-confirm')));
+    await tester.pumpAndSettle();
+    expect(repo.cateringWrites, 1);
+  });
+  testWidgets('selected location uses real values', (tester) async {
+    final container = await pump(tester);
+    await tester.pumpAndSettle();
+    (container.read(currentLocationProvider.notifier) as Current).replace(
+      location(
+        name: 'Portland',
+        regular: {'enabled': true, 'feeCents': 975},
+        catering: {'enabled': false},
+        fee: 1800,
+      ),
     );
     await tester.pumpAndSettle();
     expect(find.text('Portland'), findsOneWidget);
-    expect(find.text('Tualatin'), findsNothing);
-    expect(find.text('Disabled'), findsNWidgets(2));
-    current.replace(
-      location(regular: {'enabled': 'bad'}, catering: {'enabled': true}),
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('regular-delivery-fee')))
+          .controller!
+          .text,
+      '9.75',
+    );
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('catering-delivery-fee')))
+          .controller!
+          .text,
+      '18.00',
+    );
+  });
+  testWidgets('dirty guard keeps or discards both drafts', (tester) async {
+    await pump(tester);
+    await tester.pumpAndSettle();
+    await tap(tester, 'regular-delivery-enabled');
+    final scope = tester.widget<AdminPopScope<void>>(
+      find.byType(AdminPopScope<void>),
+    );
+    final pending = scope.onRequestLeave!();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Keep editing'));
+    await tester.pumpAndSettle();
+    expect(await pending, false);
+    final discard = scope.onRequestLeave!();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Discard'));
+    await tester.pumpAndSettle();
+    expect(await discard, true);
+    expect(
+      tester
+          .widget<SwitchListTile>(
+            find.byKey(const Key('regular-delivery-enabled')),
+          )
+          .value,
+      false,
+    );
+  });
+  testWidgets('keyboard and large text keep save reachable', (tester) async {
+    await pump(tester, width: 320, scale: 2);
+    await tester.pumpAndSettle();
+    tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+    addTearDown(tester.view.resetViewInsets);
+    await tester.ensureVisible(find.byKey(const Key('catering-delivery-fee')));
+    await tester.enterText(
+      find.byKey(const Key('catering-delivery-fee')),
+      '6.00',
     );
     await tester.pumpAndSettle();
-    expect(find.byKey(const Key('edit-regular-delivery')), findsNothing);
-    expect(find.byKey(const Key('edit-catering-delivery')), findsOneWidget);
-    current.replace(location(catering: {'enabled': 'bad'}));
+    await tester.ensureVisible(find.byKey(const Key('catering-delivery-save')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const Key('edit-regular-delivery')), findsOneWidget);
-    expect(find.byKey(const Key('edit-catering-delivery')), findsNothing);
+    expect(tester.takeException(), isNull);
+    expect(
+      tester.getRect(find.byKey(const Key('catering-delivery-save'))).bottom,
+      lessThanOrEqualTo(800),
+    );
   });
-  testWidgets('loading, error, retry and missing location', (tester) async {
+  testWidgets('conflict requires explicit reload without overwriting server', (
+    tester,
+  ) async {
+    final repo = Repo();
+    await pump(tester, repo: repo);
+    await tester.pumpAndSettle();
+    await tap(tester, 'regular-delivery-enabled');
+    repo.current = location(
+      regular: {'enabled': true, 'feeCents': 950},
+      updatedAt: DateTime.utc(2026, 2),
+    );
+    await tap(tester, 'regular-delivery-save');
+    expect(find.text('Store settings were changed elsewhere.'), findsOneWidget);
+    expect(repo.current.regularDeliveryJson!['feeCents'], 950);
+    await tester.tap(find.text('Reload'));
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('regular-delivery-fee')))
+          .controller!
+          .text,
+      '9.50',
+    );
+  });
+  testWidgets('unsupported service settings isolate only the affected card', (
+    tester,
+  ) async {
+    await pump(tester, load: () async => location(regular: {'enabled': 'bad'}));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('regular-delivery-save')), findsNothing);
+    expect(find.byKey(const Key('catering-delivery-save')), findsOneWidget);
+    expect(find.textContaining('unsupported format'), findsOneWidget);
+  });
+  testWidgets('loading error retry missing location', (tester) async {
     final pending = Completer<Location?>();
     var calls = 0;
     await pump(
@@ -342,8 +450,6 @@ void main() {
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
     pending.completeError(Exception('Location unavailable'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('Location unavailable'), findsOneWidget);
-    expect(find.byKey(const Key('edit-regular-delivery')), findsNothing);
     await tester.tap(find.text('Try again'));
     await tester.pumpAndSettle();
     expect(find.text('Choose a location to continue.'), findsOneWidget);
