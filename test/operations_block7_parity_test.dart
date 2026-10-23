@@ -272,7 +272,9 @@ void main() {
           expect(tester.takeException(), isNull);
           for (var n = 0; n < 5; n++) {
             await tester.drag(
-              find.byType(ListView).first,
+              screen.key == 'promotion detail'
+                  ? find.byKey(const Key('promotion-details-scroll'))
+                  : find.byType(ListView).first,
               const Offset(0, -700),
             );
             await tester.pumpAndSettle();

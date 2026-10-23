@@ -245,8 +245,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.text('Usage claimed'), 400);
-    expect(find.text('Usage claimed'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('Times redeemed'), 400);
+    expect(find.text('Times redeemed'), findsOneWidget);
     expect(find.textContaining('created but not completed'), findsOneWidget);
     expect(
       find.text('This promotion applies to all locations.'),

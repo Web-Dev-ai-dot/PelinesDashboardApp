@@ -1,5 +1,10 @@
 // English source messages and their Spanish UI translations. Backend values are never catalog keys.
 const spanishCatalog = <String, String>{
+  "Back": "Volver",
+  "Promotions could not be loaded.": "No se pudieron cargar las promociones.",
+  "Discount code details": "Detalles del código de descuento",
+  "Usage limit": "Límite de uso",
+  "Times redeemed": "Canjes realizados",
   "This promotion applies to all locations.":
       "Esta promoción se aplica a todas las sucursales.",
   "Modify global promotion": "Modificar promoción global",

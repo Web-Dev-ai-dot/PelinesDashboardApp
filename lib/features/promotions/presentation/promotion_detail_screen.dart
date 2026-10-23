@@ -1,10 +1,14 @@
-import '../../locations/presentation/operations_parity_widgets.dart';
 import '../../../app/theme/app_theme.dart';
+import '../../../core/api/api_exception.dart';
 
 import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
+
+import '../../../core/time/pelines_time.dart';
+import 'promotion_delete_flow.dart';
 
 import '../../../app/navigation/admin_navigation.dart';
 import '../../../app/theme/pelines_components.dart';
@@ -26,6 +30,24 @@ class PromotionDetailScreen extends ConsumerStatefulWidget {
 
 class _PromotionDetailScreenState extends ConsumerState<PromotionDetailScreen> {
   DateTime? _openedUpdatedAt;
+  bool _deleting = false;
+  void _close() => context.go('/app/promotions');
+  Future<void> _delete(Discount discount, Location location) async {
+    if (_deleting || ref.read(promotionMutationProvider).isBusy) return;
+    setState(() => _deleting = true);
+    try {
+      final deleted = await deletePromotionWithConfirmation(
+        context: context,
+        ref: ref,
+        discount: discount,
+        location: location,
+        originalUpdatedAt: _openedUpdatedAt,
+      );
+      if (deleted && mounted) _close();
+    } finally {
+      if (mounted) setState(() => _deleting = false);
+    }
+  }
 
   @override
   void initState() {
@@ -36,73 +58,111 @@ class _PromotionDetailScreenState extends ConsumerState<PromotionDetailScreen> {
   }
 
   @override
+  void didUpdateWidget(covariant PromotionDetailScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.discountId != widget.discountId) _openedUpdatedAt = null;
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final Location? location = ref.watch(currentLocationProvider).value;
+    final selected = ref.watch(currentLocationProvider);
+    final Location? location = selected.isLoading || selected.hasError
+        ? null
+        : selected.value;
     final AsyncValue<List<Discount>> source = ref.watch(promotionsProvider);
-    return Scaffold(
-      appBar: AdminAppBar(
-        title: Text(
-          tr(context, 'Promotion Details'),
-          style: PelinesTypography.pageTitle(Theme.of(context).textTheme),
-        ),
-      ),
-      body: source.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (Object error, StackTrace stack) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                Text(error.toString(), textAlign: TextAlign.center),
-                const SizedBox(height: 16),
-                FilledButton(
-                  style: PelinesControlStyles.button(
-                    PelinesButtonVariant.primary,
-                  ),
-                  onPressed: ref.read(promotionsProvider.notifier).refresh,
-                  child: Text(tr(context, 'Try again')),
-                ),
-              ],
-            ),
+    return AdminPopScope<void>(
+      canPop: false,
+      onRequestLeave: () async => !_deleting,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && !_deleting) _close();
+      },
+      child: Scaffold(
+        appBar: AdminAppBar(
+          leading: IconButton(
+            key: const Key('promotion-details-back'),
+            tooltip: tr(context, 'Back'),
+            onPressed: _deleting ? null : _close,
+            icon: const Icon(Icons.arrow_back),
+          ),
+          title: Text(
+            tr(context, 'Promotions'),
+            style: PelinesTypography.pageTitle(Theme.of(context).textTheme),
           ),
         ),
-        data: (List<Discount> values) {
-          final Discount? discount = _find(values);
-          if (discount == null) {
-            return Center(
-              child: Text(tr(context, 'This promotion no longer exists.')),
-            );
-          }
-          final bool applies =
-              location != null &&
-              (discount.locationId == null ||
-                  discount.locationId == location.id);
-          if (!applies) {
-            return Center(
+        body: source.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (Object error, StackTrace stack) => Center(
+            child: SingleChildScrollView(
               child: Padding(
-                padding: EdgeInsets.all(24),
-                child: Text(
-                  tr(
-                    context,
-                    'This promotion is not available for the selected location.',
-                  ),
-                  textAlign: TextAlign.center,
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Text(
+                      tr(
+                        context,
+                        error is ApiException
+                            ? error.message
+                            : 'Promotions could not be loaded.',
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    FilledButton(
+                      style: PelinesControlStyles.button(
+                        PelinesButtonVariant.primary,
+                      ),
+                      onPressed: ref.read(promotionsProvider.notifier).refresh,
+                      child: Text(tr(context, 'Try again')),
+                    ),
+                  ],
                 ),
               ),
+            ),
+          ),
+          data: (List<Discount> values) {
+            if (selected.isLoading) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            final Discount? discount = _find(values);
+            if (discount == null) {
+              return Center(
+                child: Text(tr(context, 'This promotion no longer exists.')),
+              );
+            }
+            final bool applies =
+                location != null &&
+                (discount.locationId == null ||
+                    discount.locationId == location.id);
+            if (!applies) {
+              return Center(
+                child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Text(
+                    tr(
+                      context,
+                      'This promotion is not available for the selected location.',
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              );
+            }
+            _openedUpdatedAt ??= discount.updatedAt;
+            return _Details(
+              discount: discount,
+              location: location,
+              deleting: _deleting,
+              onClose: _close,
+              onDelete: () => _delete(discount, location),
+              openedUpdatedAt: _openedUpdatedAt!,
+              onReloadSnapshot: () => setState(() {
+                _openedUpdatedAt = discount.updatedAt;
+                ref.read(promotionMutationProvider.notifier).reset();
+              }),
             );
-          }
-          _openedUpdatedAt ??= discount.updatedAt;
-          return _Details(
-            discount: discount,
-            location: location,
-            openedUpdatedAt: _openedUpdatedAt!,
-            onReloadSnapshot: () => setState(() {
-              _openedUpdatedAt = discount.updatedAt;
-              ref.read(promotionMutationProvider.notifier).reset();
-            }),
-          );
-        },
+          },
+        ),
       ),
     );
   }
@@ -121,11 +181,17 @@ class _Details extends ConsumerWidget {
     required this.location,
     required this.openedUpdatedAt,
     required this.onReloadSnapshot,
+    required this.deleting,
+    required this.onClose,
+    required this.onDelete,
   });
   final Discount discount;
   final Location location;
   final DateTime openedUpdatedAt;
   final VoidCallback onReloadSnapshot;
+  final bool deleting;
+  final VoidCallback onClose;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -134,108 +200,219 @@ class _Details extends ConsumerWidget {
     );
     final bool global = discount.locationId == null;
     final bool manageable = discount.locationId == location.id;
-    return OperationsFormList(
-      padding: const EdgeInsets.all(PelinesSpacing.lg),
-      children: <Widget>[
-        PelinesStateBadge(
-          label: global
-              ? tr(context, 'All locations')
-              : '${location.name} · Editable',
-          foreground: global
-              ? PelinesColors.textSecondary
-              : PelinesColors.brandPrimary,
-          background: global
-              ? PelinesColors.mutedSurface
-              : PelinesColors.brandPrimarySoft,
-          icon: global ? Icons.public : Icons.edit_outlined,
-        ),
-        const SizedBox(height: PelinesSpacing.md),
-        Text(
-          discount.code,
-          style: PelinesTypography.pageTitle(Theme.of(context).textTheme),
-        ),
-        const SizedBox(height: 20),
-        _StatusField(discount.effectiveStatus(DateTime.now())),
-        _Field(tr(context, 'Discount'), promotionValue(context, discount)),
-        _Field(tr(context, 'Applies to'), tr(context, discount.appliesToLabel)),
-        _Field(
-          tr(context, 'Scope'),
-          global ? tr(context, 'All locations') : location.name,
-        ),
-        _Field(tr(context, 'Minimum order subtotal'), discount.minimumLabel),
-        _Field(
-          tr(context, 'Starts'),
-          discount.startsLabel ?? tr(context, 'No start date'),
-        ),
-        _Field(
-          tr(context, 'Ends'),
-          discount.endsLabel ?? tr(context, 'No end date'),
-        ),
-        _Field(tr(context, 'Usage claimed'), promotionUsage(context, discount)),
-        Padding(
-          padding: EdgeInsets.only(bottom: 20),
-          child: Text(
-            tr(
-              context,
-              'This count may include orders that were created but not completed.',
-            ),
-          ),
-        ),
-        _Field(
-          tr(context, 'Active setting'),
-          discount.isActive ? tr(context, 'On') : tr(context, 'Off'),
-        ),
-        if (global)
-          Card(
-            child: Padding(
-              padding: EdgeInsets.all(PelinesSpacing.md),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Icon(Icons.public, color: PelinesColors.textSecondary),
-                  SizedBox(width: PelinesSpacing.sm),
-                  Expanded(
-                    child: Text(
-                      tr(context, 'This promotion applies to all locations.'),
+    final busy = deleting || operation.isBusy;
+    final locale = Localizations.localeOf(context).toString();
+    String money(int cents) => NumberFormat.currency(
+      locale: locale,
+      symbol: r'$',
+      decimalDigits: 2,
+    ).format(cents / 100);
+    Widget value(String text) => Text(
+      text,
+      textAlign: TextAlign.end,
+      style: Theme.of(context).textTheme.bodyLarge
+          ?.copyWith(fontWeight: FontWeight.w600),
+    );
+    Widget row(String label, Widget content) =>
+        _DetailRow(label: tr(context, label), child: content);
+    return SafeArea(
+      top: false,
+      child: SingleChildScrollView(
+        key: const Key('promotion-details-scroll'),
+        padding: const EdgeInsets.all(PelinesSpacing.lg),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 760),
+            child: PelinesCard(
+              key: const Key('promotion-details-card'),
+              variant: PelinesCardVariant.raised,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              discount.code,
+                              style: Theme.of(context).textTheme.titleLarge
+                                  ?.copyWith(fontWeight: FontWeight.w700),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              tr(context, 'Discount code details'),
+                              style: Theme.of(context).textTheme.bodyLarge
+                                  ?.copyWith(
+                                    color: PelinesColors.textSecondary,
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        key: const Key('promotion-details-x'),
+                        tooltip: tr(context, 'Close'),
+                        onPressed: busy ? null : onClose,
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ),
+                  const Divider(height: 40),
+                  row(
+                    'Type',
+                    value(
+                      tr(
+                        context,
+                        discount.type == 'percent'
+                            ? 'Percentage'
+                            : 'Fixed amount',
+                      ),
                     ),
                   ),
+                  row(
+                    'Value',
+                    value(
+                      discount.type == 'percent'
+                          ? '${discount.value}%'
+                          : money(discount.value),
+                    ),
+                  ),
+                  row(
+                    'Applies to',
+                    value(tr(context, discount.appliesToLabel)),
+                  ),
+                  row('Minimum order', value(money(discount.minSubtotalCents))),
+                  row(
+                    'Start date',
+                    value(
+                      discount.startsAt == null
+                          ? '—'
+                          : PelinesTime.dayKey(discount.startsAt!),
+                    ),
+                  ),
+                  row(
+                    'End date',
+                    value(
+                      discount.endsAt == null
+                          ? '—'
+                          : PelinesTime.dayKey(discount.endsAt!),
+                    ),
+                  ),
+                  row(
+                    'Usage limit',
+                    value(
+                      discount.usageLimit == null
+                          ? tr(context, 'Unlimited')
+                          : tr(
+                              context,
+                              '{count} total',
+                            ).replaceAll('{count}', '${discount.usageLimit}'),
+                    ),
+                  ),
+                  row(
+                    'Times redeemed',
+                    value(
+                      discount.usageLimit == null
+                          ? '${discount.timesRedeemed}'
+                          : '${discount.timesRedeemed} / ${discount.usageLimit}',
+                    ),
+                  ),
+                  row(
+                    'Location',
+                    value(
+                      global ? tr(context, 'All locations') : location.name,
+                    ),
+                  ),
+                  row(
+                    'Status',
+                    PromotionStatusChip(
+                      discount.effectiveStatus(DateTime.now()),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    tr(
+                      context,
+                      'This count may include orders that were created but not completed.',
+                    ),
+                    style: Theme.of(context).textTheme.bodySmall
+                        ?.copyWith(color: PelinesColors.textSecondary),
+                  ),
+                  if (global) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      tr(context, 'This promotion applies to all locations.'),
+                    ),
+                  ],
+                  const Divider(height: 32),
+                  Wrap(
+                    alignment: WrapAlignment.end,
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      OutlinedButton(
+                        key: const Key('promotion-details-close'),
+                        style: PelinesControlStyles.button(
+                          PelinesButtonVariant.secondary,
+                        ),
+                        onPressed: busy ? null : onClose,
+                        child: Text(tr(context, 'Close')),
+                      ),
+                      if (manageable || global) ...[
+                        TextButton(
+                          key: const Key('promotion-details-delete'),
+                          style: TextButton.styleFrom(
+                            foregroundColor: PelinesColors.destructive,
+                            minimumSize: const Size(48, 48),
+                          ),
+                          onPressed: busy ? null : onDelete,
+                          child: Text(tr(context, 'Delete')),
+                        ),
+                        FilledButton(
+                          key: const Key('edit-promotion'),
+                          style: PelinesControlStyles.button(
+                            PelinesButtonVariant.primary,
+                          ),
+                          onPressed: busy
+                              ? null
+                              : () => context.push(
+                                  '/app/promotions/${discount.id}/edit',
+                                ),
+                          child: Text(tr(context, 'Edit')),
+                        ),
+                      ],
+                    ],
+                  ),
+                  if (manageable) ...[
+                    const SizedBox(height: 16),
+                    OutlinedButton(
+                      key: const Key('promotion-active-action'),
+                      style: PelinesControlStyles.button(
+                        PelinesButtonVariant.secondary,
+                      ),
+                      onPressed: busy
+                          ? null
+                          : () => _confirmAndSave(context, ref),
+                      child: Text(
+                        tr(
+                          context,
+                          discount.isActive
+                              ? 'Deactivate promotion'
+                              : 'Activate promotion',
+                        ),
+                      ),
+                    ),
+                  ],
+                  if (operation.isBusy) const LinearProgressIndicator(),
                 ],
               ),
             ),
           ),
-        if (manageable || global) ...<Widget>[
-          OutlinedButton.icon(
-            style: PelinesControlStyles.button(PelinesButtonVariant.secondary),
-            key: const Key('edit-promotion'),
-            onPressed: operation.isBusy
-                ? null
-                : () => context.push('/app/promotions/${discount.id}/edit'),
-            icon: const Icon(Icons.edit_outlined),
-            label: Text(tr(context, 'Edit Promotion')),
-          ),
-          const SizedBox(height: 10),
-          if (manageable)
-            FilledButton(
-              style: PelinesControlStyles.button(PelinesButtonVariant.primary),
-              key: const Key('promotion-active-action'),
-              onPressed: operation.isBusy
-                  ? null
-                  : () => _confirmAndSave(context, ref),
-              child: Text(
-                operation.isBusy
-                    ? tr(context, 'Checking…')
-                    : discount.isActive
-                    ? tr(context, 'Deactivate promotion')
-                    : tr(context, 'Activate promotion'),
-              ),
-            ),
-          if (operation.isBusy)
-            const Padding(
-              padding: EdgeInsets.only(top: 12),
-              child: LinearProgressIndicator(),
-            ),
-        ],
-      ],
+        ),
+      ),
     );
   }
 
@@ -339,47 +516,31 @@ class _Details extends ConsumerWidget {
   }
 }
 
-class _Field extends StatelessWidget {
-  const _Field(this.label, this.value);
+class _DetailRow extends StatelessWidget {
+  const _DetailRow({required this.label, required this.child});
   final String label;
-  final String value;
-
+  final Widget child;
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: PelinesSpacing.lg),
-    child: Column(
+  Widget build(BuildContext context) => Container(
+    key: ValueKey('promotion-detail-row-$label'),
+    padding: const EdgeInsets.symmetric(vertical: 16),
+    decoration: const BoxDecoration(
+      border: Border(bottom: BorderSide(color: PelinesColors.border)),
+    ),
+    child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Text(
-          label,
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: PelinesColors.textSecondary,
-            letterSpacing: 0.5,
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: Theme.of(context).textTheme.bodyLarge
+                ?.copyWith(color: PelinesColors.textSecondary),
           ),
         ),
-        const SizedBox(height: PelinesSpacing.xxs),
-        Text(value, style: Theme.of(context).textTheme.bodyLarge),
-      ],
-    ),
-  );
-}
-
-class _StatusField extends StatelessWidget {
-  const _StatusField(this.status);
-  final PromotionEffectiveStatus status;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: PelinesSpacing.lg),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Text(
-          tr(context, 'Status'),
-          style: Theme.of(context).textTheme.labelLarge,
+        const SizedBox(width: 16),
+        Expanded(
+          child: Align(alignment: AlignmentDirectional.centerEnd, child: child),
         ),
-        const SizedBox(height: 6),
-        PromotionStatusChip(status),
       ],
     ),
   );

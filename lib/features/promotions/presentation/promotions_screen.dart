@@ -12,6 +12,7 @@ import '../../locations/models/location.dart';
 import '../../locations/providers/locations_providers.dart';
 import '../models/discount.dart';
 import '../providers/promotions_providers.dart';
+import 'promotion_delete_flow.dart';
 
 class PromotionsScreen extends ConsumerStatefulWidget {
   const PromotionsScreen({super.key});
@@ -22,69 +23,14 @@ class PromotionsScreen extends ConsumerStatefulWidget {
 class _PromotionsScreenState extends ConsumerState<PromotionsScreen> {
   bool _confirming = false;
   Future<void> _delete(Discount discount, Location location) async {
-    if (_confirming ||
-        ref.read(promotionMutationProvider).isBusy ||
-        (discount.locationId != null && discount.locationId != location.id)) {
-      return;
-    }
+    if (_confirming || ref.read(promotionMutationProvider).isBusy) return;
     setState(() => _confirming = true);
     try {
-      final confirmed =
-          await showDialog<bool>(
-            context: context,
-            builder: (ctx) => AlertDialog(
-              title: Text(
-                tr(
-                  context,
-                  discount.locationId == null
-                      ? 'Delete global promotion'
-                      : 'Delete discount code?',
-                ),
-              ),
-              content: Text(
-                '${discount.code}\n\n${tr(context, discount.locationId == null ? 'This promotion will no longer be available for future use at all locations. This action cannot be undone.' : 'Customers will no longer be able to use this discount code.')}',
-              ),
-              actions: [
-                TextButton(
-                  key: const Key('promotion-delete-cancel'),
-                  onPressed: () => Navigator.pop(ctx, false),
-                  child: Text(tr(context, 'Cancel')),
-                ),
-                FilledButton(
-                  key: const Key('promotion-delete-confirm'),
-                  style: PelinesControlStyles.button(
-                    PelinesButtonVariant.primary,
-                  ),
-                  onPressed: () => Navigator.pop(ctx, true),
-                  child: Text(tr(context, 'Delete')),
-                ),
-              ],
-            ),
-          ) ??
-          false;
-      if (!confirmed || !mounted) return;
-      await ref
-          .read(promotionMutationProvider.notifier)
-          .delete(
-            discountId: discount.id,
-            locationId: location.id,
-            originalUpdatedAt: discount.updatedAt,
-            global: discount.locationId == null,
-          );
-      if (!mounted) return;
-      final result = ref.read(promotionMutationProvider);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            tr(
-              context,
-              result.message ??
-                  (result.phase == PromotionMutationPhase.success
-                      ? 'Promotion deleted.'
-                      : 'The promotion could not be deleted.'),
-            ),
-          ),
-        ),
+      await deletePromotionWithConfirmation(
+        context: context,
+        ref: ref,
+        discount: discount,
+        location: location,
       );
     } finally {
       if (mounted) setState(() => _confirming = false);
@@ -546,11 +492,12 @@ class _PromotionAction extends StatelessWidget {
 }
 
 class PromotionStatusChip extends StatelessWidget {
-  const PromotionStatusChip(this.status, {super.key});
+  const PromotionStatusChip(this.status, {super.key, this.dot = false});
   final PromotionEffectiveStatus status;
+  final bool dot;
 
   @override
-  Widget build(BuildContext context) => _StatusChip(status);
+  Widget build(BuildContext context) => _StatusChip(status, dot: dot);
 }
 
 class _StatusChip extends StatelessWidget {
