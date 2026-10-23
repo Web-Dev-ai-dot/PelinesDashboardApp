@@ -121,6 +121,13 @@ class TodayOrdersViewState extends ConsumerState<TodayOrdersView> {
                     Expanded(
                       child: TodoStatusBoard(
                         orders: state.orders,
+                        pickedUpOrders:
+                            state.snapshotLocationId == widget.location.id
+                            ? filterTodayPickedUpOrders(
+                                state.fullLocationSnapshot ?? const [],
+                                locationId: widget.location.id,
+                              )
+                            : const [],
                         showChannel: true,
                       ),
                     ),

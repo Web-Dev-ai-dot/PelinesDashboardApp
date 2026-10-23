@@ -157,11 +157,15 @@ void main() {
           final titleRect = tester.getRect(title);
           final refreshRect = tester.getRect(find.byType(AdminHeaderRefresh));
           expect(locationRect.top, greaterThanOrEqualTo(titleRect.bottom));
-          expect(refreshRect.left, greaterThanOrEqualTo(titleRect.right));
-          expect(
-            (refreshRect.center.dy - titleRect.center.dy).abs(),
-            lessThan(1),
-          );
+          if (width < 360 * scale) {
+            expect(refreshRect.top, greaterThanOrEqualTo(titleRect.bottom));
+          } else {
+            expect(refreshRect.left, greaterThanOrEqualTo(titleRect.right));
+            expect(
+              (refreshRect.center.dy - titleRect.center.dy).abs(),
+              lessThan(1),
+            );
+          }
           expect(
             tester.getRect(find.text('Approved description')).top,
             greaterThanOrEqualTo(locationRect.bottom),

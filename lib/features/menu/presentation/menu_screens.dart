@@ -716,11 +716,7 @@ class _LocationHeader extends StatelessWidget {
           icon: Icons.storefront_outlined,
         ),
         ?action,
-        IconButton(
-          tooltip: tr(context, 'Refresh'),
-          onPressed: onRefresh,
-          icon: const Icon(Icons.refresh),
-        ),
+        AdminHeaderRefresh(onPressed: onRefresh),
       ],
     ),
   );

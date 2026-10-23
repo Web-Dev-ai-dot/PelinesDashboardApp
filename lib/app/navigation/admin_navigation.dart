@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../features/auth/providers/auth_providers.dart';
 import '../../features/locations/providers/locations_providers.dart';
+import '../../features/locations/models/location.dart';
 import '../../features/locations/presentation/pelines_location_selector.dart';
 import '../../features/locations/presentation/pelines_location_context.dart';
 import '../theme/pelines_tokens.dart';
@@ -239,11 +240,27 @@ class AdminSectionScaffold extends ConsumerWidget {
                           )
                         : text ?? const SizedBox.shrink(),
                   );
-                  final title = Row(
+                  final stackActions =
+                      constraints.maxWidth <
+                      360 * MediaQuery.textScalerOf(context).scale(1);
+                  final title = Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      if (appBar.leading != null) appBar.leading!,
-                      Expanded(child: heading),
-                      ...?appBar.actions,
+                      Row(
+                        children: [
+                          if (appBar.leading != null) appBar.leading!,
+                          Expanded(child: heading),
+                          if (!stackActions) ...?appBar.actions,
+                        ],
+                      ),
+                      if (stackActions && appBar.actions?.isNotEmpty == true)
+                        Wrap(
+                          alignment: WrapAlignment.end,
+                          spacing: PelinesSpacing.xs,
+                          runSpacing: PelinesSpacing.xs,
+                          children: appBar.actions!,
+                        ),
                     ],
                   );
                   final contextLine = location == null
@@ -305,7 +322,14 @@ class AdminHeaderRefresh extends StatelessWidget {
         shape: const StadiumBorder(),
         foregroundColor: PelinesColors.textPrimary,
       ),
-      child: Icon(Icons.refresh, semanticLabel: tr(context, 'Refresh')),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.refresh, size: 20),
+          const SizedBox(width: PelinesSpacing.xs),
+          Flexible(child: Text(tr(context, 'Refresh'))),
+        ],
+      ),
     ),
   );
 }
@@ -415,13 +439,26 @@ class AdminNavigationShell extends ConsumerStatefulWidget {
 class _AdminNavigationShellState extends ConsumerState<AdminNavigationShell> {
   final _scaffold = GlobalKey<ScaffoldState>();
   bool _busy = false;
-  Future<void> _changeLocation() async {
-    _scaffold.currentState?.closeDrawer();
+  bool _locationsExpanded = false;
+  Future<void> _changeLocation(Location next) async {
     if (_busy) return;
+    if (ref.read(currentLocationProvider).value?.id == next.id) {
+      setState(() => _locationsExpanded = false);
+      return;
+    }
     setState(() => _busy = true);
     try {
       if (!await widget.controller.leaveSection() || !mounted) return;
-      await showPelinesLocationPicker(context, ref);
+      await ref.read(currentLocationProvider.notifier).select(next);
+      if (mounted) setState(() => _locationsExpanded = false);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(tr(context, 'Location could not be selected.')),
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -474,7 +511,9 @@ class _AdminNavigationShellState extends ConsumerState<AdminNavigationShell> {
       // manual choice overrides this default at every permanent-panel width.
       final tablet = constraints.maxWidth - 260 < 640;
       final rail =
-          !compact && (ref.watch(navigationCollapsedProvider) ?? tablet);
+          !compact &&
+          !_locationsExpanded &&
+          (ref.watch(navigationCollapsedProvider) ?? tablet);
       final navWidth = rail ? 76.0 : 260.0;
       Widget navigation() => _AdminDestinationList(
         rail: rail,
@@ -487,11 +526,17 @@ class _AdminNavigationShellState extends ConsumerState<AdminNavigationShell> {
         onNavigate: _navigate,
         onSignOut: _signOut,
         onChangeLocation: _changeLocation,
+        locationsExpanded: _locationsExpanded,
+        onToggleLocations: () =>
+            setState(() => _locationsExpanded = !_locationsExpanded),
         onToggle: compact
             ? null
-            : () => unawaited(
-                ref.read(navigationCollapsedProvider.notifier).select(!rail),
-              ),
+            : () {
+                setState(() => _locationsExpanded = false);
+                unawaited(
+                  ref.read(navigationCollapsedProvider.notifier).select(!rail),
+                );
+              },
       );
       return _NavigationScope(
         controller: widget.controller,
@@ -567,14 +612,29 @@ class _AdminTopBar extends StatelessWidget {
     child: Row(
       children: [
         if (compact)
-          IconButton(
-            key: const Key('admin-open-drawer'),
-            tooltip: tr(context, 'Open navigation'),
-            onPressed: openDrawer,
-            icon: const Icon(Icons.menu_rounded, size: 20),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                key: const Key('admin-open-drawer'),
+                tooltip: tr(context, 'Open navigation'),
+                onPressed: openDrawer,
+                icon: const Icon(Icons.menu_rounded, size: 20),
+              ),
+              const SizedBox(width: PelinesSpacing.xs),
+              Image.asset(
+                'assets/branding/pelines_logo.png',
+                key: const Key('admin-header-logo'),
+                height: 36,
+                width: 96,
+                fit: BoxFit.contain,
+                alignment: Alignment.centerLeft,
+                semanticLabel: 'Pelines Tequila and Mezcal',
+              ),
+            ],
           ),
         const Spacer(),
-        const LanguageToggle(inline: true, horizontalPadding: 0),
+        if (!compact) const LanguageToggle(inline: true, horizontalPadding: 0),
       ],
     ),
   );
@@ -586,9 +646,13 @@ class _ShellLocationContext extends ConsumerWidget {
     required this.busy,
     required this.onChange,
     this.phone = false,
+    required this.expanded,
+    required this.onSelect,
   });
   final bool compact, busy;
   final bool phone;
+  final bool expanded;
+  final Future<void> Function(Location) onSelect;
   final VoidCallback onChange;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -627,12 +691,36 @@ class _ShellLocationContext extends ConsumerWidget {
       subtitle: phone && !loading && !error
           ? locationCityState(location.value?.address)
           : null,
+      expanded: expanded,
     );
     if (!compact) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          selector,
+          Semantics(expanded: expanded, child: selector),
+          if (expanded && !loading && !error)
+            Padding(
+              padding: const EdgeInsets.only(top: PelinesSpacing.xs),
+              child: Material(
+                key: const Key('navigation-location-panel'),
+                color: PelinesColors.card,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(PelinesRadius.pageCard),
+                  side: const BorderSide(color: PelinesColors.border),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(PelinesSpacing.xs),
+                  child: PelinesLocationList(
+                    key: const Key('navigation-location-list'),
+                    locations: locations.value ?? const [],
+                    selectedId: location.value?.id,
+                    onSelected: onSelect,
+                    enabled: !busy,
+                    embedded: true,
+                  ),
+                ),
+              ),
+            ),
           if (!phone)
             if (location.value?.address case final String address)
               Padding(
@@ -660,6 +748,8 @@ class _AdminDestinationList extends ConsumerStatefulWidget {
     required this.onNavigate,
     required this.onSignOut,
     required this.onChangeLocation,
+    required this.locationsExpanded,
+    required this.onToggleLocations,
     required this.phone,
     required this.upcoming,
     required this.onUpcoming,
@@ -671,7 +761,9 @@ class _AdminDestinationList extends ConsumerStatefulWidget {
   final VoidCallback onUpcoming, onClose;
   final AdminDestination selected;
   final ValueChanged<AdminDestination> onNavigate;
-  final VoidCallback onSignOut, onChangeLocation;
+  final VoidCallback onSignOut, onToggleLocations;
+  final bool locationsExpanded;
+  final Future<void> Function(Location) onChangeLocation;
   final VoidCallback? onToggle;
   @override
   ConsumerState<_AdminDestinationList> createState() =>
@@ -1171,16 +1263,23 @@ class _AdminDestinationListState extends ConsumerState<_AdminDestinationList> {
                         ),
                       ),
                     Padding(
-                      padding: EdgeInsets.symmetric(
-                        vertical: widget.phone ? 8 : 12,
+                      padding: EdgeInsets.only(
+                        top: widget.phone ? 8 : 12,
+                        bottom: widget.locationsExpanded
+                            ? PelinesSpacing.md
+                            : widget.phone
+                            ? 8
+                            : 12,
                       ),
                       child: _ShellLocationContext(
                         compact: widget.rail,
                         phone: widget.phone,
                         busy: widget.busy,
+                        expanded: widget.locationsExpanded,
+                        onSelect: widget.onChangeLocation,
                         onChange: () {
                           _closeMenus();
-                          widget.onChangeLocation();
+                          widget.onToggleLocations();
                         },
                       ),
                     ),
@@ -1218,6 +1317,18 @@ class _AdminDestinationListState extends ConsumerState<_AdminDestinationList> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    if (widget.phone)
+                      const Padding(
+                        padding: EdgeInsets.only(bottom: PelinesSpacing.xs),
+                        child: Align(
+                          alignment: AlignmentDirectional.centerStart,
+                          child: LanguageToggle(
+                            inline: true,
+                            horizontalPadding: 0,
+                            segmentWidth: 80,
+                          ),
+                        ),
+                      ),
                     if (widget.rail && email != null)
                       Tooltip(
                         message: email,

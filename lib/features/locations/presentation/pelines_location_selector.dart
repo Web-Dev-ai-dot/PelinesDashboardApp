@@ -27,6 +27,7 @@ class PelinesLocationSelector extends StatelessWidget {
     this.shell = false,
     this.mobileCard = false,
     this.subtitle,
+    this.expanded = false,
     super.key,
   });
   final String locationName;
@@ -35,6 +36,7 @@ class PelinesLocationSelector extends StatelessWidget {
   final bool shell;
   final bool mobileCard;
   final String? subtitle;
+  final bool expanded;
 
   @override
   Widget build(BuildContext context) => compact
@@ -120,7 +122,10 @@ class PelinesLocationSelector extends StatelessWidget {
                     : Text(locationName),
               ),
               const SizedBox(width: PelinesSpacing.xs),
-              Icon(Icons.expand_more, size: mobileCard ? 16 : 24),
+              Icon(
+                expanded ? Icons.expand_less : Icons.expand_more,
+                size: mobileCard ? 16 : 24,
+              ),
             ],
           ),
         );
@@ -173,20 +178,31 @@ class PelinesLocationList extends StatelessWidget {
     required this.locations,
     required this.onSelected,
     this.selectedId,
+    this.enabled = true,
+    this.embedded = false,
     super.key,
   });
   final List<Location> locations;
   final String? selectedId;
+  final bool enabled;
+  final bool embedded;
   final Future<void> Function(Location) onSelected;
   @override
   Widget build(BuildContext context) => ListView.builder(
     shrinkWrap: true,
-    padding: const EdgeInsets.symmetric(vertical: PelinesSpacing.xs),
+    primary: false,
+    physics: embedded ? const NeverScrollableScrollPhysics() : null,
+    padding: embedded
+        ? EdgeInsets.zero
+        : const EdgeInsets.symmetric(vertical: PelinesSpacing.xs),
     itemCount: locations.length,
     itemBuilder: (context, index) {
       final location = locations[index];
       return ListTile(
-        enabled: location.isActive,
+        dense: embedded,
+        minTileHeight: embedded ? 48 : null,
+        minVerticalPadding: embedded ? 0 : null,
+        enabled: enabled && location.isActive,
         selected: selectedId == location.id,
         selectedTileColor: PelinesColors.brandPrimarySoft,
         shape: RoundedRectangleBorder(
@@ -195,17 +211,23 @@ class PelinesLocationList extends StatelessWidget {
         leading: Icon(
           location.isActive ? Icons.storefront_outlined : Icons.store_outlined,
         ),
-        title: Text(location.name),
-        subtitle: Text(
-          [
-            if (location.address != null) location.address!,
-            if (!location.isActive) tr(context, 'Inactive'),
-          ].join('\n'),
+        title: Text(
+          location.name,
+          maxLines: embedded ? 1 : null,
+          overflow: embedded ? TextOverflow.ellipsis : null,
         ),
+        subtitle: embedded
+            ? null
+            : Text(
+                [
+                  if (location.address != null) location.address!,
+                  if (!location.isActive) tr(context, 'Inactive'),
+                ].join('\n'),
+              ),
         trailing: selectedId == location.id
             ? const Icon(Icons.check_circle, color: PelinesColors.brandPrimary)
             : null,
-        onTap: location.isActive ? () => onSelected(location) : null,
+        onTap: enabled && location.isActive ? () => onSelected(location) : null,
       );
     },
   );

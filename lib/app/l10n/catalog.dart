@@ -616,6 +616,7 @@ const spanishCatalog = <String, String>{
   "Phone must be 40 characters or fewer.": "El teléfono debe tener 40 caracteres o menos.",
   "Phone: ": "Teléfono: ",
   "Picked up": "Recogido",
+  "Picked Up": "Recogido",
   "Pickup": "Recogida",
   "Port": "Puerto",
   "Preparing": "En preparación",

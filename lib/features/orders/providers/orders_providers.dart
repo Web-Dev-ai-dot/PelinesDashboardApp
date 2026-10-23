@@ -968,6 +968,26 @@ List<OrderSummary> filterTodayActiveOrders(
   return result;
 }
 
+/// A visual terminal column from the already fetched full location snapshot.
+/// Uses the same paid/operational-day rules as To Do; never widens its query.
+List<OrderSummary> filterTodayPickedUpOrders(
+  List<OrderSummary> snapshot, {
+  required String locationId,
+  DateTime? now,
+}) {
+  final unique = <String, OrderSummary>{};
+  for (final order in snapshot) {
+    if (order.locationId == locationId &&
+        order.status == OrderStatus.delivered &&
+        order.fulfillmentType == FulfillmentType.pickup &&
+        order.paymentStatus.isOperationallyPaid &&
+        PelinesTime.isToday(order.operationalAt, now: now)) {
+      unique[order.id] = order;
+    }
+  }
+  return unique.values.toList()..sort(compareOperationalOrders);
+}
+
 int compareOperationalOrders(OrderSummary a, OrderSummary b) {
   final bool aScheduled = a.scheduledFor != null;
   final bool bScheduled = b.scheduledFor != null;

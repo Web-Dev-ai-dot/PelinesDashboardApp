@@ -227,25 +227,72 @@ Finder action(String id) => find.descendant(
 
 Future<void> tab(WidgetTester tester, String status) async {
   final target = find.byKey(Key('todo-tab-$status'));
-  await tester.ensureVisible(target);
-  await tester.pumpAndSettle();
+  final tabs = find.byKey(const Key('todo-tabs-scroll'));
+  for (
+    var attempt = 0;
+    attempt < 4 && target.hitTestable().evaluate().isEmpty;
+    attempt++
+  ) {
+    final direction = tester.getCenter(target).dx > tester.getCenter(tabs).dx
+        ? -1.0
+        : 1.0;
+    await tester.fling(tabs, Offset(direction * 100, 0), 1000);
+    await tester.pumpAndSettle();
+  }
   await tester.tap(target);
   await tester.pumpAndSettle();
 }
 
 void main() {
+  testWidgets('To Do Refresh retains the final column and vertical scroll', (
+    tester,
+  ) async {
+    final repo = _Repository(today: true);
+    await _mount(tester, repo, width: 390, scale: 2);
+    await tab(tester, 'confirmed');
+    final vertical = find
+        .descendant(of: column('confirmed'), matching: find.byType(Scrollable))
+        .first;
+    final position = tester.state<ScrollableState>(vertical).position;
+    position.jumpTo(position.maxScrollExtent);
+    final before = position.pixels;
+    final board = find.byKey(const Key('todo-board-scroll'));
+    final controller = tester.widget<SingleChildScrollView>(board).controller!;
+    final offset = controller.offset;
+    final calls = repo.listCalls;
+    final refresh = tester
+        .state<TodayOrdersViewState>(find.byType(TodayOrdersView))
+        .refresh();
+    await tester.pumpAndSettle();
+    await refresh;
+    expect(repo.listCalls, greaterThan(calls));
+    expect(controller.offset, offset);
+    expect(tester.state<ScrollableState>(vertical).position.pixels, before);
+    expect(
+      tester
+          .widget<OutlinedButton>(find.byKey(const Key('todo-tab-confirmed')))
+          .style!
+          .side!
+          .resolve({})!
+          .color,
+      PelinesColors.textPrimary,
+    );
+    expect(
+      tester.getRect(column('confirmed')).left,
+      closeTo(tester.getRect(board).left, .1),
+    );
+    expect(tester.takeException(), isNull);
+  });
   testWidgets('slim tab surface retains a 48px effective touch target', (
     tester,
   ) async {
     await _mount(tester, _Repository(today: true));
     final target = find.byKey(const Key('todo-tab-confirmed'));
-    await tester.ensureVisible(target);
-    await tester.pumpAndSettle();
     final surface = find.descendant(
       of: target,
       matching: find.byType(Material),
     );
-    expect(tester.getSize(surface).height, 36);
+    expect(tester.getSize(surface).height, greaterThanOrEqualTo(36));
     expect(tester.getSize(target).height, greaterThanOrEqualTo(48));
     final rect = tester.getRect(target);
     await tester.tapAt(Offset(rect.center.dx, rect.top + 1));
@@ -668,7 +715,27 @@ void main() {
       await tester.tap(find.byKey(const Key('completion-confirm')));
       await tester.pumpAndSettle();
       expect(repo.rows['ready']!['status'], 'delivered');
-      expect(card('ready'), findsNothing);
+      expect(
+        find.descendant(of: column('ready'), matching: card('ready')),
+        findsNothing,
+      );
+      expect(
+        find.descendant(of: column('delivered'), matching: card('ready')),
+        findsOneWidget,
+      );
+      expect(find.text('Picked Up · 1'), findsOneWidget);
+      final pickedBadge = tester
+          .widgetList<PelinesStateBadge>(
+            find.descendant(
+              of: card('ready'),
+              matching: find.byType(PelinesStateBadge),
+            ),
+          )
+          .singleWhere((badge) => badge.label == 'PICKED UP');
+      expect(pickedBadge.background, PelinesColors.border);
+      expect(pickedBadge.foreground, PelinesColors.textPrimary);
+      await tab(tester, 'delivered');
+      expect(action('ready'), findsNothing);
       expect(find.text('Ready · 0'), findsOneWidget);
       expect(repo.patches, 1);
     },

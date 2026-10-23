@@ -34,6 +34,11 @@ class OrderPreviewCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final richLayout = statusBoard || planning;
+    final pickedUpBoard =
+        statusBoard &&
+        !planning &&
+        order.status == OrderStatus.delivered &&
+        order.fulfillmentType == FulfillmentType.pickup;
     final detail = statusBoard || planning
         ? ref.watch(orderDetailProvider(order.id))
         : null;
@@ -94,17 +99,24 @@ class OrderPreviewCard extends ConsumerWidget {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    PelinesOrderBadges.status(
-                      status: order.status,
-                      label: tr(
-                        context,
-                        statusLabel(
-                          order.status,
-                          order.fulfillmentType,
-                          order.rawStatus,
+                    if (pickedUpBoard)
+                      PelinesStateBadge(
+                        label: tr(context, 'Picked up').toUpperCase(),
+                        foreground: PelinesColors.textPrimary,
+                        background: PelinesColors.border,
+                      )
+                    else
+                      PelinesOrderBadges.status(
+                        status: order.status,
+                        label: tr(
+                          context,
+                          statusLabel(
+                            order.status,
+                            order.fulfillmentType,
+                            order.rawStatus,
+                          ),
                         ),
                       ),
-                    ),
                     PelinesOrderBadges.type(
                       type: order.orderType,
                       label: tr(context, orderTypeLabel(order.orderType)),

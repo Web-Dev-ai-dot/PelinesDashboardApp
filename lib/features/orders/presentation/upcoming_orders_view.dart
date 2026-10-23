@@ -224,6 +224,7 @@ class _UpcomingOrdersViewState extends State<UpcomingOrdersView> {
                     child: SizedBox(
                       height: math.max(480, constraints.maxHeight * .8),
                       child: TodoStatusBoard(
+                        paged: false,
                         orders: visible,
                         showChannel: true,
                       ),

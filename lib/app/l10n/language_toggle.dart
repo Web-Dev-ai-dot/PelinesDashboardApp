@@ -9,10 +9,12 @@ class LanguageToggle extends ConsumerWidget {
   const LanguageToggle({
     this.horizontalPadding = PelinesSpacing.lg,
     this.inline = false,
+    this.segmentWidth,
     super.key,
   });
   final double horizontalPadding;
   final bool inline;
+  final double? segmentWidth;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final language = ref.watch(localeProvider).languageCode;
@@ -42,10 +44,13 @@ class LanguageToggle extends ConsumerWidget {
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
                     ),
-                    minimumSize: const Size(
-                      PelinesLayout.touchTarget,
+                    minimumSize: Size(
+                      segmentWidth ?? PelinesLayout.touchTarget,
                       PelinesLayout.touchTarget,
                     ),
+                    fixedSize: segmentWidth == null
+                        ? null
+                        : Size.fromWidth(segmentWidth!),
                     padding: const EdgeInsets.symmetric(
                       horizontal: PelinesSpacing.sm,
                     ),

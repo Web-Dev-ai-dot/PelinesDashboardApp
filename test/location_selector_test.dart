@@ -5,6 +5,7 @@ import 'package:pelines_admin_app/features/locations/presentation/pelines_locati
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pelines_admin_app/app/theme/app_theme.dart';
+import 'package:pelines_admin_app/app/theme/pelines_tokens.dart';
 import 'package:pelines_admin_app/app/navigation/admin_navigation.dart';
 import 'package:pelines_admin_app/features/account/presentation/admin_home_screen.dart';
 import 'package:pelines_admin_app/features/locations/data/location_selection_store.dart';
@@ -144,8 +145,14 @@ void main() {
             ),
             findsNothing,
           );
-          expect(find.byKey(const Key('language-en')), findsOneWidget);
-          expect(find.byKey(const Key('language-es')), findsOneWidget);
+          expect(
+            find.byKey(const Key('language-en')),
+            width < 600 ? findsNothing : findsOneWidget,
+          );
+          expect(
+            find.byKey(const Key('language-es')),
+            width < 600 ? findsNothing : findsOneWidget,
+          );
           await tester.tap(context);
           await tester.pumpAndSettle();
           expect(find.byType(BottomSheet), findsNothing);
@@ -172,11 +179,73 @@ void main() {
           expect(tester.getSize(selector).height, greaterThanOrEqualTo(48));
           await tester.tap(selector);
           await tester.pumpAndSettle();
-          expect(find.byType(BottomSheet), findsOneWidget);
-          final sheetScroll = find.descendant(
-            of: find.byType(BottomSheet),
-            matching: find.byType(Scrollable),
+          expect(find.byType(BottomSheet), findsNothing);
+          final options = find.byKey(const Key('navigation-location-list'));
+          final panel = find.byKey(const Key('navigation-location-panel'));
+          final surface = tester.widget<Material>(panel);
+          expect(surface.color, PelinesColors.card);
+          final shape = surface.shape! as RoundedRectangleBorder;
+          expect(shape.side.color, PelinesColors.border);
+          expect(shape.side.width, 1);
+          expect(
+            shape.borderRadius,
+            BorderRadius.circular(PelinesRadius.pageCard),
           );
+          final panelRect = tester.getRect(panel);
+          final optionsRect = tester.getRect(options);
+          expect(
+            panelRect.top -
+                tester
+                    .getRect(find.byKey(const Key('location-selector')))
+                    .bottom,
+            8,
+          );
+          expect(optionsRect.left - panelRect.left, 8);
+          expect(panelRect.right - optionsRect.right, 8);
+          expect(optionsRect.top - panelRect.top, 8);
+          expect(panelRect.bottom - optionsRect.bottom, 8);
+          final rows = find.descendant(
+            of: options,
+            matching: find.byType(ListTile),
+          );
+          expect(rows, findsNWidgets(_locations.length));
+          for (final row in rows.evaluate()) {
+            final tile = row.widget as ListTile;
+            expect(tile.subtitle, isNull);
+            expect((tile.title! as Text).maxLines, 1);
+            expect(
+              tester.getSize(find.byWidget(tile)).height,
+              greaterThanOrEqualTo(48),
+            );
+          }
+          expect(
+            find.descendant(
+              of: options,
+              matching: find.text(_locations.first.name),
+            ),
+            findsOneWidget,
+          );
+          expect(
+            find.descendant(
+              of: options,
+              matching: find.textContaining('25627 SE Stark'),
+            ),
+            findsNothing,
+          );
+          final active = tester.widget<ListTile>(rows.first);
+          expect(active.selected, isTrue);
+          expect((active.trailing! as Icon).icon, Icons.check_circle);
+          expect(
+            tester.getRect(find.byKey(const Key('nav-orders'))).top -
+                panelRect.bottom,
+            greaterThanOrEqualTo(16),
+          );
+          final sheetScroll = find
+              .descendant(
+                of: find.byKey(const Key('admin-navigation-list')),
+                matching: find.byType(Scrollable),
+              )
+              .first;
           await tester.scrollUntilVisible(
             find.text('Inactive restaurant'),
             150,
@@ -204,6 +273,18 @@ void main() {
           await tester.tap(nextLocation);
           await tester.pumpAndSettle();
           expect(store.value, 'second');
+          expect(
+            find.byKey(const Key('navigation-location-panel')),
+            findsNothing,
+          );
+          if (width < 600) {
+            expect(find.byType(Drawer).hitTestable(), findsOneWidget);
+            final en = tester.getSize(find.byKey(const Key('language-en')));
+            final es = tester.getSize(find.byKey(const Key('language-es')));
+            expect(en, es);
+            expect(en.width, 80);
+            expect(en.height, 48);
+          }
           expect(container.read(currentLocationProvider).value?.id, 'second');
           expect(
             tester.widget<PelinesLocationContext>(context).location.id,
@@ -217,6 +298,11 @@ void main() {
             findsWidgets,
           );
           expect(find.byType(BottomSheet), findsNothing);
+          if (width < 600) {
+            expect(find.byType(Drawer).hitTestable(), findsOneWidget);
+            Navigator.of(tester.element(find.byType(Drawer))).pop();
+            await tester.pumpAndSettle();
+          }
           // To Do is Today-only; date selection belongs to Orders / Upcoming.
           expect(find.byKey(const Key('orders-date-selector')), findsNothing);
           final labels = language == 'es'

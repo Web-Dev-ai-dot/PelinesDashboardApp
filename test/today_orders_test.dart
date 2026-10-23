@@ -11,6 +11,125 @@ import 'package:pelines_admin_app/features/orders/providers/orders_providers.dar
 
 void main() {
   setUpAll(PelinesTime.initialize);
+  test(
+    'Picked Up follows Refresh and location without additional queries',
+    () async {
+      final today = DateTime.now().toUtc().toIso8601String();
+      final repository = _RecordingRepository();
+      repository.rows['first'] = [
+        _order('collected', OrderStatus.delivered, today, locationId: 'first'),
+        _order(
+          'delivery',
+          OrderStatus.delivered,
+          today,
+          locationId: 'first',
+          fulfillment: FulfillmentType.delivery,
+        ),
+      ];
+      repository.rows['second'] = [
+        _order(
+          'second-pickup',
+          OrderStatus.delivered,
+          today,
+          locationId: 'second',
+        ),
+      ];
+      final container = ProviderContainer(
+        overrides: [
+          currentLocationProvider.overrideWith(_FakeCurrentLocation.new),
+          ordersRepositoryProvider.overrideWithValue(repository),
+        ],
+      );
+      addTearDown(container.dispose);
+      final subscription = container.listen(todayOrdersProvider, (_, _) {});
+      addTearDown(subscription.close);
+      final first = await container.read(todayOrdersProvider.future);
+      expect(first.orders, isEmpty);
+      expect(
+        filterTodayPickedUpOrders(
+          first.fullLocationSnapshot!,
+          locationId: 'first',
+        ).map((o) => o.id),
+        ['collected-id'],
+      );
+      expect(repository.locationIds, ['first']);
+      repository.rows['first'] = [];
+      await container.read(todayOrdersProvider.notifier).refresh();
+      expect(
+        container.read(todayOrdersProvider).requireValue.fullLocationSnapshot,
+        isEmpty,
+      );
+      (container.read(currentLocationProvider.notifier) as _FakeCurrentLocation)
+          .change(_location('second'));
+      final second = await container.read(todayOrdersProvider.future);
+      expect(second.snapshotLocationId, 'second');
+      expect(
+        filterTodayPickedUpOrders(
+          second.fullLocationSnapshot!,
+          locationId: 'second',
+        ).map((o) => o.id),
+        ['second-pickup-id'],
+      );
+      expect(repository.locationIds, ['first', 'first', 'second']);
+      expect(repository.statuses, everyElement(isNull));
+    },
+  );
+  test('Picked Up uses the existing full snapshot, excludes delivery and deduplicates', () {
+    final now = DateTime.parse('2026-09-04T19:00:00Z');
+    final picked = _order(
+      'picked',
+      OrderStatus.delivered,
+      '2026-09-04T18:00:00Z',
+    );
+    final snapshot = [
+      picked,
+      picked,
+      _order(
+        'delivery',
+        OrderStatus.delivered,
+        '2026-09-04T18:00:00Z',
+        fulfillment: FulfillmentType.delivery,
+      ),
+      _order(
+        'unknown',
+        OrderStatus.delivered,
+        '2026-09-04T18:00:00Z',
+        fulfillment: FulfillmentType.unknown,
+      ),
+      _order(
+        'foreign',
+        OrderStatus.delivered,
+        '2026-09-04T18:00:00Z',
+        locationId: 'other',
+      ),
+      _order('yesterday', OrderStatus.delivered, '2026-09-03T18:00:00Z'),
+      _order(
+        'refunded',
+        OrderStatus.delivered,
+        '2026-09-04T18:00:00Z',
+        payment: PaymentStatus.refunded,
+      ),
+      _order('ready', OrderStatus.ready, '2026-09-04T18:00:00Z'),
+      _order('cancelled', OrderStatus.cancelled, '2026-09-04T18:00:00Z'),
+    ];
+    final result = filterTodayPickedUpOrders(
+      snapshot,
+      locationId: 'location-id',
+      now: now,
+    );
+    expect(result.map((o) => o.id), [picked.id]);
+    expect(filterTodayActiveOrders(snapshot, now: now).map((o) => o.id), [
+      'ready-id',
+    ]);
+    expect(
+      filterTodayPickedUpOrders(
+        snapshot,
+        locationId: 'other',
+        now: now,
+      ).map((o) => o.id),
+      ['foreign-id'],
+    );
+  });
   for (final fail in [false, true]) {
     test(
       'late location response cannot replace full snapshot, failure=$fail',
@@ -193,15 +312,17 @@ OrderSummary _order(
   String created, {
   String? scheduled,
   PaymentStatus payment = PaymentStatus.paid,
+  FulfillmentType fulfillment = FulfillmentType.pickup,
+  String locationId = 'location-id',
 }) => OrderSummary(
   id: '$number-id',
   orderNumber: number,
-  locationId: 'location-id',
+  locationId: locationId,
   orderType: OrderType.online,
   status: status,
   rawStatus: status.name,
   paymentStatus: payment,
-  fulfillmentType: FulfillmentType.pickup,
+  fulfillmentType: fulfillment,
   contactName: 'Customer',
   scheduledFor: scheduled == null ? null : DateTime.parse(scheduled),
   createdAt: DateTime.parse(created),
@@ -228,6 +349,8 @@ class _FakeCurrentLocation extends CurrentLocationController {
 }
 
 class _RecordingRepository implements OrdersRepository {
+  final rows = <String, List<OrderSummary>>{};
+  final statuses = <OrderStatus?>[];
   Completer<List<OrderSummary>>? pending;
   final List<String> locationIds = <String>[];
   @override
@@ -236,10 +359,11 @@ class _RecordingRepository implements OrdersRepository {
     OrderStatus? status,
   }) async {
     locationIds.add(locationId);
+    statuses.add(status);
     final held = pending;
     pending = null;
     if (held != null) return held.future;
-    return <OrderSummary>[];
+    return rows[locationId] ?? <OrderSummary>[];
   }
 
   @override
