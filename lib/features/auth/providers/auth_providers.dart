@@ -5,10 +5,18 @@ import '../../../core/api/api_client.dart';
 import '../../account/data/account_repository.dart';
 import '../data/auth_repository.dart';
 import '../models/admin_session.dart';
+import '../models/password_change.dart';
 import 'auth_controller.dart';
 
 final authRepositoryProvider = Provider<AuthRepository>((Ref ref) {
   return SupabaseAuthRepository(Supabase.instance.client);
+});
+
+final passwordAuthRepositoryProvider = Provider<PasswordAuthRepository?>((ref) {
+  final repository = ref.watch(authRepositoryProvider);
+  return repository is PasswordAuthRepository
+      ? repository as PasswordAuthRepository
+      : null;
 });
 
 final apiClientProvider = Provider<ApiClient>((Ref ref) {

@@ -9,10 +9,12 @@ import '../../../app/navigation/admin_navigation.dart';
 import '../../../app/theme/pelines_components.dart';
 import '../../../app/theme/pelines_tokens.dart';
 import '../../auth/models/admin_session.dart';
+import '../../locations/presentation/pelines_location_context.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../models/profile.dart';
 import '../models/profile_edit.dart';
 import '../providers/profile_mutation_controller.dart';
+import 'change_password_dialog.dart';
 
 class AccountScreen extends ConsumerWidget {
   const AccountScreen({super.key});
@@ -20,88 +22,29 @@ class AccountScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final AsyncValue<AdminSession?> session = ref.watch(authControllerProvider);
-    return AdminSectionScaffold(
-      appBar: AdminAppBar(
-        title: Text(
-          tr(context, 'My Profile'),
-          style: PelinesTypography.pageTitle(Theme.of(context).textTheme),
-        ),
+    return session.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (Object error, StackTrace stack) => _AccountError(
+        message: error.toString(),
+        onRetry: ref.read(authControllerProvider.notifier).retrySession,
       ),
-      body: session.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (Object error, StackTrace stack) => _AccountError(
-          message: error.toString(),
-          onRetry: ref.read(authControllerProvider.notifier).retrySession,
-        ),
-        data: (AdminSession? value) {
-          if (value == null || value.email == null || value.email!.isEmpty) {
-            return _AccountError(
-              message: tr(
-                context,
-                'Your authenticated email is unavailable. Please sign in again.',
-              ),
-              onRetry: ref.read(authControllerProvider.notifier).retrySession,
-            );
-          }
-          return _AccountContent(session: value);
-        },
-      ),
-    );
-  }
-}
-
-class _AccountContent extends ConsumerWidget {
-  const _AccountContent({required this.session});
-  final AdminSession session;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final Profile profile = session.profile;
-    return PelinesPageBody(
-      child: ListView(
-        padding: const EdgeInsets.all(PelinesSpacing.lg),
-        children: <Widget>[
-          PelinesSettingsCard(
-            key: const Key('profile-card'),
-            title: tr(context, 'My Profile'),
-            children: [
-              PelinesSettingsFields(
-                children: [
-                  _ProfileRow(
-                    tr(context, 'Full name'),
-                    _display(profile.fullName),
-                  ),
-                  _ProfileRow(
-                    tr(context, 'Email'),
-                    session.email!,
-                    helper: tr(context, 'Read-only'),
-                  ),
-                  _ProfileRow(tr(context, 'Phone'), _display(profile.phone)),
-                  _ProfileRow(
-                    tr(context, 'Role'),
-                    tr(context, 'Admin'),
-                    helper: tr(context, 'Read-only'),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: PelinesSpacing.md),
-          FilledButton.icon(
-            style: PelinesControlStyles.button(PelinesButtonVariant.primary),
-            key: const Key('edit-profile'),
-            onPressed: () => Navigator.push<void>(
+      data: (AdminSession? value) {
+        if (value == null || value.email == null || value.email!.isEmpty) {
+          return _AccountError(
+            message: tr(
               context,
-              MaterialPageRoute<void>(
-                builder: (_) =>
-                    EditProfileScreen(profile: profile, email: session.email!),
-              ),
+              'Your authenticated email is unavailable. Please sign in again.',
             ),
-            icon: const Icon(Icons.edit_outlined),
-            label: Text(tr(context, 'Edit Profile')),
-          ),
-        ],
-      ),
+            onRetry: ref.read(authControllerProvider.notifier).retrySession,
+          );
+        }
+        return EditProfileScreen(
+          key: ValueKey(value.profile.id),
+          profile: value.profile,
+          email: value.email!,
+          inline: true,
+        );
+      },
     );
   }
 }
@@ -111,9 +54,11 @@ class EditProfileScreen extends ConsumerStatefulWidget {
     super.key,
     required this.profile,
     required this.email,
+    this.inline = false,
   });
   final Profile profile;
   final String email;
+  final bool inline;
 
   @override
   ConsumerState<EditProfileScreen> createState() => _EditProfileScreenState();
@@ -156,116 +101,191 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   Widget build(BuildContext context) {
     final ProfileMutationState operation = ref.watch(profileMutationProvider);
     final ProfileDraftResult desired = _desired;
+    final form = PelinesPageBody(
+      child: ListView(
+        padding: const EdgeInsets.all(PelinesSpacing.lg),
+        children: [
+          Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 640),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  PelinesPageHeader(
+                    title: tr(context, 'My Profile'),
+                    location: const SectionLocationContext(bottomSpacing: 0),
+                    subtitle: tr(
+                      context,
+                      'Manage your personal account information.',
+                    ),
+                  ),
+                  const SizedBox(height: PelinesSpacing.xl),
+                  PelinesSectionHeading(tr(context, 'Profile information')),
+                  const SizedBox(height: PelinesSpacing.md),
+                  PelinesSettingsCard(
+                    key: const Key('profile-card'),
+                    children: [
+                      _field(
+                        tr(context, 'Full name'),
+                        TextField(
+                          key: const Key('profile-full-name'),
+                          controller: _name,
+                          enabled: !operation.isBusy,
+                          maxLength: 120,
+                          textCapitalization: TextCapitalization.words,
+                          autofillHints: const [AutofillHints.name],
+                          decoration: PelinesControlStyles.input().copyWith(
+                            counterText: '',
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: PelinesSpacing.lg),
+                      _field(
+                        tr(context, 'Email address'),
+                        TextFormField(
+                          key: const Key('profile-email'),
+                          initialValue: widget.email,
+                          readOnly: true,
+                          maxLines: null,
+                          decoration: PelinesControlStyles.input().copyWith(
+                            fillColor: PelinesColors.mutedSurface,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: PelinesSpacing.lg),
+                      _field(
+                        tr(context, 'Phone number'),
+                        TextField(
+                          key: const Key('profile-phone'),
+                          controller: _phone,
+                          enabled: !operation.isBusy,
+                          maxLength: 40,
+                          keyboardType: TextInputType.phone,
+                          autofillHints: const [AutofillHints.telephoneNumber],
+                          decoration: PelinesControlStyles.input().copyWith(
+                            counterText: '',
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: PelinesSpacing.lg),
+                      const Divider(color: PelinesColors.border),
+                      const SizedBox(height: PelinesSpacing.md),
+                      Text(
+                        tr(context, 'Password'),
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: PelinesSpacing.sm),
+                      Text(
+                        tr(
+                          context,
+                          "Use a strong password you don't reuse elsewhere.",
+                        ),
+                        style: Theme.of(context).textTheme.bodyMedium
+                            ?.copyWith(color: PelinesColors.textSecondary),
+                      ),
+                      const SizedBox(height: PelinesSpacing.md),
+                      Align(
+                        alignment: AlignmentDirectional.centerStart,
+                        child: OutlinedButton(
+                          key: const Key('profile-change-password'),
+                          style: PelinesControlStyles.button(
+                            PelinesButtonVariant.secondary,
+                          ),
+                          onPressed: operation.isBusy
+                              ? null
+                              : () => showChangePasswordDialog(context),
+                          child: Text(
+                            tr(context, 'Change password'),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: PelinesSpacing.md),
+                      if (desired.message != null)
+                        _message(desired.message!, error: true),
+                      if (operation.phase == ProfileMutationPhase.error &&
+                          operation.message != null)
+                        _message(operation.message!, error: true),
+                      if (operation.phase == ProfileMutationPhase.success)
+                        _message(tr(context, 'Profile updated.')),
+                      Align(
+                        alignment: AlignmentDirectional.centerStart,
+                        child: FilledButton(
+                          key: const Key('profile-save'),
+                          style: PelinesControlStyles.button(
+                            PelinesButtonVariant.primary,
+                          ),
+                          onPressed:
+                              operation.isBusy || !desired.isValid || !_dirty
+                              ? null
+                              : _save,
+                          child: Text(
+                            tr(
+                              context,
+                              operation.isBusy ? 'Saving...' : 'Save changes',
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ),
+                      if (operation.isBusy)
+                        const Padding(
+                          padding: EdgeInsets.only(top: 12),
+                          child: LinearProgressIndicator(),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
     return AdminPopScope<void>(
-      canPop: !_dirty || operation.isBusy,
+      canPop: !_dirty && !operation.isBusy,
+      onRequestLeave: widget.inline ? _confirmLeave : null,
       onPopInvokedWithResult: (bool didPop, void result) async {
         if (!didPop && !operation.isBusy) await _leave();
       },
       child: Scaffold(
-        appBar: AdminAppBar(
-          title: Text(
-            tr(context, 'Edit Profile'),
-            style: PelinesTypography.pageTitle(Theme.of(context).textTheme),
-          ),
-          leading: IconButton(
-            onPressed: operation.isBusy ? null : _leave,
-            icon: const Icon(Icons.arrow_back),
-          ),
-        ),
-        body: PelinesPageBody(
-          child: PelinesSettingsForm(
-            padding: const EdgeInsets.all(PelinesSpacing.lg),
-            children: <Widget>[
-              PelinesSettingsFields(
-                children: [
-                  TextField(
-                    key: const Key('profile-full-name'),
-                    controller: _name,
-                    enabled: !operation.isBusy,
-                    maxLength: 120,
-                    decoration: PelinesControlStyles.input(
-                      label: tr(context, 'Full name'),
-                    ),
-                  ),
-                  TextField(
-                    key: const Key('profile-phone'),
-                    controller: _phone,
-                    enabled: !operation.isBusy,
-                    maxLength: 40,
-                    keyboardType: TextInputType.phone,
-                    decoration: PelinesControlStyles.input(
-                      label: tr(context, 'Phone'),
-                    ),
-                  ),
-                ],
-              ),
-              PelinesSettingsFields(
-                children: [
-                  PelinesReadOnlyField(
-                    label: tr(context, 'Email'),
-                    value: widget.email,
-                  ),
-                  PelinesReadOnlyField(
-                    label: tr(context, 'Role'),
-                    value: tr(context, 'Admin'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: PelinesSpacing.xl),
-              if (desired.message != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Text(
-                    desired.message!,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                ),
-              if (operation.phase == ProfileMutationPhase.error &&
-                  operation.message != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Text(
-                    operation.message!,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                ),
-              OutlinedButton(
-                style: PelinesControlStyles.button(
-                  PelinesButtonVariant.secondary,
-                ),
-                onPressed: operation.isBusy ? null : _leave,
-                child: Text(tr(context, 'Cancel')),
-              ),
-              const SizedBox(height: 12),
-              FilledButton(
-                style: PelinesControlStyles.button(
-                  PelinesButtonVariant.primary,
-                ),
-                key: const Key('profile-save'),
-                onPressed: operation.isBusy || !desired.isValid || !_dirty
-                    ? null
-                    : _save,
-                child: Text(
-                  operation.isBusy
-                      ? tr(context, 'Saving...')
-                      : tr(context, 'Save Changes'),
+        appBar: widget.inline
+            ? null
+            : AdminAppBar(
+                title: Text(tr(context, 'My Profile')),
+                leading: IconButton(
+                  onPressed: operation.isBusy ? null : _leave,
+                  icon: const Icon(Icons.arrow_back),
                 ),
               ),
-              if (operation.isBusy)
-                const Padding(
-                  padding: EdgeInsets.only(top: 12),
-                  child: LinearProgressIndicator(),
-                ),
-            ],
-          ),
-        ),
+        body: SafeArea(child: form),
       ),
     );
   }
+
+  Widget _field(String label, Widget child) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Text(label, style: Theme.of(context).textTheme.titleMedium),
+      const SizedBox(height: PelinesSpacing.xs),
+      Semantics(label: label, child: child),
+    ],
+  );
+
+  Widget _message(String message, {bool error = false}) => Padding(
+    padding: const EdgeInsets.only(bottom: PelinesSpacing.sm),
+    child: Semantics(
+      liveRegion: true,
+      child: Text(
+        message,
+        style: TextStyle(
+          color: error
+              ? Theme.of(context).colorScheme.error
+              : PelinesColors.textPrimary,
+        ),
+      ),
+    ),
+  );
 
   Future<void> _save() async {
     await ref
@@ -278,7 +298,13 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     if (!mounted) return;
     final ProfileMutationState result = ref.read(profileMutationProvider);
     if (result.phase == ProfileMutationPhase.success) {
-      Navigator.pop(context);
+      if (widget.inline) {
+        final canonical = ref.read(authControllerProvider).value?.profile;
+        if (canonical != null) _load(canonical, reset: false);
+        FocusManager.instance.primaryFocus?.unfocus();
+      } else {
+        Navigator.pop(context);
+      }
       return;
     }
     if (result.phase == ProfileMutationPhase.conflict) {
@@ -313,20 +339,28 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     }
   }
 
-  void _load(Profile profile) {
+  void _load(Profile profile, {bool reset = true}) {
     setState(() {
       _snapshot = profile;
       _name.text = profile.fullName ?? '';
       _phone.text = profile.phone ?? '';
-      ref.read(profileMutationProvider.notifier).reset();
+      if (reset) ref.read(profileMutationProvider.notifier).reset();
     });
   }
 
   Future<void> _leave() async {
-    if (!_dirty) {
+    if (!await _confirmLeave() || !mounted) return;
+    if (widget.inline) {
+      await WidgetsBinding.instance.endOfFrame;
+      if (mounted) Navigator.maybePop(context);
+    } else {
       Navigator.pop(context);
-      return;
     }
+  }
+
+  Future<bool> _confirmLeave() async {
+    if (ref.read(profileMutationProvider).isBusy) return false;
+    if (!_dirty) return true;
     final bool discard =
         await showDialog<bool>(
           context: context,
@@ -348,22 +382,14 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           ),
         ) ??
         false;
-    if (discard && mounted) Navigator.pop(context);
+    if (!mounted) return false;
+    if (discard) {
+      _load(_snapshot);
+      // The shell checks this route's PopScope again after confirmation.
+      await WidgetsBinding.instance.endOfFrame;
+    }
+    return discard;
   }
-}
-
-class _ProfileRow extends StatelessWidget {
-  const _ProfileRow(this.label, this.value, {this.helper});
-  final String label;
-  final String value;
-  final String? helper;
-
-  @override
-  Widget build(BuildContext context) => InputDecorator(
-    decoration: PelinesControlStyles.input(label: label)
-        .copyWith(helperText: helper),
-    child: Text(value, style: Theme.of(context).textTheme.bodyLarge),
-  );
 }
 
 class _AccountError extends StatelessWidget {
@@ -392,6 +418,3 @@ class _AccountError extends StatelessWidget {
     ),
   );
 }
-
-String _display(String? value) =>
-    value == null || value.isEmpty ? 'Not set' : value;

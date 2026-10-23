@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:go_router/go_router.dart';
 import 'package:pelines_admin_app/features/locations/providers/locations_providers.dart';
 import 'package:pelines_admin_app/features/locations/presentation/pelines_location_context.dart';
@@ -16,14 +18,68 @@ import 'package:pelines_admin_app/features/auth/providers/auth_providers.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() {
+  testWidgets(
+    'inline save keeps the page, blocks repeats and adopts canonical data',
+    (tester) async {
+      final harness = await _WidgetHarness.pump(tester, _profile());
+      addTearDown(harness.dispose);
+      harness.account.hold = Completer<void>();
+      await tester.enterText(
+        find.byKey(const Key('profile-full-name')),
+        'Grace',
+      );
+      final save = find.byKey(const Key('profile-save'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(save);
+      await tester.pumpAndSettle();
+      await tester.tap(save);
+      await tester.pump();
+      expect(tester.widget<FilledButton>(save).onPressed, isNull);
+      expect(harness.account.updateCalls, 1);
+      harness.account.hold!.complete();
+      await tester.pumpAndSettle();
+      expect(find.text('Profile updated.'), findsOneWidget);
+      expect(find.byKey(const Key('profile-card')), findsOneWidget);
+      expect(tester.widget<FilledButton>(save).onPressed, isNull);
+      expect(
+        harness.container.read(authControllerProvider).value!.profile.fullName,
+        'Grace',
+      );
+      expect(harness.account.updateCalls, 1);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'location context changes retain the account draft and password action',
+    (tester) async {
+      final harness = await _WidgetHarness.pump(tester, _profile());
+      addTearDown(harness.dispose);
+      final name = find.byKey(const Key('profile-full-name'));
+      await tester.enterText(name, 'Unsaved');
+      (harness.container.read(
+        currentLocationProvider.notifier,
+      ) as HeaderLocation).replace(null);
+      await tester.pumpAndSettle();
+      expect(tester.widget<TextField>(name).controller!.text, 'Unsaved');
+      expect(find.byType(PelinesLocationContext), findsNothing);
+      expect(
+        tester
+            .widget<OutlinedButton>(
+              find.byKey(const Key('profile-change-password')),
+            )
+            .onPressed,
+        isNotNull,
+      );
+      expect(harness.account.updateCalls, 0);
+    },
+  );
   testWidgets('section change awaits the real profile discard confirmation', (
     tester,
   ) async {
     final harness = await _WidgetHarness.pump(tester, _profile());
     addTearDown(harness.dispose);
     expect(find.byKey(const Key('account-log-out')), findsNothing);
-    await tester.tap(find.byKey(const Key('edit-profile')));
-    await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const Key('profile-full-name')),
       'Unsaved name',
@@ -42,23 +98,44 @@ void main() {
     expect(find.byKey(const Key('orders-page')), findsOneWidget);
     expect(harness.account.updateCalls, 0);
   });
-  testWidgets(
-    'shows canonical profile, auth email, nulls, and read-only role',
-    (WidgetTester tester) async {
-      final _WidgetHarness harness = await _WidgetHarness.pump(
-        tester,
-        _profile(fullName: null, phone: null),
-      );
-      addTearDown(harness.dispose);
+  testWidgets('shows editable canonical profile and read-only auth email', (
+    WidgetTester tester,
+  ) async {
+    final _WidgetHarness harness = await _WidgetHarness.pump(
+      tester,
+      _profile(fullName: null, phone: null),
+    );
+    addTearDown(harness.dispose);
 
-      expect(find.text('Not set'), findsNWidgets(2));
-      expect(find.byType(PelinesLocationContext), findsOneWidget);
-      expect(find.text('Tualatin · 7670 SW Nyberg St'), findsOneWidget);
-      expect(find.text('session@example.com'), findsOneWidget);
-      expect(find.text('Admin'), findsOneWidget);
-      expect(find.text('Read-only'), findsNWidgets(2));
-    },
-  );
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('profile-full-name')))
+          .controller!
+          .text,
+      isEmpty,
+    );
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('profile-phone')))
+          .controller!
+          .text,
+      isEmpty,
+    );
+    expect(find.byType(PelinesLocationContext), findsOneWidget);
+    expect(find.text('Tualatin · 7670 SW Nyberg St'), findsOneWidget);
+    expect(find.text('session@example.com'), findsOneWidget);
+    expect(
+      tester
+          .widget<TextField>(
+            find.descendant(
+              of: find.byKey(const Key('profile-email')),
+              matching: find.byType(TextField),
+            ),
+          )
+          .readOnly,
+      isTrue,
+    );
+  });
 
   testWidgets('logout requires confirmation and uses AuthController signOut', (
     WidgetTester tester,
@@ -100,8 +177,6 @@ void main() {
       );
       addTearDown(harness.dispose);
 
-      await tester.tap(find.byKey(const Key('edit-profile')));
-      await tester.pumpAndSettle();
       final Finder name = find.byKey(const Key('profile-full-name'));
       final Finder save = find.byKey(const Key('profile-save'));
       await tester.enterText(name, 'Grace');
@@ -114,17 +189,17 @@ void main() {
 
       await tester.enterText(name, 'Grace');
       await tester.pump();
-      await tester.tap(find.byIcon(Icons.arrow_back));
+      await tester.tap(find.byKey(const Key('nav-orders')));
       await tester.pumpAndSettle();
       expect(find.text('Discard changes?'), findsOneWidget);
       await tester.tap(find.text('Keep editing'));
       await tester.pumpAndSettle();
-      expect(find.text('Edit Profile'), findsOneWidget);
-      await tester.tap(find.byIcon(Icons.arrow_back));
+      expect(find.byKey(const Key('profile-card')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('nav-orders')));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Discard'));
       await tester.pumpAndSettle();
-      expect(find.byKey(const Key('profile-card')), findsOneWidget);
+      expect(find.byKey(const Key('orders-page')), findsOneWidget);
       expect(harness.account.updateCalls, 0);
     },
   );
@@ -192,12 +267,26 @@ class _FakeAccountRepository implements AccountRepository {
   _FakeAccountRepository(this.profile);
   Profile profile;
   int updateCalls = 0;
+  Completer<void>? hold;
 
   @override
   Future<Profile> getMe() async => profile;
   @override
   Future<Profile> updateMe(Map<String, dynamic> patch) async {
     updateCalls++;
+    await hold?.future;
+    profile = Profile(
+      id: profile.id,
+      role: profile.role,
+      fullName: patch.containsKey('fullName')
+          ? patch['fullName'] as String?
+          : profile.fullName,
+      phone: patch.containsKey('phone')
+          ? patch['phone'] as String?
+          : profile.phone,
+      createdAt: profile.createdAt,
+      updatedAt: profile.updatedAt.add(const Duration(seconds: 1)),
+    );
     return profile;
   }
 }

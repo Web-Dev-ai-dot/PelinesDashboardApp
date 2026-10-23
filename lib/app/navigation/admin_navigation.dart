@@ -143,9 +143,13 @@ class AdminPopScope<T> extends StatefulWidget {
     required this.canPop,
     required this.onPopInvokedWithResult,
     required this.child,
+    this.onRequestLeave,
     super.key,
   });
   final bool canPop;
+
+  /// Root-page forms confirm a section change without popping their route.
+  final Future<bool> Function()? onRequestLeave;
   final FutureOr<void> Function(bool, T?) onPopInvokedWithResult;
   final Widget child;
   @override
@@ -169,6 +173,7 @@ class _AdminPopScopeState<T> extends State<AdminPopScope<T>> {
       _pending ??= _leave().whenComplete(() => _pending = null);
   Future<bool> _leave() async {
     if (widget.canPop) return true;
+    if (widget.onRequestLeave != null) return widget.onRequestLeave!();
     await widget.onPopInvokedWithResult(false, null);
     return !(_route?.isActive ?? false);
   }
@@ -186,7 +191,11 @@ class _AdminPopScopeState<T> extends State<AdminPopScope<T>> {
       if (didPop) {
         widget.onPopInvokedWithResult(didPop, result);
       } else {
-        unawaited(_requestLeave());
+        if (widget.onRequestLeave != null) {
+          widget.onPopInvokedWithResult(false, result);
+        } else {
+          unawaited(_requestLeave());
+        }
       }
     },
     child: widget.child,

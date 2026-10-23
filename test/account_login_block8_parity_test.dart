@@ -13,6 +13,9 @@ import 'package:pelines_admin_app/features/auth/providers/auth_providers.dart';
 import 'package:pelines_admin_app/features/account/models/profile.dart';
 import 'package:pelines_admin_app/features/account/data/account_repository.dart';
 import 'package:pelines_admin_app/features/account/presentation/account_screen.dart';
+import 'package:pelines_admin_app/features/locations/providers/locations_providers.dart';
+
+import 'section_location_context_test.dart' show HeaderLocation;
 
 final _profile = Profile(
   id: 'admin',
@@ -31,14 +34,14 @@ class _Account implements AccountRepository {
 }
 
 class _Auth extends AuthController {
-  _Auth({this.signedIn = false});
+  _Auth({this.signedIn = false, this.email = 'backend@example.test'});
   final bool signedIn;
+  final String email;
   Completer<void>? hold;
   String? emailSent, passwordSent;
   @override
-  Future<AdminSession?> build() async => signedIn
-      ? AdminSession(profile: _profile, email: 'backend@example.test')
-      : null;
+  Future<AdminSession?> build() async =>
+      signedIn ? AdminSession(profile: _profile, email: email) : null;
   @override
   Future<void> signIn({required String email, required String password}) async {
     emailSent = email;
@@ -67,6 +70,7 @@ Future<void> _pump(
       overrides: [
         authControllerProvider.overrideWith(() => auth),
         accountRepositoryProvider.overrideWithValue(_Account()),
+        currentLocationProvider.overrideWith(HeaderLocation.new),
       ],
       child: MaterialApp(
         theme: AppTheme.light,
@@ -91,6 +95,46 @@ Future<void> _pump(
 }
 
 void main() {
+  for (final viewport in [(320.0, 2.0), (768.0, 1.0)]) {
+    testWidgets('profile long email and keyboard at $viewport', (tester) async {
+      const email =
+          'a.very.long.account.address.for.responsive.testing@example.restaurant.test';
+      await _pump(
+        tester,
+        const AccountScreen(),
+        _Auth(signedIn: true, email: email),
+        viewport.$1,
+        viewport.$2,
+        'en',
+        keyboard: 300,
+      );
+      final name = find.byKey(const Key('profile-full-name'));
+      final phone = find.byKey(const Key('profile-phone'));
+      final emailField = find.byKey(const Key('profile-email'));
+      expect(
+        tester.getTopLeft(name).dy,
+        lessThan(tester.getTopLeft(emailField).dy),
+      );
+      expect(
+        tester.getTopLeft(emailField).dy,
+        lessThan(tester.getTopLeft(phone).dy),
+      );
+      expect(
+        tester.getSize(find.byKey(const Key('profile-card'))).width,
+        lessThanOrEqualTo(640),
+      );
+      await tester.ensureVisible(phone);
+      await tester.pumpAndSettle();
+      await tester.enterText(phone, '555-789');
+      await tester.pumpAndSettle();
+      final save = find.byKey(const Key('profile-save'));
+      await tester.ensureVisible(save);
+      await tester.pumpAndSettle();
+      expect(tester.getSize(save).height, greaterThanOrEqualTo(48));
+      expect(find.text(email), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
   for (final viewport in [
     (390.0, 1.0),
     (768.0, 1.0),
@@ -195,22 +239,7 @@ void main() {
           expect(find.text('Backend Name'), findsOneWidget);
           expect(find.text('backend@example.test'), findsOneWidget);
           expect(find.byKey(const Key('profile-card')), findsOneWidget);
-          expect(
-            find.byKey(
-              ValueKey('settings-fields-${viewport.$1 >= 768 ? 2 : 1}'),
-            ),
-            findsOneWidget,
-          );
-          final edit = find.byKey(const Key('edit-profile'));
-          await tester.scrollUntilVisible(
-            edit,
-            250,
-            scrollable: find.byType(Scrollable).first,
-          );
-          await tester.pumpAndSettle();
-          await tester.tap(edit);
-          await tester.pumpAndSettle();
-          expect(find.byType(TextField), findsNWidgets(2));
+          expect(find.byType(TextField), findsNWidgets(3));
           expect(find.text('backend@example.test'), findsOneWidget);
           final name = find.byKey(const Key('profile-full-name'));
           expect(
@@ -218,7 +247,8 @@ void main() {
             isA<OutlineInputBorder>(),
           );
           await tester.enterText(name, 'Unsaved Backend Name');
-          await tester.tap(find.byIcon(Icons.arrow_back).first);
+          await tester.pumpAndSettle();
+          await tester.binding.handlePopRoute();
           await tester.pumpAndSettle();
           expect(find.byType(AlertDialog), findsOneWidget);
           // Existing guard text is retained; no mutation is sent by cancelling it.
