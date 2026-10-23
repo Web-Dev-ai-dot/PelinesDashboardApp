@@ -24,6 +24,7 @@ import 'catering_delivery_screen.dart';
 import 'auto_accept_screen.dart';
 import 'closure_form_screen.dart';
 import 'pickup_service_card.dart';
+import 'holidays_section.dart';
 import '../models/auto_cancellation.dart';
 import '../providers/locations_providers.dart';
 import '../providers/store_operations_controller.dart';

@@ -1,5 +1,8 @@
 import 'package:dio/dio.dart';
 
+import 'holidays_repository.dart';
+import '../models/holiday.dart';
+
 import 'pickup_service_repository.dart';
 import '../models/pickup_service_settings.dart';
 
@@ -68,7 +71,8 @@ class ApiLocationsRepository
         LocationsRepository,
         AutoCancellationRepository,
         PickupPreferencesRepository,
-        PickupServiceRepository {
+        PickupServiceRepository,
+        HolidaysRepository {
   ApiLocationsRepository(this._client);
 
   final ApiClient _client;
@@ -388,6 +392,45 @@ class ApiLocationsRepository
       () => _client.dio.patch<dynamic>(
         'locations/$locationId',
         data: {'servicePrefsJson': next},
+      ),
+    );
+  }
+
+  @override
+  Future<Location> saveHolidays({
+    required String locationId,
+    required DateTime originalUpdatedAt,
+    required List<Holiday> holidays,
+    required bool Function() canWrite,
+  }) async {
+    final validation = validateHolidays(holidays);
+    if (validation != null) throw ArgumentError(validation);
+    final canonical = await getLocation(locationId);
+    if (!canWrite()) {
+      throw const ApiException(
+        message: 'The selected location changed. No change was sent.',
+      );
+    }
+    if (canonical.updatedAt != originalUpdatedAt) {
+      throw LocationSettingsConflict(canonical);
+    }
+    if (canonical.hoursJson == null) {
+      throw ArgumentError('Configure Standard Hours before saving holidays.');
+    }
+    holidaysFromExtras(
+      canonical.hoursExtrasJson,
+    ); // Reject unsupported data instead of replacing it.
+    // Preserve closures, pickupOverride and future extras; use the existing API.
+    // The API has no conditional PATCH, so the same small race as closures remains.
+    return _locationRequest(
+      () => _client.dio.patch<dynamic>(
+        'locations/$locationId',
+        data: {
+          'hoursExtrasJson': {
+            ...?canonical.hoursExtrasJson,
+            'holidays': holidays.map((h) => h.toJson()).toList(),
+          },
+        },
       ),
     );
   }

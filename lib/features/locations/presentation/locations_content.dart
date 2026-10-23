@@ -92,6 +92,16 @@ class _LocationsContent extends StatelessWidget {
             _TemporaryClosuresCard(location: location, locationsStyle: true),
           ],
         ),
+        const SizedBox(height: 24),
+        Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 860),
+            child: HolidaysSection(
+              key: ValueKey('holidays-${location.id}'),
+              location: location,
+            ),
+          ),
+        ),
       ],
     ),
   );
