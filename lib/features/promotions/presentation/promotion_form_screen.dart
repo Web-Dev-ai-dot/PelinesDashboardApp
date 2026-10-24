@@ -356,6 +356,7 @@ class _PromotionFormState extends ConsumerState<_PromotionForm> {
             busy: busy,
             formatters: [LengthLimitingTextInputFormatter(40)],
             capitalization: TextCapitalization.characters,
+            hint: !_editing && !widget.generateCode ? 'Example: LUNCH10' : null,
           ),
           Text(
             tr(context, 'This is the code customers will enter at checkout.'),
@@ -592,6 +593,7 @@ class _PromotionFormState extends ConsumerState<_PromotionForm> {
     bool number = false,
     String? prefix,
     String? suffix,
+    String? hint,
     List<TextInputFormatter>? formatters,
     TextCapitalization capitalization = TextCapitalization.none,
   }) => Padding(
@@ -612,6 +614,7 @@ class _PromotionFormState extends ConsumerState<_PromotionForm> {
                 ? const TextInputType.numberWithOptions(decimal: true)
                 : null,
             decoration: PelinesControlStyles.input().copyWith(
+              hintText: hint == null ? null : tr(context, hint),
               prefixText: prefix,
               suffixText: suffix,
             ),

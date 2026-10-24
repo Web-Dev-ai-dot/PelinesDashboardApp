@@ -87,6 +87,15 @@ void main() {
               expect(find.byType(AlertDialog), findsNothing);
               expect(code(tester).isNotEmpty, generated);
               expect(
+                tester
+                    .widget<TextField>(find.byKey(const Key('promotion-code')))
+                    .decoration!
+                    .hintText,
+                generated
+                    ? isNull
+                    : (lang == 'en' ? 'Example: LUNCH10' : 'Ejemplo: LUNCH10'),
+              );
+              expect(
                 find.text(
                   lang == 'en'
                       ? 'Create discount code'
@@ -113,27 +122,38 @@ void main() {
       }
     }
   }
-  for (final control in [
-    'promotion-form-cancel',
-    'promotion-form-close',
-    'back',
-  ]) {
-    testWidgets('$control leaves without creating', (tester) async {
-      final repo = CreateRepo();
-      final result = await h.pump(tester, repo);
-      await open(tester);
-      if (control == 'back') {
-        await tester.binding.handlePopRoute();
+  for (final generated in [true, false]) {
+    for (final control in [
+      'promotion-form-cancel',
+      'promotion-form-close',
+      'back',
+    ]) {
+      testWidgets('$control leaves without creating generated=$generated', (
+        tester,
+      ) async {
+        final repo = CreateRepo();
+        final result = await h.pump(tester, repo);
+        await open(tester, generated: generated);
+        if (!generated) {
+          await tester.enterText(
+            find.byKey(const Key('promotion-code')),
+            'MANUAL',
+          );
+          await tester.pumpAndSettle();
+        }
+        if (control == 'back') {
+          await tester.binding.handlePopRoute();
+          await tester.pumpAndSettle();
+        } else {
+          await h.tap(tester, control);
+        }
+        await tester.tap(find.byKey(const Key('promotion-discard-confirm')));
         await tester.pumpAndSettle();
-      } else {
-        await h.tap(tester, control);
-      }
-      await tester.tap(find.byKey(const Key('promotion-discard-confirm')));
-      await tester.pumpAndSettle();
-      expect(repo.creates, 0);
-      expect(find.byType(PromotionsScreen), findsOneWidget);
-      expect(result.c.read(currentLocationProvider).value!.id, 'a');
-    });
+        expect(repo.creates, 0);
+        expect(find.byType(PromotionsScreen), findsOneWidget);
+        expect(result.c.read(currentLocationProvider).value!.id, 'a');
+      });
+    }
   }
   testWidgets('repeated Generate taps open only one page', (tester) async {
     final repo = CreateRepo();
@@ -260,19 +280,33 @@ void main() {
       expect(result.c.read(currentLocationProvider).value!.id, 'a');
     },
   );
-  for (final status in [403, 500]) {
-    testWidgets('server rejection $status stays on form', (tester) async {
-      final repo = CreateRepo()
-        ..apply = false
-        ..createError = ApiException(message: 'Rejected', statusCode: status);
-      await h.pump(tester, repo);
-      await open(tester);
-      await value(tester, '10');
-      await h.tap(tester, 'promotion-form-save');
-      expect(repo.creates, 1);
-      expect(find.byType(PromotionFormScreen), findsOneWidget);
-      expect(find.text('Rejected'), findsOneWidget);
-    });
+  for (final generated in [true, false]) {
+    for (final status in [403, 409, 500]) {
+      testWidgets(
+        'server rejection $status stays on form generated=$generated',
+        (tester) async {
+          final repo = CreateRepo()
+            ..apply = false
+            ..createError = ApiException(
+              message: 'Rejected',
+              statusCode: status,
+            );
+          await h.pump(tester, repo);
+          await open(tester, generated: generated);
+          if (!generated) {
+            await tester.enterText(
+              find.byKey(const Key('promotion-code')),
+              'MANUAL',
+            );
+          }
+          await value(tester, '10');
+          await h.tap(tester, 'promotion-form-save');
+          expect(repo.creates, 1);
+          expect(find.byType(PromotionFormScreen), findsOneWidget);
+          expect(find.text('Rejected'), findsOneWidget);
+        },
+      );
+    }
   }
   testWidgets('create guards duplicate submits and branch changes', (
     tester,
