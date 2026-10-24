@@ -11,8 +11,8 @@ import '../../auth/providers/auth_providers.dart';
 import '../../locations/providers/locations_providers.dart';
 import '../providers/analytics_providers.dart';
 import '../application/analytics_visualization_data.dart';
-import '../models/analytics_result.dart';
 import 'analytics_filters.dart';
+import 'analytics_revenue_overview.dart';
 import 'analytics_export_action.dart';
 import 'analytics_visualizations.dart';
 
@@ -25,11 +25,6 @@ class AnalyticsScreen extends ConsumerWidget {
     final result = ref.watch(analyticsResultProvider);
     final range = ref.watch(analyticsRangeProvider);
     final locale = Localizations.localeOf(context).toLanguageTag();
-    final money = NumberFormat.currency(
-      locale: locale,
-      name: 'USD',
-      symbol: 'US\$',
-    );
     final integer = NumberFormat.decimalPattern(locale);
     Future<void> refresh() => ref.read(analyticsRefreshProvider)();
     Future<void> retry() async {
@@ -165,61 +160,9 @@ class AnalyticsScreen extends ConsumerWidget {
                               tr(context, 'Sales Overview'),
                             ),
                             const SizedBox(height: 16),
-                            LayoutBuilder(
-                              builder: (context, constraints) {
-                                final scale =
-                                    MediaQuery.textScalerOf(context).scale(14) /
-                                    14;
-                                final columns =
-                                    constraints.maxWidth >= 1080 * scale
-                                    ? 4
-                                    : constraints.maxWidth >= 400 * scale
-                                    ? 2
-                                    : 1;
-                                final width =
-                                    (constraints.maxWidth -
-                                        12 * (columns - 1)) /
-                                    columns;
-                                return Wrap(
-                                  key: ValueKey(
-                                    'analytics-kpi-columns-$columns',
-                                  ),
-                                  spacing: 12,
-                                  runSpacing: 12,
-                                  children: [
-                                    for (final entry in {
-                                      'Sales': money.format(
-                                        period.salesCents / 100,
-                                      ),
-                                      'Orders': integer.format(period.orders),
-                                      'Average Order':
-                                          period.averageOrderCents == null
-                                          ? '—'
-                                          : money.format(
-                                              period.averageOrderCents! / 100,
-                                            ),
-                                      'Items Sold': integer.format(
-                                        period.itemsSold,
-                                      ),
-                                    }.entries)
-                                      SizedBox(
-                                        width: width,
-                                        child: _KpiCard(
-                                          label: entry.key,
-                                          value: entry.value,
-                                          comparison: switch (entry.key) {
-                                            'Sales' => analytics!.sales,
-                                            'Orders' => analytics!.orders,
-                                            'Average Order' =>
-                                              analytics!.averageOrder,
-                                            _ => analytics!.itemsSold,
-                                          },
-                                          comparisonCovered: comparisonCovered,
-                                        ),
-                                      ),
-                                  ],
-                                );
-                              },
+                            AnalyticsRevenueOverview(
+                              result: analytics!,
+                              comparisonCovered: comparisonCovered,
                             ),
                             if (!comparisonCovered)
                               Padding(
@@ -256,7 +199,7 @@ class AnalyticsScreen extends ConsumerWidget {
                               ),
                             AnalyticsVisualizations(
                               dataset: loaded.dataset,
-                              result: analytics!,
+                              result: analytics,
                             ),
                           ],
                         ],
@@ -271,56 +214,4 @@ class AnalyticsScreen extends ConsumerWidget {
       ),
     );
   }
-}
-
-class _KpiCard extends StatelessWidget {
-  const _KpiCard({
-    required this.label,
-    required this.value,
-    required this.comparison,
-    required this.comparisonCovered,
-  });
-  final String label, value;
-  final MetricComparison comparison;
-  final bool comparisonCovered;
-  @override
-  Widget build(BuildContext context) => PelinesCard(
-    key: Key('analytics-kpi-$label'),
-    variant: PelinesCardVariant.compact,
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Text(
-                tr(context, label),
-                style: PelinesTypography.smallLabel,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Icon(
-              switch (label) {
-                'Sales' => Icons.attach_money,
-                'Orders' => Icons.receipt_long_outlined,
-                'Average Order' => Icons.trending_up,
-                _ => Icons.restaurant_outlined,
-              },
-              color: PelinesColors.brandPrimary,
-              size: 20,
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Text(
-          value,
-          style: PelinesTypography.pageTitle(Theme.of(context).textTheme)
-              ?.copyWith(fontSize: 30),
-        ),
-        const Divider(height: 24),
-        AnalyticsComparison(metric: comparison, covered: comparisonCovered),
-      ],
-    ),
-  );
 }

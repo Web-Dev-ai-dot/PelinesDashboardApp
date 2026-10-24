@@ -275,10 +275,10 @@ void main() {
   }
 
   for (final viewport in [
-    (390.0, 1.0, 1),
+    (390.0, 1.0, 2),
     (768.0, 1.0, 2),
     (1400.0, 1.0, 4),
-    (320.0, 2.0, 1),
+    (320.0, 2.0, 2),
   ]) {
     for (final lang in ['en', 'es']) {
       testWidgets(
@@ -431,7 +431,13 @@ void main() {
     for (final label in ['Sales', 'Orders', 'Average Order', 'Items Sold']) {
       expect(find.byKey(Key('analytics-kpi-$label')), findsOneWidget);
     }
-    expect(find.text('US\$11.00'), findsNWidgets(2));
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('analytics-kpi-columns-2')),
+        matching: find.text('US\$11.00'),
+      ),
+      findsNWidgets(2),
+    );
     // The page and operational cohort both identify the ongoing period.
     expect(find.text('This period is still in progress.'), findsNWidgets(2));
     await rangeTap(tester, 'analytics-date-range');
@@ -463,7 +469,13 @@ void main() {
     repository.requests.last.completeError(Exception('offline'));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('analytics-refresh-error')), findsOneWidget);
-    expect(find.text('US\$11.00'), findsNWidgets(2));
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('analytics-kpi-columns-2')),
+        matching: find.text('US\$11.00'),
+      ),
+      findsNWidgets(2),
+    );
   });
 
   testWidgets('initial error offers retry without fake zeros', (tester) async {
@@ -489,7 +501,8 @@ void main() {
         of: find.byKey(const Key('analytics-kpi-Average Order')),
         matching: find.text('—'),
       ),
-      findsOneWidget,
+      // Both the current and the separately fitted previous amount are absent.
+      findsNWidgets(2),
     );
   });
 
@@ -520,7 +533,13 @@ void main() {
       find.byKey(const Key('analytics-comparison-unavailable')),
       findsOneWidget,
     );
-    expect(find.text('— vs. período anterior'), findsNWidgets(5));
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('analytics-kpi-columns-2')),
+        matching: find.text('— vs. período anterior'),
+      ),
+      findsNWidgets(4),
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -558,8 +577,20 @@ void main() {
     await rangeTap(tester, 'analytics-today');
     await rangeTap(tester, 'analytics-range-apply');
     await tester.pumpAndSettle();
-    expect(find.text('+100.0% vs previous period'), findsNWidgets(3));
-    expect(find.text('0.0% vs previous period'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('analytics-kpi-columns-2')),
+        matching: find.text('+100.0% vs previous period'),
+      ),
+      findsNWidgets(3),
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('analytics-kpi-columns-2')),
+        matching: find.text('0.0% vs previous period'),
+      ),
+      findsOneWidget,
+    );
     expect(repository.requests.length, 1);
   });
 
@@ -577,12 +608,9 @@ void main() {
       final average = tester.getTopLeft(
         find.byKey(const Key('analytics-kpi-Average Order')),
       );
-      if (width < 432) {
-        expect(orders.dy, greaterThan(sales.dy));
-      } else {
-        expect(orders.dy, sales.dy);
-        expect(average.dy, width == 1400 ? sales.dy : greaterThan(sales.dy));
-      }
+      expect(orders.dy, sales.dy);
+      expect(orders.dx, greaterThan(sales.dx));
+      expect(average.dy, width == 1400 ? sales.dy : greaterThan(sales.dy));
       expect(tester.takeException(), isNull);
     });
   }
