@@ -1,5 +1,18 @@
 // English source messages and their Spanish UI translations. Backend values are never catalog keys.
 const spanishCatalog = <String, String>{
+  "Edit discount code": "Editar código de descuento",
+  "Configure the discount code customers can use at checkout.": "Configura el código de descuento que los clientes pueden usar al pagar.",
+  "Discount code": "Código de descuento",
+  "This is the code customers will enter at checkout.": "Este es el código que los clientes introducirán al pagar.",
+  "Discount type": "Tipo de descuento",
+  "Applies to menu type": "Se aplica al tipo de menú",
+  "Minimum order amount": "Importe mínimo del pedido",
+  "Usage limit (total)": "Límite de uso (total)",
+  "Total number of times this code can be used. Enable unlimited usage for no limit.": "Número total de veces que se puede usar este código. Activa el uso ilimitado para no establecer un límite.",
+  "When active, customers can use this discount code at checkout during the valid date range.": "Cuando está activo, los clientes pueden usar este código al pagar durante el período de validez.",
+  "Save discount code": "Guardar código de descuento",
+  "No date": "Sin fecha",
+  "Clear date": "Borrar fecha",
   "Back": "Volver",
   "Promotions could not be loaded.": "No se pudieron cargar las promociones.",
   "Discount code details": "Detalles del código de descuento",

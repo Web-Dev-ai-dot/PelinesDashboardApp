@@ -477,6 +477,15 @@ void main() {
     container
         .read(promotionsProvider.notifier)
         .adoptCanonical(repository.current);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(
+          home: PromotionFormScreen(discountId: 'discount-id'),
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
     expect(find.text('All locations'), findsWidgets);
     expect(
