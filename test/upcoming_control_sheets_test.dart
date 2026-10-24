@@ -1,3 +1,4 @@
+import 'package:pelines_admin_app/features/orders/presentation/upcoming_date_range.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -88,6 +89,259 @@ OrderStatus? selectedStatus(WidgetTester tester) => tester
     .groupValue;
 
 void main() {
+  testWidgets('range spans months and excludes dates before Pacific tomorrow', (
+    tester,
+  ) async {
+    await mount(
+      tester,
+      filters: UpcomingFilters(
+        from: DateTime.utc(2030, 5, 30),
+        to: DateTime.utc(2030, 6, 2),
+      ),
+    );
+    await upcomingTap(tester, 'upcoming-filters');
+    await upcomingTap(tester, 'upcoming-date-range');
+    expect(
+      tester.getSize(find.byKey(const Key('upcoming-range-band-31'))).height,
+      48,
+    );
+    await upcomingTap(tester, 'upcoming-range-next');
+    expect(
+      tester.getSize(find.byKey(const Key('upcoming-range-band-1'))).height,
+      48,
+    );
+    final endMarker = tester.widget<Container>(
+      find.byKey(const Key('upcoming-range-marker-2')),
+    );
+    expect(
+      (endMarker.decoration! as BoxDecoration).color,
+      PelinesColors.brandPrimary,
+    );
+    await upcomingTap(tester, 'upcoming-range-cancel');
+    await upcomingTap(tester, 'upcoming-filter-reset');
+    await upcomingTap(tester, 'upcoming-date-range');
+    final picker = tester.widget<UpcomingRangeCalendar>(
+      find.byType(UpcomingRangeCalendar),
+    );
+    expect(
+      tester
+          .widget<IconButton>(find.byKey(const Key('upcoming-range-previous')))
+          .onPressed,
+      isNull,
+    );
+    if (picker.firstDate.day > 1) {
+      final date = picker.firstDate.subtract(const Duration(days: 1));
+      final disabled = find.byKey(
+        ValueKey('upcoming-range-day-${date.year}-${date.month}-${date.day}'),
+      );
+      expect(
+        tester
+            .widget<InkWell>(
+              find.descendant(of: disabled, matching: find.byType(InkWell)),
+            )
+            .onTap,
+        isNull,
+      );
+    }
+    expect(tester.takeException(), isNull);
+  });
+  for (final lang in ['en', 'es']) {
+    testWidgets(
+      'consecutive range taps, restart, earlier end and same day $lang',
+      (tester) async {
+        UpcomingFilters? result;
+        await mount(
+          tester,
+          language: lang,
+          filters: UpcomingFilters(
+            from: DateTime.utc(2030, 5, 2),
+            to: DateTime.utc(2030, 5, 4),
+            status: OrderStatus.ready,
+          ),
+          onFilters: (value) => result = value,
+        );
+        await upcomingTap(tester, 'upcoming-filters');
+        await upcomingTap(tester, 'upcoming-date-range');
+        UpcomingRangeCalendar calendar() => tester
+            .widget<UpcomingRangeCalendar>(find.byType(UpcomingRangeCalendar));
+        Future<void> day(int value) =>
+            upcomingTap(tester, 'upcoming-range-day-2030-5-$value');
+        expect(find.byType(ChoiceChip), findsNothing);
+        await day(7);
+        expect(calendar().from, DateTime.utc(2030, 5, 7));
+        expect(calendar().to, isNull);
+        expect(
+          tester
+              .widget<FilledButton>(
+                find.byKey(const Key('upcoming-range-confirm')),
+              )
+              .onPressed,
+          isNull,
+        );
+        await day(9);
+        expect(calendar().to, DateTime.utc(2030, 5, 9));
+        expect(
+          tester
+              .widget<ColoredBox>(
+                find.byKey(const Key('upcoming-range-band-8')),
+              )
+              .color,
+          PelinesColors.brandPrimarySoft,
+        );
+        for (final endpoint in [7, 9]) {
+          final marker = tester.widget<Container>(
+            find.byKey(ValueKey('upcoming-range-marker-$endpoint')),
+          );
+          expect(
+            (marker.decoration! as BoxDecoration).color,
+            PelinesColors.brandPrimary,
+          );
+        }
+        final semantics = tester.ensureSemantics();
+        expect(
+          tester
+              .getSemantics(
+                find.byKey(const Key('upcoming-range-day-2030-5-8')),
+              )
+              .getSemanticsData()
+              .label,
+          contains(lang == 'en' ? 'Date range' : 'Rango de fechas'),
+        );
+        semantics.dispose();
+        await day(10);
+        expect(calendar().from, DateTime.utc(2030, 5, 10));
+        expect(calendar().to, isNull);
+        await day(8);
+        expect(calendar().from, DateTime.utc(2030, 5, 8));
+        expect(calendar().to, isNull);
+        await day(8);
+        expect(calendar().to, calendar().from);
+        await upcomingTap(tester, 'upcoming-range-no-end');
+        expect(calendar().to, isNull);
+        await day(11);
+        await day(12);
+        expect(calendar().from, DateTime.utc(2030, 5, 12));
+        expect(calendar().to, isNull);
+        await upcomingTap(tester, 'upcoming-range-no-end');
+        expect(calendar().from, DateTime.utc(2030, 5, 12));
+        await day(15);
+        expect(calendar().to, DateTime.utc(2030, 5, 15));
+        await upcomingTap(tester, 'upcoming-range-next');
+        expect(
+          find.byKey(const Key('upcoming-range-day-2030-6-1')),
+          findsOneWidget,
+        );
+        expect(calendar().to, DateTime.utc(2030, 5, 15));
+        await upcomingTap(tester, 'upcoming-range-previous');
+        await upcomingTap(tester, 'upcoming-range-confirm');
+        expect(result, isNull);
+        await upcomingTap(tester, 'upcoming-sheet-apply');
+        expect(result!.from, DateTime.utc(2030, 5, 12));
+        expect(result!.to, DateTime.utc(2030, 5, 15));
+        expect(result!.status, OrderStatus.ready);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+  testWidgets(
+    'range calendar scrolls on a short phone and selects a day by tap',
+    (tester) async {
+      UpcomingFilters? result;
+      await mount(
+        tester,
+        width: 320,
+        height: 500,
+        scale: 2,
+        onFilters: (value) => result = value,
+      );
+      await upcomingTap(tester, 'upcoming-filters');
+      await upcomingTap(tester, 'upcoming-date-range');
+      final picker = tester.widget<UpcomingRangeCalendar>(
+        find.byType(UpcomingRangeCalendar),
+      );
+      final day = picker.firstDate;
+      final target = find
+          .descendant(
+            of: find.byType(UpcomingRangeCalendar),
+            matching: find.text('${day.day}'),
+          )
+          .last;
+      await tester.ensureVisible(target);
+      await tester.tap(target);
+      await tester.pumpAndSettle();
+      await upcomingTap(tester, 'upcoming-range-confirm');
+      expect(result, isNull);
+      await upcomingTap(tester, 'upcoming-sheet-apply');
+      expect(result!.from, DateTime.utc(day.year, day.month, day.day));
+      expect(result!.to, isNull);
+      expect(tester.takeException(), isNull);
+    },
+  );
+  for (final language in ['en', 'es']) {
+    for (final width in [320.0, 768.0]) {
+      testWidgets(
+        'range calendar isolated draft optional end $language/$width',
+        (tester) async {
+          UpcomingFilters? result;
+          final initial = UpcomingFilters(
+            from: DateTime.utc(2030, 5, 2),
+            to: DateTime.utc(2030, 5, 4),
+            status: OrderStatus.confirmed,
+          );
+          await mount(
+            tester,
+            width: width,
+            scale: 2,
+            language: language,
+            filters: initial,
+            onFilters: (value) => result = value,
+          );
+          await upcomingTap(tester, 'upcoming-filters');
+          expect(find.byKey(const Key('upcoming-date-range')), findsOneWidget);
+          expect(find.byKey(const Key('upcoming-from')), findsNothing);
+          expect(find.byKey(const Key('upcoming-to')), findsNothing);
+          await upcomingTap(tester, 'upcoming-date-range');
+          expect(find.byType(UpcomingRangeCalendar), findsOneWidget);
+          expect(
+            find.text(language == 'en' ? 'Confirm' : 'Confirmar'),
+            findsOneWidget,
+          );
+          final picker = tester.widget<UpcomingRangeCalendar>(
+            find.byType(UpcomingRangeCalendar),
+          );
+          expect(picker.lastDate, DateTime(2100, 12, 31));
+          picker.onDateChanged(DateTime(2030, 5, 3));
+          await tester.pumpAndSettle();
+          await upcomingTap(tester, 'upcoming-range-cancel');
+          await upcomingTap(tester, 'upcoming-date-range');
+          expect(
+            tester
+                .widget<UpcomingRangeCalendar>(
+                  find.byType(UpcomingRangeCalendar),
+                )
+                .initialDate,
+            DateTime.utc(2030, 5, 2),
+          );
+          await upcomingTap(tester, 'upcoming-range-no-end');
+          expect(find.byType(ChoiceChip), findsNothing);
+          await upcomingTap(tester, 'upcoming-range-confirm');
+          expect(result, isNull);
+          expect(selectedStatus(tester), OrderStatus.confirmed);
+          expect(
+            find.textContaining(
+              language == 'en' ? 'No end date' : 'Sin fecha de fin',
+            ),
+            findsOneWidget,
+          );
+          expect(tester.takeException(), isNull);
+          await upcomingTap(tester, 'upcoming-sheet-apply');
+          expect(result!.from, initial.from);
+          expect(result!.to, isNull);
+          expect(result!.status, initial.status);
+        },
+      );
+    }
+  }
   for (final language in ['en', 'es']) {
     for (final keyboard in [0.0, 180.0]) {
       testWidgets(
@@ -215,10 +469,23 @@ void main() {
       await upcomingTap(tester, 'upcoming-filters');
       expect(find.byType(RadioListTile<OrderStatus?>), findsNWidgets(6));
       await upcomingDate(tester, 'from', DateTime(2030, 5, 4));
-      await upcomingDate(tester, 'to', DateTime(2030, 5, 2));
-      await upcomingTap(tester, 'upcoming-sheet-apply');
+      await upcomingTap(tester, 'upcoming-date-range');
+      await upcomingTap(tester, 'upcoming-range-no-end');
+      tester
+          .widget<UpcomingRangeCalendar>(find.byType(UpcomingRangeCalendar))
+          .onDateChanged(DateTime(2030, 5, 2));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.byKey(const Key('upcoming-range-confirm')),
+            )
+            .onPressed,
+        isNull,
+      );
       expect(result, isNull);
-      expect(find.text('From must be on or before To.'), findsOneWidget);
+      expect(find.textContaining('Select end date'), findsOneWidget);
+      await upcomingTap(tester, 'upcoming-range-cancel');
       await upcomingDate(tester, 'to', DateTime(2030, 5, 4));
       await upcomingTap(tester, 'upcoming-status-delivered');
       expect(find.text('Picked up / Delivered'), findsOneWidget);
@@ -248,12 +515,12 @@ void main() {
             find.byKey(const Key('upcoming-sheet-apply')),
           );
           if (control == 'filters') {
-            for (final bound in ['from', 'to']) {
-              final button = tester.widget<OutlinedButton>(
-                find.byKey(Key('upcoming-$bound')),
-              );
-              expect(button.style!.shape!.resolve({}), isA<StadiumBorder>());
-            }
+            expect(
+              find.byKey(const Key('upcoming-date-range')),
+              findsOneWidget,
+            );
+            expect(find.byKey(const Key('upcoming-from')), findsNothing);
+            expect(find.byKey(const Key('upcoming-to')), findsNothing);
             final heading = find.text(language == 'es' ? 'Filtros' : 'Filters');
             final reset = find.byKey(const Key('upcoming-filter-reset'));
             expect(

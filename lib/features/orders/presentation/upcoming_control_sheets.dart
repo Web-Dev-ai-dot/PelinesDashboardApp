@@ -3,10 +3,9 @@ import 'package:intl/intl.dart';
 
 import '../../../app/l10n/admin_localizations.dart';
 import '../../../app/theme/pelines_tokens.dart';
-import '../../../core/time/pelines_time.dart';
 import '../models/order_models.dart';
-import '../models/orders_date_filter.dart';
 import '../models/upcoming_filters.dart';
+import 'upcoming_date_range.dart';
 
 // A wrapper distinguishes Apply All Types (null) from dismiss (null result).
 class UpcomingTypeSelection {
@@ -244,25 +243,12 @@ class _FiltersSheetState extends State<_FiltersSheet> {
   late OrderStatus? _status = widget.applied.status;
   bool _invalid = false;
 
-  Future<void> _pick(bool from) async {
-    final today = pacificDate(PelinesTime.now());
-    final tomorrow = DateTime.utc(today.year, today.month, today.day + 1);
-    final current = (from ? _from : _to) ?? _from ?? tomorrow;
-    final picked = await showDatePicker(
-      context: context,
-      currentDate: today,
-      initialDate: current.isBefore(tomorrow) ? tomorrow : current,
-      firstDate: tomorrow,
-      lastDate: DateTime(2100, 12, 31),
-    );
+  Future<void> _pickRange() async {
+    final picked = await showUpcomingDateRange(context, _from, _to);
     if (picked == null || !mounted) return;
     setState(() {
-      final day = DateTime.utc(picked.year, picked.month, picked.day);
-      if (from) {
-        _from = day;
-      } else {
-        _to = day;
-      }
+      _from = picked.$1;
+      _to = picked.$2;
       _invalid = false;
     });
   }
@@ -299,26 +285,27 @@ class _FiltersSheetState extends State<_FiltersSheet> {
             ),
           ),
           const SizedBox(height: 8),
-          for (final from in [true, false])
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: OutlinedButton.icon(
-                key: Key(from ? 'upcoming-from' : 'upcoming-to'),
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size(48, 48),
-                  shape: const StadiumBorder(),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 12,
-                  ),
-                ),
-                onPressed: () => _pick(from),
-                icon: const Icon(Icons.calendar_today_outlined),
-                label: Text(
-                  '${tr(context, from ? 'From' : 'To')}: ${(from ? _from : _to) == null ? tr(context, from ? 'Tomorrow' : 'No end date') : format.format((from ? _from : _to)!)}',
+          OutlinedButton.icon(
+            key: const Key('upcoming-date-range'),
+            style: OutlinedButton.styleFrom(
+              backgroundColor: PelinesColors.card,
+              side: const BorderSide(color: PelinesColors.border),
+              minimumSize: const Size(48, 48),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(
+                  PelinesRadius.prominentCard,
                 ),
               ),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             ),
+            onPressed: _pickRange,
+            icon: const Icon(Icons.calendar_today_outlined),
+            label: Text(
+              '${_from == null ? tr(context, 'Tomorrow') : format.format(_from!)} — '
+              '${_to == null ? tr(context, 'No end date') : format.format(_to!)}',
+            ),
+          ),
+          const SizedBox(height: 8),
           Text(
             tr(context, 'From tomorrow · Pacific time · Available orders only'),
             style: Theme.of(context).textTheme.bodySmall,

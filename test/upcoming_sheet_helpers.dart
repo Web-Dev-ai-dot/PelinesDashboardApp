@@ -1,6 +1,6 @@
+import 'package:pelines_admin_app/features/orders/presentation/upcoming_date_range.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:intl/intl.dart';
 
 Future<void> upcomingTap(WidgetTester tester, String key) async {
   final target = find.byKey(Key(key));
@@ -21,16 +21,32 @@ Future<void> upcomingDate(
   String bound,
   DateTime day,
 ) async {
-  await upcomingTap(tester, 'upcoming-$bound');
-  await tester.tap(find.byIcon(Icons.edit_outlined));
+  await upcomingTap(tester, 'upcoming-date-range');
+  if (bound == 'to') {
+    final toggle = tester.widget<SwitchListTile>(
+      find.byKey(const Key('upcoming-range-no-end')),
+    );
+    if (toggle.value) {
+      await upcomingTap(tester, 'upcoming-range-no-end');
+    } else {
+      final picker = tester.widget<UpcomingRangeCalendar>(
+        find.byType(UpcomingRangeCalendar),
+      );
+      picker.onDateChanged(picker.from);
+      await tester.pumpAndSettle();
+    }
+  } else {
+    final toggle = tester.widget<SwitchListTile>(
+      find.byKey(const Key('upcoming-range-no-end')),
+    );
+    if (!toggle.value) await upcomingTap(tester, 'upcoming-range-no-end');
+  }
+  tester
+      .widget<UpcomingRangeCalendar>(find.byType(UpcomingRangeCalendar))
+      .onDateChanged(day);
   await tester.pumpAndSettle();
-  await tester.enterText(
-    find.byType(TextField).last,
-    DateFormat.yMd().format(day),
-  );
-  await tester.tap(find.text('OK'));
-  await tester.pumpAndSettle();
-  expect(find.byType(DatePickerDialog), findsNothing);
+  await upcomingTap(tester, 'upcoming-range-confirm');
+  expect(find.byKey(const Key('upcoming-range-dialog')), findsNothing);
 }
 
 Future<void> upcomingDismiss(WidgetTester tester) async {

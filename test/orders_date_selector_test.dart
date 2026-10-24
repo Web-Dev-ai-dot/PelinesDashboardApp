@@ -1,3 +1,4 @@
+import 'package:pelines_admin_app/features/orders/presentation/upcoming_date_range.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -90,8 +91,14 @@ Future<void> _date(WidgetTester tester, String label) async {
   await upcomingTap(tester, 'upcoming-filters');
   await upcomingTap(tester, 'upcoming-filter-reset');
   if (label == 'Tomorrow') {
-    await upcomingTap(tester, 'upcoming-to');
-    await tester.tap(find.text('OK'));
+    await upcomingTap(tester, 'upcoming-date-range');
+    await upcomingTap(tester, 'upcoming-range-no-end');
+    final picker = tester.widget<UpcomingRangeCalendar>(
+      find.byType(UpcomingRangeCalendar),
+    );
+    picker.onDateChanged(picker.firstDate);
+    await tester.pumpAndSettle();
+    await upcomingTap(tester, 'upcoming-range-confirm');
     await tester.pumpAndSettle();
   }
   await upcomingTap(tester, 'upcoming-sheet-apply');
@@ -404,14 +411,14 @@ void main() {
       final all = container.read(calendarOrdersProvider).requireValue.orders;
       expect(all.any((o) => o.id == 'completed' || o.id == 'unpaid'), isFalse);
       await upcomingTap(tester, 'upcoming-filters');
-      await upcomingTap(tester, 'upcoming-from');
-      final picker = tester.widget<DatePickerDialog>(
-        find.byType(DatePickerDialog),
+      await upcomingTap(tester, 'upcoming-date-range');
+      final picker = tester.widget<UpcomingRangeCalendar>(
+        find.byType(UpcomingRangeCalendar),
       );
       final today = pacificDate(PelinesTime.now());
       expect(
         picker.firstDate,
-        DateTime(today.year, today.month, today.day + 1),
+        DateTime.utc(today.year, today.month, today.day + 1),
       );
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
