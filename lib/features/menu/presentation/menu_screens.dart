@@ -244,73 +244,198 @@ class _ProductTile extends StatelessWidget {
     required this.onTap,
     this.catering = false,
     this.actions,
+    this.onEdit,
   });
   final MenuProduct product;
   final String category;
   final VoidCallback onTap;
   final bool catering;
   final Widget? actions;
+  final VoidCallback? onEdit;
   @override
-  Widget build(BuildContext context) => PelinesCard(
-    key: ValueKey('menu-product-${product.id}'),
-    padding: EdgeInsets.zero,
-    child: InkWell(
-      borderRadius: BorderRadius.circular(18),
-      onTap: onTap,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          MenuPhoto(url: product.imageUrl),
-          Padding(
-            padding: const EdgeInsets.all(16),
+  Widget build(BuildContext context) => catering
+      ? _cateringCard(context)
+      : PelinesCard(
+          key: ValueKey('menu-product-${product.id}'),
+          padding: EdgeInsets.zero,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(18),
+            onTap: onTap,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                OverflowBar(
-                  alignment: MainAxisAlignment.spaceBetween,
-                  overflowAlignment: OverflowBarAlignment.end,
-                  spacing: 12,
-                  overflowSpacing: 4,
-                  children: [
-                    Text(
-                      product.name,
-                      style: PelinesTypography.sectionTitle(
-                        Theme.of(context).textTheme,
-                      )?.copyWith(fontSize: 20),
-                    ),
-                    Text(
-                      money(product.priceCents),
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w600,
+                MenuPhoto(url: product.imageUrl),
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      OverflowBar(
+                        alignment: MainAxisAlignment.spaceBetween,
+                        overflowAlignment: OverflowBarAlignment.end,
+                        spacing: 12,
+                        overflowSpacing: 4,
+                        children: [
+                          Text(
+                            product.name,
+                            style: PelinesTypography.sectionTitle(
+                              Theme.of(context).textTheme,
+                            )?.copyWith(fontSize: 20),
+                          ),
+                          Text(
+                            money(product.priceCents),
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 8),
+                      Text(
+                        [
+                          category,
+                          if (product.subcategory?.isNotEmpty == true)
+                            product.subcategory!,
+                        ].join(' · '),
+                        style: PelinesTypography.smallLabel,
+                      ),
+                      if (product.description?.isNotEmpty == true) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          product.description!,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: PelinesColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                      const Divider(height: 20),
+                      if (catering && product.servesCount != null)
+                        Text(
+                          '${tr(context, 'Serves')}: ${product.servesCount}',
+                        ),
+                      Align(
+                        alignment: AlignmentDirectional.centerStart,
+                        child: PelinesStateBadge(
+                          label: tr(
+                            context,
+                            product.isAvailable ? 'Available' : 'Unavailable',
+                          ),
+                          foreground: product.isAvailable
+                              ? PelinesColors.successForeground
+                              : PelinesColors.textSecondary,
+                          background: product.isAvailable
+                              ? PelinesColors.successBackground
+                              : PelinesColors.mutedSurface,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      PelinesButton(
+                        label: tr(context, 'View'),
+                        variant: PelinesButtonVariant.secondary,
+                        onPressed: onTap,
+                      ),
+                      if (actions != null) ...[
+                        const Divider(height: 20),
+                        actions!,
+                      ],
+                    ],
+                  ),
                 ),
+              ],
+            ),
+          ),
+        );
+  Widget _cateringCard(BuildContext context) => PelinesCard(
+    key: ValueKey('menu-product-${product.id}'),
+    padding: EdgeInsets.zero,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ClipRRect(
+          borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(PelinesRadius.pageCard),
+          ),
+          child: Stack(
+            children: [
+              AspectRatio(
+                aspectRatio: 1.6,
+                child: MenuPhoto(url: product.imageUrl),
+              ),
+              Positioned(
+                top: 12,
+                right: 12,
+                child: IconButton.filled(
+                  tooltip: tr(context, 'Edit'),
+                  style: IconButton.styleFrom(
+                    backgroundColor: PelinesColors.card,
+                    foregroundColor: PelinesColors.textPrimary,
+                    minimumSize: const Size(48, 48),
+                  ),
+                  onPressed: onEdit,
+                  icon: const Icon(Icons.edit_outlined),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final name = Text(
+                    product.name,
+                    style: PelinesTypography.sectionTitle(
+                      Theme.of(context).textTheme,
+                    )?.copyWith(fontSize: 20),
+                  );
+                  final price = Text(
+                    money(product.priceCents),
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  );
+                  if (constraints.maxWidth <
+                      300 * MediaQuery.textScalerOf(context).scale(1)) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [name, const SizedBox(height: 8), price],
+                    );
+                  }
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: name),
+                      const SizedBox(width: 12),
+                      price,
+                    ],
+                  );
+                },
+              ),
+              if (product.servesCount != null) ...[
                 const SizedBox(height: 8),
                 Text(
-                  [
-                    category,
-                    if (product.subcategory?.isNotEmpty == true)
-                      product.subcategory!,
-                  ].join(' · '),
+                  '${tr(context, 'Serves')}: ${product.servesCount}',
                   style: PelinesTypography.smallLabel,
                 ),
-                if (product.description?.isNotEmpty == true) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    product.description!,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: PelinesColors.textSecondary),
-                  ),
-                ],
-                const Divider(height: 20),
-                if (catering && product.servesCount != null)
-                  Text('${tr(context, 'Serves')}: ${product.servesCount}'),
-                Align(
-                  alignment: AlignmentDirectional.centerStart,
-                  child: PelinesStateBadge(
+              ],
+              if (product.description?.isNotEmpty == true) ...[
+                const SizedBox(height: 12),
+                Text(
+                  product.description!,
+                  style: const TextStyle(color: PelinesColors.textSecondary),
+                ),
+              ],
+              const Divider(height: 24),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final badge = PelinesStateBadge(
                     label: tr(
                       context,
                       product.isAvailable ? 'Available' : 'Unavailable',
@@ -321,20 +446,53 @@ class _ProductTile extends StatelessWidget {
                     background: product.isAvailable
                         ? PelinesColors.successBackground
                         : PelinesColors.mutedSurface,
-                  ),
+                  );
+                  if (constraints.maxWidth <
+                      280 * MediaQuery.textScalerOf(context).scale(1)) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Align(
+                          alignment: AlignmentDirectional.centerStart,
+                          child: badge,
+                        ),
+                        if (actions != null)
+                          Align(
+                            alignment: AlignmentDirectional.centerEnd,
+                            child: actions!,
+                          ),
+                      ],
+                    );
+                  }
+                  return Row(
+                    children: [
+                      Expanded(
+                        child: Align(
+                          alignment: AlignmentDirectional.centerStart,
+                          child: badge,
+                        ),
+                      ),
+                      ?actions,
+                    ],
+                  );
+                },
+              ),
+              const Divider(height: 24),
+              OutlinedButton(
+                onPressed: onTap,
+                style: OutlinedButton.styleFrom(
+                  backgroundColor: PelinesColors.card,
+                  foregroundColor: PelinesColors.textPrimary,
+                  side: const BorderSide(color: PelinesColors.border),
+                  shape: const StadiumBorder(),
+                  minimumSize: const Size(48, 48),
                 ),
-                const SizedBox(height: 12),
-                PelinesButton(
-                  label: tr(context, 'View'),
-                  variant: PelinesButtonVariant.secondary,
-                  onPressed: onTap,
-                ),
-                if (actions != null) ...[const Divider(height: 20), actions!],
-              ],
-            ),
+                child: Text(tr(context, 'View')),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     ),
   );
 }

@@ -334,7 +334,9 @@ void menuCatalogTests(MenuKind kind) {
     final router = await mount(tester, repo, deletion: deletion);
     Finder action(String label) => find.descendant(
       of: find.byKey(const ValueKey('menu-product-2')),
-      matching: find.widgetWithText(TextButton, label),
+      matching: kind == MenuKind.catering
+          ? find.byWidgetPredicate((w) => w is IconButton && w.tooltip == label)
+          : find.widgetWithText(TextButton, label),
     );
     Future<void> reveal(String label) async {
       await tester.ensureVisible(action(label));
@@ -350,6 +352,31 @@ void menuCatalogTests(MenuKind kind) {
       expect(action(label).hitTestable(), findsOneWidget);
     }
 
+    if (kind == MenuKind.catering) {
+      final view = find.descendant(
+        of: find.byKey(const ValueKey('menu-product-2')),
+        matching: find.widgetWithText(OutlinedButton, 'View'),
+      );
+      await tester.ensureVisible(view);
+      await tester.pumpAndSettle();
+      for (var i = 0; i < 10 && view.hitTestable().evaluate().isEmpty; i++) {
+        await tester.drag(find.byType(Scrollable).first, const Offset(0, -250));
+        await tester.pumpAndSettle();
+      }
+      expect(view.hitTestable(), findsOneWidget);
+      await tester.tap(view);
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<MenuProductDetailScreen>(
+              find.byType(MenuProductDetailScreen),
+            )
+            .productId,
+        '2',
+      );
+      router.go('/app/menu/${kind.name}');
+      await tester.pumpAndSettle();
+    }
     await reveal('Edit');
     await tester.tap(action('Edit'));
     await tester.pumpAndSettle();
@@ -630,9 +657,11 @@ void menuCatalogTests(MenuKind kind) {
               tester.getRect(find.byType(PelinesLocationContext)).bottom,
             ),
           );
-          final create = find.text(
-            lang == 'en' ? 'New Category' : 'Nueva categoría',
-          );
+          final create = kind == MenuKind.catering
+              ? find.byTooltip(
+                  lang == 'en' ? 'New Category' : 'Nueva categoría',
+                )
+              : find.text(lang == 'en' ? 'New Category' : 'Nueva categoría');
           expect(
             tester.getRect(create).top,
             greaterThan(tester.getRect(description).bottom),
@@ -659,6 +688,9 @@ void menuCatalogTests(MenuKind kind) {
               );
             }
             expect(tester.widget<ChoiceChip>(all).selected, isTrue);
+            if (kind == MenuKind.catering) {
+              expect(tester.widget<ChoiceChip>(all).showCheckmark, isFalse);
+            }
             expect(tester.widget<ChoiceChip>(all).shape, isA<StadiumBorder>());
             expect(tester.getSize(all).height, greaterThanOrEqualTo(48));
             expect(
@@ -677,6 +709,49 @@ void menuCatalogTests(MenuKind kind) {
           expect(find.byKey(const Key('menu-image-fallback')), findsWidgets);
           final card = find.byKey(const ValueKey('menu-product-2'));
           final header = find.byKey(ValueKey('$prefix-category-header-c'));
+          if (kind == MenuKind.catering) {
+            final edit = find.descendant(
+              of: card,
+              matching: find.byWidgetPredicate(
+                (w) =>
+                    w is IconButton &&
+                    w.tooltip == (lang == 'en' ? 'Edit' : 'Editar'),
+              ),
+            );
+            final photo = find.descendant(
+              of: card,
+              matching: find.byKey(const Key('menu-image-fallback')),
+            );
+            final view = find.descendant(
+              of: card,
+              matching: find.widgetWithText(
+                OutlinedButton,
+                lang == 'en' ? 'View' : 'Ver',
+              ),
+            );
+            expect(view, findsOneWidget);
+            expect(
+              tester.getRect(photo).contains(tester.getCenter(edit)),
+              isTrue,
+            );
+            expect(
+              tester.getRect(view).width,
+              closeTo(tester.getRect(card).width - 34, 1),
+            );
+            expect(
+              tester
+                  .widget<Text>(
+                    find.descendant(
+                      of: header,
+                      matching: find.text('Category c'),
+                    ),
+                  )
+                  .style!
+                  .color,
+              PelinesColors.brandPrimary,
+            );
+          }
+
           {
             for (final edit in [true, false]) {
               final action = edit
@@ -721,10 +796,20 @@ void menuCatalogTests(MenuKind kind) {
                   : ['Editar', 'Duplicar', 'Eliminar']) {
             final action = find.descendant(
               of: card,
-              matching: find.widgetWithText(TextButton, label),
+              matching: kind == MenuKind.catering
+                  ? find.byWidgetPredicate(
+                      (w) => w is IconButton && w.tooltip == label,
+                    )
+                  : find.widgetWithText(TextButton, label),
             );
             expect(action, findsOneWidget);
-            {
+            if (kind == MenuKind.catering) {
+              expect(tester.widget<IconButton>(action).onPressed, isNotNull);
+              expect(
+                find.descendant(of: action, matching: find.byType(Icon)),
+                findsOneWidget,
+              );
+            } else {
               final button = tester.widget<TextButton>(action);
               expect(button.style!.side!.resolve({})!.width, greaterThan(0));
               expect(
@@ -829,7 +914,13 @@ void menuCatalogTests(MenuKind kind) {
     'create chooses category by ID and edit exposes real photo controls',
     (tester) async {
       final router = await mount(tester, Repo(kind: kind));
-      await tester.tap(find.text('New Item'));
+      await tester.tap(
+        kind == MenuKind.catering
+            ? find.byWidgetPredicate(
+                (w) => w is IconButton && w.tooltip == 'New Item',
+              )
+            : find.text('New Item'),
+      );
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(SimpleDialogOption, 'Category d'));
       await tester.pumpAndSettle();

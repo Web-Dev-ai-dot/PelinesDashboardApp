@@ -1,5 +1,6 @@
 // English source messages and their Spanish UI translations. Backend values are never catalog keys.
 const spanishCatalog = <String, String>{
+  "Manage catering categories, items, modifiers, photos, and availability.": "Administra categorías, productos, modificadores, fotos y disponibilidad de catering.",
   "Order count trends and demand patterns.": "Tendencias del volumen de pedidos y patrones de demanda.",
   "Total Orders": "Total de pedidos",
   "Average Ticket": "Ticket promedio",
