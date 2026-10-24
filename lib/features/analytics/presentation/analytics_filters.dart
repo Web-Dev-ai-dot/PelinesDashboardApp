@@ -1,4 +1,4 @@
-import '../../../app/theme/pelines_components.dart';
+import '../../../app/navigation/admin_navigation.dart';
 import '../../../app/theme/pelines_tokens.dart';
 
 import 'package:flutter/material.dart';
@@ -6,10 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../app/l10n/admin_localizations.dart';
-import '../../../core/time/pelines_time.dart';
-import '../../locations/presentation/pelines_location_selector.dart';
+import 'analytics_date_range_sheet.dart';
+import '../../locations/presentation/pelines_location_context.dart';
 import '../../locations/providers/locations_providers.dart';
-import '../models/analytics_date_range.dart';
 import '../providers/analytics_providers.dart';
 
 class AnalyticsFilters extends ConsumerWidget {
@@ -18,110 +17,106 @@ class AnalyticsFilters extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final range = ref.watch(analyticsRangeProvider);
-    final location = ref.watch(currentLocationProvider);
     final locale = Localizations.localeOf(context).toLanguageTag();
     final date = DateFormat.yMMMd(locale);
-    return PelinesCard(
-      key: const Key('analytics-filter-bar'),
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          PelinesLocationSelector(
-            locationName:
-                location.value?.name ?? tr(context, 'Choose a location'),
-            onPressed: () => showModalBottomSheet<void>(
-              context: context,
-              isScrollControlled: true,
-              builder: (_) => const _LocationPicker(),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AnalyticsDateRangeField(
+          buttonKey: const Key('analytics-date-range'),
+          label: tr(context, 'Date range'),
+          dates:
+              '${date.format(range.startDate)} – ${date.format(range.endDate)}',
+          chevron: true,
+          onPressed: () async {
+            final picked = await showAnalyticsDateRange(context, range);
+            if (picked == null || !context.mounted) return;
+            final controller = ref.read(analyticsRangeProvider.notifier);
+            if (picked.preset != null) {
+              controller.selectPreset(picked.preset!);
+            } else {
+              controller.selectCustom(picked.startDate, picked.endDate);
+            }
+          },
+        ),
+        const SizedBox(height: 4),
+        Text(
+          tr(context, 'Pacific time'),
+          style: Theme.of(context).textTheme.bodySmall
+              ?.copyWith(color: PelinesColors.textSecondary),
+        ),
+      ],
+    );
+  }
+}
+
+class AnalyticsHeader extends ConsumerWidget {
+  const AnalyticsHeader({super.key, required this.onRefresh});
+  final VoidCallback? onRefresh;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final current = ref.watch(currentLocationProvider);
+    final location = current.isLoading || current.hasError
+        ? null
+        : current.value;
+    return Material(
+      key: const Key('persistent-section-header'),
+      color: Theme.of(context).scaffoldBackgroundColor,
+      child: Padding(
+        padding: const EdgeInsets.all(PelinesSpacing.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: Semantics(
+                    header: true,
+                    child: Text(
+                      tr(context, 'Analytics'),
+                      key: const Key('analytics-title'),
+                      style: PelinesTypography.pageTitle(
+                        Theme.of(context).textTheme,
+                        width: MediaQuery.sizeOf(context).width,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 2,
+                  child: Align(
+                    alignment: AlignmentDirectional.centerEnd,
+                    child: AdminHeaderRefresh(
+                      key: const Key('analytics-refresh'),
+                      onPressed: onRefresh,
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final entry in {
-                AnalyticsDatePreset.today: 'Today',
-                AnalyticsDatePreset.last7Days: 'Last 7 days',
-                AnalyticsDatePreset.last30Days: 'Last 30 days',
-                AnalyticsDatePreset.last90Days: 'Last 90 days',
-              }.entries)
-                ChoiceChip(
-                  showCheckmark: false,
-                  selectedColor: PelinesColors.brandPrimary,
-                  backgroundColor: PelinesColors.card,
-                  side: const BorderSide(color: PelinesColors.border),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 12,
-                  ),
-                  key: Key('analytics-${entry.key.name}'),
-                  label: Text(
-                    tr(context, entry.value),
-                    style: TextStyle(
-                      color: range.preset == entry.key
-                          ? PelinesColors.card
-                          : PelinesColors.textPrimary,
-                    ),
-                  ),
-                  selected: range.preset == entry.key,
-                  onSelected: (_) => ref
-                      .read(analyticsRangeProvider.notifier)
-                      .selectPreset(entry.key),
-                ),
-              ChoiceChip(
-                showCheckmark: false,
-                selectedColor: PelinesColors.brandPrimary,
-                backgroundColor: PelinesColors.card,
-                side: const BorderSide(color: PelinesColors.border),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 12,
-                ),
-                key: const Key('analytics-custom'),
-                avatar: const Icon(Icons.date_range, size: 18),
-                label: Text(
-                  tr(context, 'Custom'),
-                  style: TextStyle(
-                    color: range.preset == null
-                        ? PelinesColors.card
-                        : PelinesColors.textPrimary,
-                  ),
-                ),
-                selected: range.preset == null,
-                onSelected: (_) async {
-                  final now = PelinesTime.now();
-                  final first = range.startDate.isBefore(DateTime.utc(2000))
-                      ? range.startDate
-                      : DateTime(2000);
-                  final last = DateTime(now.year, now.month, now.day);
-                  final picked = await showDateRangePicker(
+            const SizedBox(height: 6),
+            if (location != null)
+              Semantics(
+                button: true,
+                child: InkWell(
+                  key: const Key('location-selector'),
+                  onTap: () => showModalBottomSheet<void>(
                     context: context,
-                    firstDate: first,
-                    lastDate: range.endDate.isAfter(last)
-                        ? range.endDate
-                        : last,
-                    initialDateRange: DateTimeRange(
-                      start: range.startDate,
-                      end: range.endDate,
-                    ),
-                  );
-                  if (picked != null && context.mounted) {
-                    ref
-                        .read(analyticsRangeProvider.notifier)
-                        .selectCustom(picked.start, picked.end);
-                  }
-                },
+                    isScrollControlled: true,
+                    builder: (_) => const _LocationPicker(),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: PelinesLocationContext(location: location),
+                  ),
+                ),
               ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '${date.format(range.startDate)} – ${date.format(range.endDate)} · Pacific',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ],
+            const SizedBox(height: 12),
+            const AnalyticsFilters(key: Key('analytics-filter-bar')),
+          ],
+        ),
       ),
     );
   }

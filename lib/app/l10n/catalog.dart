@@ -1,5 +1,6 @@
 // English source messages and their Spanish UI translations. Backend values are never catalog keys.
 const spanishCatalog = <String, String>{
+  "Select date range": "Seleccionar rango de fechas",
   "Confirm": "Confirmar",
   "Select end date": "Selecciona la fecha final",
   "Generate another code": "Generar otro código",

@@ -220,9 +220,10 @@ void main() {
             return const ShareResult('', ShareResultStatus.dismissed);
           },
         );
+        await tap(tester, 'analytics-date-range');
         expect(find.text(lang == 'en' ? 'Today' : 'Hoy'), findsOneWidget);
         expect(
-          find.text(lang == 'en' ? 'Custom' : 'Personalizado'),
+          find.text(lang == 'en' ? 'Custom range' : 'Rango personalizado'),
           findsOneWidget,
         );
         for (final n in [7, 30, 90]) {
@@ -231,7 +232,9 @@ void main() {
             findsOneWidget,
           );
           await tap(tester, 'analytics-last${n}Days');
+          await tap(tester, 'analytics-range-apply');
           expect(container.read(analyticsRangeProvider).dayCount, n);
+          if (n != 90) await tap(tester, 'analytics-date-range');
         }
         await tap(tester, 'analytics-export');
         await tap(tester, 'analytics-export-revenue');

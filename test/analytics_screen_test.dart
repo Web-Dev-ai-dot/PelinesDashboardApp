@@ -1,3 +1,6 @@
+import 'package:pelines_admin_app/features/analytics/presentation/analytics_date_range_sheet.dart';
+import 'package:pelines_admin_app/features/orders/presentation/upcoming_date_range.dart';
+import 'package:pelines_admin_app/features/analytics/models/analytics_date_range.dart';
 import 'package:pelines_admin_app/app/theme/app_theme.dart';
 import 'package:pelines_admin_app/features/locations/presentation/pelines_location_context.dart';
 
@@ -74,6 +77,51 @@ AnalyticsDataset sample({
   ),
 );
 
+Future<void> rangeTap(WidgetTester tester, String key) async {
+  final target = find.byKey(Key(key));
+  await tester.ensureVisible(target);
+  await tester.pumpAndSettle();
+  await tester.tap(target);
+  await tester.pumpAndSettle();
+}
+
+void expectRangePresentation(
+  WidgetTester tester,
+  String key,
+  double width, {
+  required bool chevron,
+}) {
+  final button = find.byKey(Key(key));
+  final fieldFinder = find
+      .ancestor(of: button, matching: find.byType(AnalyticsDateRangeField))
+      .first;
+  final field = tester.widget<AnalyticsDateRangeField>(fieldFinder);
+  final label = find.descendant(
+    of: fieldFinder,
+    matching: find.text(field.label),
+  );
+  expect(label, findsOneWidget);
+  expect(
+    find.descendant(of: button, matching: find.text(field.label)),
+    findsNothing,
+  );
+  expect(
+    find.descendant(of: button, matching: find.text(field.dates)),
+    findsOneWidget,
+  );
+  expect(field.dates, isNot(contains('Pacific')));
+  expect(tester.getRect(label).bottom, lessThan(tester.getRect(button).top));
+  expect(tester.getSize(button).width, closeTo(width, .1));
+  expect(tester.getSize(button).height, greaterThanOrEqualTo(48));
+  expect(
+    find.descendant(of: button, matching: find.byIcon(Icons.expand_more)),
+    chevron ? findsOneWidget : findsNothing,
+  );
+  final style = tester.widget<OutlinedButton>(button).style!;
+  expect(style.side!.resolve({})!.color, PelinesColors.border);
+  expect(style.shape!.resolve({}), isA<StadiumBorder>());
+}
+
 void main() {
   late ScreenRepository repository;
   late ProviderContainer container;
@@ -123,6 +171,109 @@ void main() {
     await tester.pump();
   }
 
+  for (final language in ['en', 'es']) {
+    for (final width in [320.0, 768.0]) {
+      testWidgets(
+        'range panel drafts presets reset cancel and custom $language/$width/2x',
+        (tester) async {
+          await mount(tester, language: language, width: width, scale: 2);
+          repository.requests.single.complete(sample());
+          await tester.pumpAndSettle();
+          expectRangePresentation(
+            tester,
+            'analytics-date-range',
+            width - 32,
+            chevron: true,
+          );
+          final initial = container.read(analyticsRangeProvider);
+          await rangeTap(tester, 'analytics-date-range');
+          expect(
+            tester
+                .widget<RadioGroup<String>>(find.byType(RadioGroup<String>))
+                .groupValue,
+            'last30Days',
+          );
+          for (final preset in [
+            'today',
+            'last7Days',
+            'last30Days',
+            'last90Days',
+          ]) {
+            await rangeTap(tester, 'analytics-$preset');
+            expect(container.read(analyticsRangeProvider), same(initial));
+            expect(repository.requests.length, 1);
+          }
+          await rangeTap(tester, 'analytics-range-cancel');
+          expect(container.read(analyticsRangeProvider), same(initial));
+          await rangeTap(tester, 'analytics-date-range');
+          await rangeTap(tester, 'analytics-last7Days');
+          await rangeTap(tester, 'analytics-range-apply');
+          expect(container.read(analyticsRangeProvider).dayCount, 7);
+          await rangeTap(tester, 'analytics-date-range');
+          expect(
+            tester
+                .widget<RadioGroup<String>>(find.byType(RadioGroup<String>))
+                .groupValue,
+            'last7Days',
+          );
+          await rangeTap(tester, 'analytics-custom');
+          expectRangePresentation(
+            tester,
+            'analytics-select-range',
+            (width < 640 ? width : 640) - 32,
+            chevron: false,
+          );
+          await rangeTap(tester, 'analytics-select-range');
+          UpcomingRangeCalendar calendar() =>
+              tester.widget<UpcomingRangeCalendar>(
+                find.byType(UpcomingRangeCalendar),
+              );
+          final today = calendar().currentDate;
+          final start = today.subtract(const Duration(days: 5));
+          calendar().onDateChanged(start);
+          await tester.pumpAndSettle();
+          calendar().onDateChanged(today);
+          await tester.pumpAndSettle();
+          await rangeTap(tester, 'analytics-calendar-cancel');
+          await rangeTap(tester, 'analytics-select-range');
+          expect(
+            calendar().from,
+            container.read(analyticsRangeProvider).startDate,
+          );
+          calendar().onDateChanged(start);
+          await tester.pumpAndSettle();
+          calendar().onDateChanged(today);
+          await tester.pumpAndSettle();
+          await rangeTap(tester, 'analytics-calendar-confirm');
+          expect(container.read(analyticsRangeProvider).dayCount, 7);
+          await rangeTap(tester, 'analytics-range-apply');
+          expect(container.read(analyticsRangeProvider).dayCount, 6);
+          expect(container.read(analyticsRangeProvider).preset, isNull);
+          await rangeTap(tester, 'analytics-date-range');
+          expect(
+            tester
+                .widget<RadioGroup<String>>(find.byType(RadioGroup<String>))
+                .groupValue,
+            'custom',
+          );
+          await rangeTap(tester, 'analytics-range-reset');
+          expect(container.read(analyticsRangeProvider).dayCount, 6);
+          await rangeTap(tester, 'analytics-range-cancel');
+          expect(container.read(analyticsRangeProvider).dayCount, 6);
+          await rangeTap(tester, 'analytics-date-range');
+          await rangeTap(tester, 'analytics-range-reset');
+          await rangeTap(tester, 'analytics-range-apply');
+          expect(
+            container.read(analyticsRangeProvider).preset,
+            AnalyticsDatePreset.last30Days,
+          );
+          expect(repository.requests.length, 1);
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  }
+
   for (final viewport in [
     (390.0, 1.0, 1),
     (768.0, 1.0, 2),
@@ -141,6 +292,12 @@ void main() {
           );
           repository.requests.single.complete(sample());
           await tester.pumpAndSettle();
+          expectRangePresentation(
+            tester,
+            'analytics-date-range',
+            viewport.$1 - 32,
+            chevron: true,
+          );
           final export = find.byKey(const Key('analytics-export'));
           final refresh = find.descendant(
             of: find.byKey(const Key('analytics-refresh')),
@@ -167,6 +324,18 @@ void main() {
           expect(
             find.descendant(of: refresh, matching: find.byIcon(Icons.refresh)),
             findsOneWidget,
+          );
+          final titleRect = tester.getRect(
+            find.byKey(const Key('analytics-title')),
+          );
+          expect(
+            tester.getRect(refresh).center.dy,
+            closeTo(titleRect.center.dy, 1),
+          );
+          expect(tester.getRect(refresh).left, greaterThan(titleRect.left));
+          expect(
+            tester.getRect(find.byType(PelinesLocationContext)).top,
+            greaterThanOrEqualTo(titleRect.bottom),
           );
           final exportRect = tester.getRect(export);
           final refreshRect = tester.getRect(refresh);
@@ -265,7 +434,9 @@ void main() {
     expect(find.text('US\$11.00'), findsNWidgets(2));
     // The page and operational cohort both identify the ongoing period.
     expect(find.text('This period is still in progress.'), findsNWidgets(2));
-    await tester.tap(find.byKey(const Key('analytics-last7Days')));
+    await rangeTap(tester, 'analytics-date-range');
+    await rangeTap(tester, 'analytics-last7Days');
+    await rangeTap(tester, 'analytics-range-apply');
     await tester.pumpAndSettle();
     expect(repository.requests.length, 1);
     expect(container.read(analyticsRangeProvider).dayCount, 7);
@@ -383,7 +554,9 @@ void main() {
       AnalyticsDataset(locationId: 'a', orders: [...sample().orders, previous]),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('analytics-today')));
+    await rangeTap(tester, 'analytics-date-range');
+    await rangeTap(tester, 'analytics-today');
+    await rangeTap(tester, 'analytics-range-apply');
     await tester.pumpAndSettle();
     expect(find.text('+100.0% vs previous period'), findsNWidgets(3));
     expect(find.text('0.0% vs previous period'), findsOneWidget);
@@ -442,25 +615,49 @@ void main() {
     );
   });
 
-  testWidgets('Custom picker saves inclusive same-day range without request', (
-    tester,
-  ) async {
-    await mount(tester);
-    repository.requests.single.complete(sample());
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('analytics-custom')));
-    await tester.pumpAndSettle();
-    final picker = tester.widget<DateRangePickerDialog>(
-      find.byType(DateRangePickerDialog),
-    );
-    expect(picker.initialDateRange, isNotNull);
-    final now = PelinesTime.now();
-    final day = DateTime(now.year, now.month, now.day);
-    // Return the same calendar result the native picker returns after Save.
-    Navigator.of(tester.element(find.byType(DateRangePickerDialog)))
-        .pop(DateTimeRange(start: day, end: day));
-    await tester.pumpAndSettle();
-    expect(container.read(analyticsRangeProvider).dayCount, 1);
-    expect(repository.requests.length, 1);
-  });
+  testWidgets(
+    'Custom calendar confirms same-day draft then Apply updates all analytics without request',
+    (tester) async {
+      await mount(tester);
+      repository.requests.single.complete(sample());
+      await tester.pumpAndSettle();
+      final before = container.read(analyticsRangeProvider);
+      await rangeTap(tester, 'analytics-date-range');
+      await rangeTap(tester, 'analytics-custom');
+      await rangeTap(tester, 'analytics-select-range');
+      expect(find.byType(SwitchListTile), findsNothing);
+      final picker = tester.widget<UpcomingRangeCalendar>(
+        find.byType(UpcomingRangeCalendar),
+      );
+      final now = PelinesTime.now();
+      final day = DateTime.utc(now.year, now.month, now.day);
+      expect(picker.lastDate, day);
+      expect(picker.firstDate, DateTime.utc(2000));
+      picker.onDateChanged(day);
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.byKey(const Key('analytics-calendar-confirm')),
+            )
+            .onPressed,
+        isNull,
+      );
+      tester
+          .widget<UpcomingRangeCalendar>(find.byType(UpcomingRangeCalendar))
+          .onDateChanged(day);
+      await tester.pumpAndSettle();
+      await rangeTap(tester, 'analytics-calendar-confirm');
+      expect(container.read(analyticsRangeProvider), same(before));
+      expect(repository.requests.length, 1);
+      await rangeTap(tester, 'analytics-range-apply');
+      expect(container.read(analyticsRangeProvider).dayCount, 1);
+      expect(container.read(analyticsRangeProvider).preset, isNull);
+      expect(
+        container.read(analyticsResultProvider).value!.current.range.startDate,
+        day,
+      );
+      expect(repository.requests.length, 1);
+    },
+  );
 }

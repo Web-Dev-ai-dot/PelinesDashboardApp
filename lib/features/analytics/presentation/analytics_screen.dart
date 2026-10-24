@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../app/l10n/admin_localizations.dart';
-import '../../../app/navigation/admin_navigation.dart';
 import '../../../app/theme/pelines_tokens.dart';
 import '../../../core/time/pelines_time.dart';
 import '../../auth/providers/auth_providers.dart';
@@ -51,203 +50,223 @@ class AnalyticsScreen extends ConsumerWidget {
         loaded != null &&
         analytics != null &&
         analyticsComparisonIsCovered(loaded.dataset, analytics);
-    return AdminSectionScaffold(
-      appBar: AdminAppBar(
-        title: Text(
-          tr(context, 'Analytics'),
-          style: PelinesTypography.pageTitle(Theme.of(context).textTheme),
-        ),
-        actions: [
-          AdminHeaderRefresh(
-            key: const Key('analytics-refresh'),
-            onPressed:
-                dataset.isLoading || loaded == null || loaded.isRefreshing
-                ? null
-                : refresh,
-          ),
-        ],
-      ),
+    return Scaffold(
       body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: refresh,
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.all(PelinesSpacing.md),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(
-                  maxWidth: PelinesLayout.dashboardMaxWidth,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const AnalyticsFilters(),
-                    const SizedBox(height: 12),
-                    if (range.contains(PelinesTime.now()))
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: Text(
-                          tr(context, 'This period is still in progress.'),
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
+        child: Column(
+          children: [
+            AnalyticsHeader(
+              onRefresh:
+                  dataset.isLoading || loaded == null || loaded.isRefreshing
+                  ? null
+                  : refresh,
+            ),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: refresh,
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.all(PelinesSpacing.md),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(
+                        maxWidth: PelinesLayout.dashboardMaxWidth,
                       ),
-                    const AnalyticsExportAction(),
-                    const SizedBox(height: 12),
-                    if (dataset.isLoading) ...[
-                      const Center(child: CircularProgressIndicator()),
-                      Text(
-                        tr(context, 'Loading analytics...'),
-                        textAlign: TextAlign.center,
-                      ),
-                    ] else if (dataset.hasError || result.hasError) ...[
-                      Text(
-                        tr(context, 'Analytics could not be loaded.'),
-                        textAlign: TextAlign.center,
-                      ),
-                      Center(
-                        child: TextButton(
-                          onPressed: retry,
-                          child: Text(tr(context, 'Retry')),
-                        ),
-                      ),
-                    ] else if (loaded == null) ...[
-                      Text(
-                        tr(context, 'Choose a location to continue.'),
-                        textAlign: TextAlign.center,
-                      ),
-                    ] else if (period != null) ...[
-                      if (loaded.isRefreshing) const LinearProgressIndicator(),
-                      if (loaded.refreshError != null)
-                        Container(
-                          margin: const EdgeInsets.symmetric(vertical: 12),
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: PelinesColors.brandPrimarySoft,
-                            border: Border.all(
-                              color: PelinesColors.brandPrimary,
-                            ),
-                            borderRadius: BorderRadius.circular(
-                              PelinesRadius.control,
-                            ),
-                          ),
-                          child: Text(
-                            tr(
-                              context,
-                              'Refresh failed. Showing previously loaded data.',
-                            ),
-                            key: const Key('analytics-refresh-error'),
-                          ),
-                        ),
-                      if (loaded.dataset.possiblyTruncated)
-                        Container(
-                          key: const Key('analytics-truncation'),
-                          padding: const EdgeInsets.all(12),
-                          margin: const EdgeInsets.only(bottom: 16),
-                          decoration: BoxDecoration(
-                            color: PelinesColors.brandYellowSoft,
-                            borderRadius: BorderRadius.circular(
-                              PelinesRadius.control,
-                            ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(tr(context, 'Data may be incomplete')),
-                              Text(
-                                '${tr(context, 'Loaded orders')}: ${integer.format(loaded.dataset.loadedCount)}',
-                              ),
-                              if (loaded.dataset.oldestLoadedCreatedAt != null)
-                                Text(
-                                  '${tr(context, 'Oldest loaded order')}: ${DateFormat.yMMMd(locale).format(PelinesTime.inPacific(loaded.dataset.oldestLoadedCreatedAt!))}',
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (range.contains(PelinesTime.now()))
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: Text(
+                                tr(
+                                  context,
+                                  'This period is still in progress.',
                                 ),
-                            ],
-                          ),
-                        ),
-                      PelinesSectionHeading(tr(context, 'Sales Overview')),
-                      const SizedBox(height: 16),
-                      LayoutBuilder(
-                        builder: (context, constraints) {
-                          final scale =
-                              MediaQuery.textScalerOf(context).scale(14) / 14;
-                          final columns = constraints.maxWidth >= 1080 * scale
-                              ? 4
-                              : constraints.maxWidth >= 400 * scale
-                              ? 2
-                              : 1;
-                          final width =
-                              (constraints.maxWidth - 12 * (columns - 1)) /
-                              columns;
-                          return Wrap(
-                            key: ValueKey('analytics-kpi-columns-$columns'),
-                            spacing: 12,
-                            runSpacing: 12,
-                            children: [
-                              for (final entry in {
-                                'Sales': money.format(period.salesCents / 100),
-                                'Orders': integer.format(period.orders),
-                                'Average Order':
-                                    period.averageOrderCents == null
-                                    ? '—'
-                                    : money.format(
-                                        period.averageOrderCents! / 100,
-                                      ),
-                                'Items Sold': integer.format(period.itemsSold),
-                              }.entries)
-                                SizedBox(
-                                  width: width,
-                                  child: _KpiCard(
-                                    label: entry.key,
-                                    value: entry.value,
-                                    comparison: switch (entry.key) {
-                                      'Sales' => analytics!.sales,
-                                      'Orders' => analytics!.orders,
-                                      'Average Order' =>
-                                        analytics!.averageOrder,
-                                      _ => analytics!.itemsSold,
-                                    },
-                                    comparisonCovered: comparisonCovered,
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ),
+                          const AnalyticsExportAction(),
+                          const SizedBox(height: 12),
+                          if (dataset.isLoading) ...[
+                            const Center(child: CircularProgressIndicator()),
+                            Text(
+                              tr(context, 'Loading analytics...'),
+                              textAlign: TextAlign.center,
+                            ),
+                          ] else if (dataset.hasError || result.hasError) ...[
+                            Text(
+                              tr(context, 'Analytics could not be loaded.'),
+                              textAlign: TextAlign.center,
+                            ),
+                            Center(
+                              child: TextButton(
+                                onPressed: retry,
+                                child: Text(tr(context, 'Retry')),
+                              ),
+                            ),
+                          ] else if (loaded == null) ...[
+                            Text(
+                              tr(context, 'Choose a location to continue.'),
+                              textAlign: TextAlign.center,
+                            ),
+                          ] else if (period != null) ...[
+                            if (loaded.isRefreshing)
+                              const LinearProgressIndicator(),
+                            if (loaded.refreshError != null)
+                              Container(
+                                margin: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: PelinesColors.brandPrimarySoft,
+                                  border: Border.all(
+                                    color: PelinesColors.brandPrimary,
+                                  ),
+                                  borderRadius: BorderRadius.circular(
+                                    PelinesRadius.control,
                                   ),
                                 ),
-                            ],
-                          );
-                        },
-                      ),
-                      if (!comparisonCovered)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 12),
-                          child: Text(
-                            tr(
-                              context,
-                              'Comparison unavailable: the loaded history may be incomplete.',
+                                child: Text(
+                                  tr(
+                                    context,
+                                    'Refresh failed. Showing previously loaded data.',
+                                  ),
+                                  key: const Key('analytics-refresh-error'),
+                                ),
+                              ),
+                            if (loaded.dataset.possiblyTruncated)
+                              Container(
+                                key: const Key('analytics-truncation'),
+                                padding: const EdgeInsets.all(12),
+                                margin: const EdgeInsets.only(bottom: 16),
+                                decoration: BoxDecoration(
+                                  color: PelinesColors.brandYellowSoft,
+                                  borderRadius: BorderRadius.circular(
+                                    PelinesRadius.control,
+                                  ),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(tr(context, 'Data may be incomplete')),
+                                    Text(
+                                      '${tr(context, 'Loaded orders')}: ${integer.format(loaded.dataset.loadedCount)}',
+                                    ),
+                                    if (loaded.dataset.oldestLoadedCreatedAt !=
+                                        null)
+                                      Text(
+                                        '${tr(context, 'Oldest loaded order')}: ${DateFormat.yMMMd(locale).format(PelinesTime.inPacific(loaded.dataset.oldestLoadedCreatedAt!))}',
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            PelinesSectionHeading(
+                              tr(context, 'Sales Overview'),
                             ),
-                            key: const Key('analytics-comparison-unavailable'),
-                          ),
-                        ),
-                      Padding(
-                        padding: const EdgeInsets.only(top: 12),
-                        child: Text(
-                          '${tr(context, 'Previous period')}: ${DateFormat.yMMMd(locale).format(range.previous.startDate)} – ${DateFormat.yMMMd(locale).format(range.previous.endDate)}',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
+                            const SizedBox(height: 16),
+                            LayoutBuilder(
+                              builder: (context, constraints) {
+                                final scale =
+                                    MediaQuery.textScalerOf(context).scale(14) /
+                                    14;
+                                final columns =
+                                    constraints.maxWidth >= 1080 * scale
+                                    ? 4
+                                    : constraints.maxWidth >= 400 * scale
+                                    ? 2
+                                    : 1;
+                                final width =
+                                    (constraints.maxWidth -
+                                        12 * (columns - 1)) /
+                                    columns;
+                                return Wrap(
+                                  key: ValueKey(
+                                    'analytics-kpi-columns-$columns',
+                                  ),
+                                  spacing: 12,
+                                  runSpacing: 12,
+                                  children: [
+                                    for (final entry in {
+                                      'Sales': money.format(
+                                        period.salesCents / 100,
+                                      ),
+                                      'Orders': integer.format(period.orders),
+                                      'Average Order':
+                                          period.averageOrderCents == null
+                                          ? '—'
+                                          : money.format(
+                                              period.averageOrderCents! / 100,
+                                            ),
+                                      'Items Sold': integer.format(
+                                        period.itemsSold,
+                                      ),
+                                    }.entries)
+                                      SizedBox(
+                                        width: width,
+                                        child: _KpiCard(
+                                          label: entry.key,
+                                          value: entry.value,
+                                          comparison: switch (entry.key) {
+                                            'Sales' => analytics!.sales,
+                                            'Orders' => analytics!.orders,
+                                            'Average Order' =>
+                                              analytics!.averageOrder,
+                                            _ => analytics!.itemsSold,
+                                          },
+                                          comparisonCovered: comparisonCovered,
+                                        ),
+                                      ),
+                                  ],
+                                );
+                              },
+                            ),
+                            if (!comparisonCovered)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 12),
+                                child: Text(
+                                  tr(
+                                    context,
+                                    'Comparison unavailable: the loaded history may be incomplete.',
+                                  ),
+                                  key: const Key(
+                                    'analytics-comparison-unavailable',
+                                  ),
+                                ),
+                              ),
+                            Padding(
+                              padding: const EdgeInsets.only(top: 12),
+                              child: Text(
+                                '${tr(context, 'Previous period')}: ${DateFormat.yMMMd(locale).format(range.previous.startDate)} – ${DateFormat.yMMMd(locale).format(range.previous.endDate)}',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ),
+                            if (period.orders == 0)
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 24,
+                                ),
+                                child: Text(
+                                  tr(
+                                    context,
+                                    'No eligible orders in this period.',
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            AnalyticsVisualizations(
+                              dataset: loaded.dataset,
+                              result: analytics!,
+                            ),
+                          ],
+                        ],
                       ),
-                      if (period.orders == 0)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 24),
-                          child: Text(
-                            tr(context, 'No eligible orders in this period.'),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      AnalyticsVisualizations(
-                        dataset: loaded.dataset,
-                        result: analytics!,
-                      ),
-                    ],
-                  ],
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
+          ],
         ),
       ),
     );
