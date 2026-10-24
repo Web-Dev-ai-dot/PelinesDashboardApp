@@ -30,7 +30,7 @@ abstract final class PelinesControlStyles {
       borderRadius: BorderRadius.circular(
         pill ? PelinesRadius.pill : PelinesRadius.control,
       ),
-      borderSide: pill
+      borderSide: variant == PelinesInputVariant.login
           ? BorderSide.none
           : const BorderSide(color: PelinesColors.border),
     );
@@ -39,7 +39,13 @@ abstract final class PelinesControlStyles {
       hintText: hint,
       errorText: error,
       filled: true,
-      fillColor: pill ? PelinesColors.mutedSurface : PelinesColors.card,
+      fillColor: variant == PelinesInputVariant.login
+          ? PelinesColors.mutedSurface
+          : PelinesColors.card,
+      hintStyle: variant == PelinesInputVariant.search
+          ? const TextStyle(color: PelinesColors.textSecondary)
+          : null,
+      hintMaxLines: variant == PelinesInputVariant.search ? 1 : null,
       contentPadding: EdgeInsets.symmetric(
         horizontal: pill ? 20 : 12,
         vertical: 16,

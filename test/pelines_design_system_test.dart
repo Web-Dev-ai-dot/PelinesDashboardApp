@@ -16,6 +16,115 @@ Widget app(Widget child, {double scale = 1}) => MaterialApp(
 );
 
 void main() {
+  for (final width in [320.0, 390.0, 768.0, 1400.0]) {
+    for (final scale in [1.0, 2.0]) {
+      for (final hint in [
+        'Search customer, event or order #',
+        'Buscar cliente, evento o número de orden',
+      ]) {
+        testWidgets('outlined search long hint $width/$scale/$hint', (
+          tester,
+        ) async {
+          await tester.binding.setSurfaceSize(Size(width, 900));
+          addTearDown(() => tester.binding.setSurfaceSize(null));
+          await tester.pumpWidget(
+            app(
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: PelinesInput(
+                  variant: PelinesInputVariant.search,
+                  hint: '$hint · $hint',
+                ),
+              ),
+              scale: scale,
+            ),
+          );
+          final field = tester.widget<TextField>(find.byType(TextField));
+          final decoration = field.decoration!;
+          final border = decoration.enabledBorder! as OutlineInputBorder;
+          expect(
+            border.borderSide,
+            const BorderSide(color: PelinesColors.border, width: 1),
+          );
+          expect(
+            border.borderRadius,
+            BorderRadius.circular(PelinesRadius.pill),
+          );
+          expect(decoration.fillColor, PelinesColors.card);
+          expect(decoration.hintStyle!.color, PelinesColors.textSecondary);
+          expect(decoration.hintMaxLines, 1);
+          expect(find.byIcon(Icons.search), findsOneWidget);
+          expect(
+            tester.getSize(find.byType(TextField)).height,
+            greaterThanOrEqualTo(48),
+          );
+          expect(tester.getSize(find.byType(TextField)).width, width - 32);
+          expect(tester.takeException(), isNull);
+        });
+      }
+    }
+  }
+  testWidgets(
+    'search preserves focus, typing, clearing, disabled and error states',
+    (tester) async {
+      final controller = TextEditingController();
+      final changes = <String>[];
+      Widget search({bool enabled = true, String? error}) => app(
+        PelinesInput(
+          controller: controller,
+          variant: PelinesInputVariant.search,
+          hint: 'Search',
+          enabled: enabled,
+          error: error,
+          onChanged: changes.add,
+        ),
+      );
+      await tester.pumpWidget(search());
+      await tester.tap(find.byType(TextField));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<InputDecorator>(find.byType(InputDecorator)).isFocused,
+        isTrue,
+      );
+      final focused =
+          tester
+                  .widget<TextField>(find.byType(TextField))
+                  .decoration!
+                  .focusedBorder!
+              as OutlineInputBorder;
+      expect(
+        focused.borderSide,
+        const BorderSide(color: PelinesColors.brandPrimary, width: 2),
+      );
+      await tester.enterText(find.byType(TextField), 'Tualatin');
+      expect(changes, ['Tualatin']);
+      expect(controller.text, 'Tualatin');
+      await tester.enterText(find.byType(TextField), '');
+      expect(changes, ['Tualatin', '']);
+      await tester.pumpWidget(search(enabled: false));
+      final disabled = tester.widget<TextField>(find.byType(TextField));
+      expect(disabled.enabled, isFalse);
+      expect(
+        (disabled.decoration!.disabledBorder! as OutlineInputBorder).borderSide,
+        const BorderSide(color: PelinesColors.border),
+      );
+      await tester.pumpWidget(search(error: 'Search unavailable'));
+      final error = tester
+          .widget<TextField>(find.byType(TextField))
+          .decoration!;
+      expect(error.errorText, 'Search unavailable');
+      expect(
+        (error.errorBorder! as OutlineInputBorder).borderSide.color,
+        PelinesColors.destructive,
+      );
+      expect(
+        (error.focusedErrorBorder! as OutlineInputBorder).borderSide.width,
+        2,
+      );
+      await tester.pumpWidget(const SizedBox());
+      controller.dispose();
+    },
+  );
   testWidgets('card borders and shadows are explicit and KPI wraps', (
     tester,
   ) async {
@@ -140,11 +249,15 @@ void main() {
       expect(border.borderRadius, BorderRadius.circular(pill ? 999 : 8));
       expect(
         border.borderSide.style,
-        pill ? BorderStyle.none : BorderStyle.solid,
+        variant == PelinesInputVariant.login
+            ? BorderStyle.none
+            : BorderStyle.solid,
       );
       expect(
         style.fillColor,
-        pill ? PelinesColors.mutedSurface : PelinesColors.card,
+        variant == PelinesInputVariant.login
+            ? PelinesColors.mutedSurface
+            : PelinesColors.card,
       );
       expect(style.constraints!.minHeight, 48);
       expect((style.focusedBorder! as OutlineInputBorder).borderSide.width, 2);
