@@ -8,12 +8,12 @@ import 'package:intl/intl.dart';
 
 import '../../../app/l10n/admin_localizations.dart';
 import '../../../app/theme/pelines_tokens.dart';
-import '../../orders/models/order_models.dart';
 import '../application/analytics_visualization_data.dart';
 import '../data/analytics_repository.dart';
 import '../models/analytics_date_range.dart';
 import '../models/analytics_result.dart';
 import 'analytics_operational_cards.dart';
+import 'analytics_order_sections.dart';
 
 NumberFormat _money(BuildContext context) => NumberFormat.currency(
   locale: Localizations.localeOf(context).toLanguageTag(),
@@ -61,53 +61,9 @@ class AnalyticsVisualizations extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const SizedBox(height: 24),
-        AnalyticsSalesChart(dataset: dataset, period: period),
-        const SizedBox(height: 16),
         PelinesSectionHeading(tr(context, 'Order Volume')),
         const SizedBox(height: 16),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
-            final columns = constraints.maxWidth >= 760 * scale ? 2 : 1;
-            final width = (constraints.maxWidth - 16 * (columns - 1)) / columns;
-            return Wrap(
-              spacing: 16,
-              runSpacing: 16,
-              children: [
-                SizedBox(
-                  width: width,
-                  child: _Breakdown(
-                    title: 'Order Type',
-                    groups: {
-                      'Regular': period.orderTypes[OrderType.online]!,
-                      'Catering': period.orderTypes[OrderType.catering]!,
-                      if (period.orderTypes[OrderType.unknown]!.orders > 0)
-                        'Unknown': period.orderTypes[OrderType.unknown]!,
-                    },
-                  ),
-                ),
-                SizedBox(
-                  width: width,
-                  child: _Breakdown(
-                    title: 'Fulfillment',
-                    groups: {
-                      'Pickup':
-                          period.fulfillmentTypes[FulfillmentType.pickup]!,
-                      'Delivery':
-                          period.fulfillmentTypes[FulfillmentType.delivery]!,
-                      if (period
-                              .fulfillmentTypes[FulfillmentType.unknown]!
-                              .orders >
-                          0)
-                        'Unknown':
-                            period.fulfillmentTypes[FulfillmentType.unknown]!,
-                    },
-                  ),
-                ),
-              ],
-            );
-          },
-        ),
+        AnalyticsOrderVolume(dataset: dataset, period: period),
         const SizedBox(height: 16),
         PelinesSectionHeading(tr(context, 'Products')),
         const SizedBox(height: 16),
@@ -115,7 +71,7 @@ class AnalyticsVisualizations extends StatelessWidget {
         const SizedBox(height: 24),
         PelinesSectionHeading(tr(context, 'Operations')),
         const SizedBox(height: 16),
-        AnalyticsOperationalCards(dataset: dataset, range: period.range),
+        AnalyticsOperationalCards(dataset: dataset, period: period),
         const SizedBox(height: 16),
         _Section(
           title: 'Order Status',
@@ -124,10 +80,8 @@ class AnalyticsVisualizations extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                AnalyticsStatusCards(dataset: dataset, period: period),
                 for (final entry in {
-                  'Completed': period.completed,
-                  'Cancelled': period.cancelled,
-                  'In Progress': period.inProgress,
                   if (period.unknownStatusOrders > 0)
                     'Unknown': period.unknownStatusOrders,
                 }.entries)
@@ -138,22 +92,9 @@ class AnalyticsVisualizations extends StatelessWidget {
                     ).format(entry.value),
                   ),
                 const Divider(),
-                _ValueRow(
-                  label: tr(context, 'Cancellation Rate'),
-                  value: period.cancellationRate == null
-                      ? '—'
-                      : '${NumberFormat('0.0', Localizations.localeOf(context).toLanguageTag()).format(period.cancellationRate)}%',
-                ),
                 _CancellationComparison(
                   result: result,
                   covered: analyticsComparisonIsCovered(dataset, result),
-                ),
-                Text(
-                  tr(
-                    context,
-                    'Cancelled eligible orders / all eligible orders.',
-                  ),
-                  style: Theme.of(context).textTheme.bodySmall,
                 ),
               ],
             ),
@@ -371,13 +312,6 @@ class AnalyticsTopProducts extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          tr(
-            context,
-            'Product Sales uses item totals before order discounts; excludes tips and fees.',
-          ),
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
         if (products.isEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 16),
@@ -386,78 +320,78 @@ class AnalyticsTopProducts extends StatelessWidget {
         for (final (rank, product) in products.take(5).indexed)
           Padding(
             key: Key('analytics-product-${product.key}'),
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                PelinesStateBadge(
-                  label: '#${rank + 1}',
-                  foreground: PelinesColors.brandPrimary,
-                  background: PelinesColors.brandPrimarySoft,
-                ),
-                const SizedBox(height: 8),
-                Semantics(
-                  label: tr(context, 'Product'),
-                  child: Text(
-                    product.name,
-                    style: Theme.of(context).textTheme.titleSmall,
+            padding: const EdgeInsets.only(bottom: 12),
+            child: PelinesCard(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      PelinesStateBadge(
+                        label: '#${rank + 1}',
+                        foreground: PelinesColors.brandPrimary,
+                        background: PelinesColors.brandPrimarySoft,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          product.name,
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                Wrap(
-                  spacing: 24,
-                  runSpacing: 4,
-                  children: [
-                    Text(
-                      '${tr(context, 'Quantity')}: ${NumberFormat.decimalPattern(Localizations.localeOf(context).toLanguageTag()).format(product.quantity)}',
-                    ),
-                    Text(
-                      '${tr(context, 'Product Sales')}: ${_money(context).format(product.lineSalesCents / 100)}',
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-      ],
-    ),
-  );
-}
-
-class _Breakdown extends StatelessWidget {
-  const _Breakdown({required this.title, required this.groups});
-  final String title;
-  final Map<String, AnalyticsBreakdown> groups;
-  @override
-  Widget build(BuildContext context) => _Section(
-    title: title,
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        for (final entry in groups.entries)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                PelinesStateBadge(
-                  label: tr(context, entry.key),
-                  foreground: PelinesColors.brandPrimary,
-                  background: PelinesColors.brandPrimarySoft,
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 24,
-                  runSpacing: 4,
-                  children: [
-                    Text(
-                      '${tr(context, 'Orders')}: ${NumberFormat.decimalPattern(Localizations.localeOf(context).toLanguageTag()).format(entry.value.orders)}',
-                    ),
-                    Text(
-                      '${tr(context, 'Sales')}: ${_money(context).format(entry.value.salesCents / 100)}',
-                    ),
-                  ],
-                ),
-              ],
+                  const SizedBox(height: 12),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              tr(context, 'Quantity'),
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                            Text(
+                              NumberFormat.decimalPattern(
+                                Localizations.localeOf(context).toLanguageTag(),
+                              ).format(product.quantity),
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              tr(context, 'Product Sales'),
+                              style: Theme.of(context).textTheme.bodySmall,
+                              textAlign: TextAlign.end,
+                            ),
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: AlignmentDirectional.centerEnd,
+                              child: Text(
+                                _money(context)
+                                    .format(product.lineSalesCents / 100),
+                                maxLines: 1,
+                                softWrap: false,
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
       ],

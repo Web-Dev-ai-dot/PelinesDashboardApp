@@ -332,13 +332,13 @@ void main() {
     expect(find.text('Product 0'), findsNothing);
     for (var i = 1; i < 6; i++) {
       expect(find.text('Product $i'), findsOneWidget);
-      expect(find.text('Quantity: ${i + 1}'), findsOneWidget);
+      expect(find.text('${i + 1}'), findsOneWidget);
     }
     expect(
       tester.getTopLeft(find.text('Product 5')).dy,
       lessThan(tester.getTopLeft(find.text('Product 4')).dy),
     );
-    expect(find.text('Product Sales: US\$36.00'), findsOneWidget);
+    expect(find.text('US\$36.00'), findsOneWidget);
     expect(computed.current.salesCents, 6000);
   });
 
@@ -360,33 +360,25 @@ void main() {
       tester,
       AnalyticsVisualizations(dataset: dataset, result: result(dataset, day())),
     );
-    final type = find.byKey(const Key('analytics-section-Order Type'));
+    expect(find.byKey(const Key('analytics-section-Order Type')), findsNothing);
     expect(
-      find.descendant(of: type, matching: find.text('Orders: 2')),
+      find.byKey(const Key('analytics-section-Fulfillment')),
+      findsNothing,
+    );
+    expect(find.byType(AnalyticsSalesChart), findsNothing);
+    final computed = result(dataset, day()).current;
+    expect(
+      computed.orderTypes.values.map((v) => v.orders).reduce((a, b) => a + b),
+      3,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('analytics-status-ready')),
+        matching: find.text('1'),
+      ),
       findsOneWidget,
     );
-    expect(
-      find.descendant(of: type, matching: find.text('Sales: US\$10.00')),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(of: type, matching: find.text('Sales: US\$20.00')),
-      findsOneWidget,
-    );
-    final fulfillment = find.byKey(const Key('analytics-section-Fulfillment'));
-    expect(
-      find.descendant(of: fulfillment, matching: find.text('Orders: 2')),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(of: fulfillment, matching: find.text('Orders: 1')),
-      findsOneWidget,
-    );
-    final status = find.byKey(const Key('analytics-section-Order Status'));
-    expect(
-      find.descendant(of: status, matching: find.text('1')),
-      findsNWidgets(3),
-    );
+    expect(find.byKey(const Key('analytics-status-completed')), findsOneWidget);
     expect(find.text('33.3%'), findsOneWidget);
     for (final name in [
       'Completed',
@@ -443,26 +435,39 @@ void main() {
         locale: 'es',
       );
       for (final label in [
-        'Ventas a lo largo del tiempo',
         'Productos más vendidos',
         'Backend Taco',
         'Tasa de cancelación',
-        'Tipo de pedido',
       ]) {
         expect(find.text(label), findsOneWidget);
       }
-      final a = tester.getTopLeft(
+      expect(
         find.byKey(const Key('analytics-section-Order Type')),
+        findsNothing,
       );
-      final b = tester.getTopLeft(
+      expect(
         find.byKey(const Key('analytics-section-Fulfillment')),
+        findsNothing,
       );
-      expect(b.dy, width == 1100 ? a.dy : greaterThan(a.dy));
+      expect(find.text('Ventas a lo largo del tiempo'), findsNothing);
+      expect(find.byType(Image), findsNothing);
+      expect(find.text('All Products'), findsNothing);
+      expect(
+        find.text(
+          'Product Sales uses item totals before order discounts; excludes tips and fees.',
+        ),
+        findsNothing,
+      );
       expect(tester.takeException(), isNull);
     });
   }
   testWidgets('large text phone has no overflow', (tester) async {
-    final dataset = data([row()]);
+    final dataset = data([
+      row(
+        product: 'Very long product name for a catering platter with additional options',
+        line: 123456789012,
+      ),
+    ]);
     await mount(
       tester,
       AnalyticsVisualizations(dataset: dataset, result: result(dataset, day())),

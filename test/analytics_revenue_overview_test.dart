@@ -237,14 +237,74 @@ void main() {
     },
   );
   testWidgets(
+    'fulfillment cards follow Regular Catering with real orders and revenue',
+    (tester) async {
+      final orders = [
+        for (final (type, cents) in [('pickup', 12345), ('delivery', 67890)])
+          AnalyticsOrder.fromJson({
+            ...orderJson(
+              fulfillment: type,
+              locationId: 'location-id',
+              payment: 'paid',
+              status: 'delivered',
+            ),
+            'createdAt': '2026-09-04T18:00:00Z',
+            'totalCents': cents,
+          }),
+      ];
+      final result = const AnalyticsCalculator().calculate(
+        orders,
+        locationId: 'location-id',
+        range: AnalyticsDateRange.custom(
+          DateTime(2026, 9, 4),
+          DateTime(2026, 9, 4),
+        ),
+      );
+      await mount(tester, result);
+      final regular = tester.getRect(
+        find.byKey(const Key('analytics-revenue-online')),
+      );
+      final catering = tester.getRect(
+        find.byKey(const Key('analytics-revenue-catering')),
+      );
+      final pickup = find.byKey(const Key('analytics-revenue-pickup'));
+      final delivery = find.byKey(const Key('analytics-revenue-delivery'));
+      expect(regular.top, catering.top);
+      expect(tester.getRect(pickup).top, greaterThan(regular.bottom));
+      expect(tester.getRect(pickup).top, tester.getRect(delivery).top);
+      expect(
+        tester.getRect(pickup).left,
+        lessThan(tester.getRect(delivery).left),
+      );
+      expect(
+        find.descendant(of: pickup, matching: find.text('US\$123.45')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: delivery, matching: find.text('US\$678.90')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: pickup, matching: find.text('Orders: 1')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: delivery, matching: find.text('Orders: 1')),
+        findsOneWidget,
+      );
+      expect(find.text('Fulfillment'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets(
     'empty periods never invent percentages and incomplete coverage hides prior values',
     (tester) async {
       await mount(tester, revenueResult(empty: true));
       expect(find.textContaining('NaN'), findsNothing);
       expect(find.textContaining('Infinity'), findsNothing);
-      expect(find.text('— vs previous period'), findsNWidgets(7));
+      expect(find.text('— vs previous period'), findsNWidgets(9));
       await mount(tester, revenueResult(), covered: false);
-      expect(find.text('Previous period:'), findsNWidgets(5));
+      expect(find.text('Previous period:'), findsNWidgets(7));
       expect(find.text('Previous period: —'), findsNWidgets(2));
       expect(find.text('+33.3% vs previous period'), findsNothing);
     },

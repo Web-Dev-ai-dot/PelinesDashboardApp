@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:pelines_admin_app/app/theme/pelines_components.dart';
+import 'package:pelines_admin_app/features/analytics/presentation/analytics_metric_cards.dart';
 import 'package:pelines_admin_app/core/time/pelines_time.dart';
 import 'package:pelines_admin_app/features/analytics/application/analytics_operational_kpis.dart';
 import 'package:pelines_admin_app/features/analytics/data/analytics_repository.dart';
@@ -102,15 +102,15 @@ void main() {
           );
           await mount(
             tester,
-            AnalyticsOperationalCards(dataset: dataset, range: range),
+            AnalyticsDemandCards(dataset: dataset, range: range),
             locale: locale,
             width: width,
             scale: scale,
           );
-          final peak = tester.widget<PelinesKpiCard>(
+          final peak = tester.widget<AnalyticsMetricCard>(
             find.byKey(const Key('analytics-peak-hour')),
           );
-          final busiest = tester.widget<PelinesKpiCard>(
+          final busiest = tester.widget<AnalyticsMetricCard>(
             find.byKey(const Key('analytics-busiest-day')),
           );
           expect(peak.value.split('\n'), hasLength(2));
@@ -126,21 +126,13 @@ void main() {
             busiest.value,
             locale == 'en' ? 'Monday\nTuesday' : 'lunes\nmartes',
           );
-          expect(
-            tester
-                .widget<PelinesKpiCard>(
-                  find.byKey(const Key('analytics-ready')),
-                )
-                .label,
-            locale == 'en' ? 'Ready' : 'Listos',
-          );
           final peakRect = tester.getRect(
             find.byKey(const Key('analytics-peak-hour')),
           );
           final dayRect = tester.getRect(
             find.byKey(const Key('analytics-busiest-day')),
           );
-          expect(dayRect.top == peakRect.top, width >= 520 * scale + 32);
+          expect(dayRect.top, peakRect.top);
           expect(tester.takeException(), isNull);
         });
       }
@@ -154,14 +146,14 @@ void main() {
     final current = AnalyticsDateRange.custom(today, today);
     await mount(
       tester,
-      AnalyticsOperationalCards(
+      AnalyticsDemandCards(
         dataset: AnalyticsDataset(locationId: 'a', orders: []),
         range: current,
       ),
     );
     expect(find.text('This period is still in progress.'), findsOneWidget);
     expect(find.text('—'), findsNWidgets(2));
-    expect(find.text('0'), findsNWidgets(2));
+    expect(find.text('0'), findsNothing);
     final dataset = AnalyticsDataset(
       locationId: 'a',
       orders: [
@@ -171,7 +163,7 @@ void main() {
     );
     await mount(
       tester,
-      AnalyticsOperationalCards(
+      AnalyticsDemandCards(
         dataset: dataset,
         range: AnalyticsDateRange.custom(
           DateTime(2026, 3, 8),
@@ -181,10 +173,7 @@ void main() {
     );
     expect(find.text('—'), findsNWidgets(2));
     expect(find.textContaining('Data may be incomplete'), findsNWidgets(2));
-    await mount(
-      tester,
-      AnalyticsOperationalCards(dataset: dataset, range: range),
-    );
+    await mount(tester, AnalyticsDemandCards(dataset: dataset, range: range));
     expect(find.text('—'), findsNothing);
     expect(tester.takeException(), isNull);
   });

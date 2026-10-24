@@ -3,14 +3,16 @@ import 'package:intl/intl.dart';
 
 import '../../../app/l10n/admin_localizations.dart';
 import '../../../app/theme/pelines_components.dart';
+import '../models/analytics_result.dart';
+import 'analytics_metric_cards.dart';
 import '../../../core/time/pelines_time.dart';
 import '../application/analytics_operational_kpis.dart';
 import '../application/analytics_visualization_data.dart';
 import '../data/analytics_repository.dart';
 import '../models/analytics_date_range.dart';
 
-class AnalyticsOperationalCards extends StatelessWidget {
-  const AnalyticsOperationalCards({
+class AnalyticsDemandCards extends StatelessWidget {
+  const AnalyticsDemandCards({
     required this.dataset,
     required this.range,
     super.key,
@@ -33,7 +35,7 @@ class AnalyticsOperationalCards extends StatelessWidget {
         : '${AdminLocalizations.of(context).text('Orders', key: 'analytics.Orders')}: ${number.format(AnalyticsOperationalKpis.maximum(counts))}'
               '${AnalyticsOperationalKpis.leaders(counts).length > 1 ? ' · ${tr(context, 'Tied — orders per group')}' : ''}';
     final cards = [
-      PelinesKpiCard(
+      AnalyticsMetricCard(
         key: const Key('analytics-peak-hour'),
         label: tr(context, 'Peak Order Hour'),
         value: ranking(values.hours, (hour) {
@@ -44,7 +46,7 @@ class AnalyticsOperationalCards extends StatelessWidget {
             '${tr(context, 'Orders received · Pacific time')}\n${description(values.hours)}',
         icon: Icons.schedule,
       ),
-      PelinesKpiCard(
+      AnalyticsMetricCard(
         key: const Key('analytics-busiest-day'),
         label: tr(context, 'Busiest Day'),
         value: ranking(
@@ -54,54 +56,117 @@ class AnalyticsOperationalCards extends StatelessWidget {
         description: description(values.weekdays),
         icon: Icons.calendar_today,
       ),
-      PelinesKpiCard(
-        key: const Key('analytics-waiting'),
-        label: tr(context, 'Waiting for Approval'),
-        value: number.format(values.waiting),
-        description: tr(
-          context,
-          'Current status of orders received in the selected period.',
-        ),
-        icon: Icons.pending_actions,
-      ),
-      PelinesKpiCard(
-        key: const Key('analytics-ready'),
-        label: AdminLocalizations.of(context)
-            .text('Ready', key: 'analytics.Ready'),
-        value: number.format(values.ready),
-        description: tr(
-          context,
-          'Current status of orders received in the selected period.',
-        ),
-        icon: Icons.check_circle_outline,
-      ),
     ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (range.contains(PelinesTime.now()))
+          Text(tr(context, 'This period is still in progress.')),
+        const SizedBox(height: 16),
+        AnalyticsMetricGrid(children: cards),
+      ],
+    );
+  }
+}
+
+class AnalyticsOperationalCards extends StatelessWidget {
+  const AnalyticsOperationalCards({
+    super.key,
+    required this.dataset,
+    required this.period,
+  });
+  final AnalyticsDataset dataset;
+  final AnalyticsPeriodResult period;
+  @override
+  Widget build(BuildContext context) {
+    final values = AnalyticsOperationalKpis(dataset, period.range);
+    final number = NumberFormat.decimalPattern(
+      Localizations.localeOf(context).toLanguageTag(),
+    );
+    final percent = NumberFormat(
+      '0.0',
+      Localizations.localeOf(context).toLanguageTag(),
+    );
+    final unavailable = tr(
+      context,
+      'Unavailable: reliable source data is not provided.',
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         PelinesSectionHeading(tr(context, 'Operational KPIs')),
         const SizedBox(height: 8),
-        Text(tr(context, 'Eligible orders received in the selected period.')),
-        if (range.contains(PelinesTime.now()))
-          Text(tr(context, 'This period is still in progress.')),
+        Text(tr(context, 'Pickup performance for the selected location.')),
+        Text(
+          tr(
+            context,
+            'Available counts use eligible orders received in the selected period.',
+          ),
+        ),
         const SizedBox(height: 16),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
-            final columns = constraints.maxWidth >= 1080 * scale
-                ? 4
-                : constraints.maxWidth >= 520 * scale
-                ? 2
-                : 1;
-            final width = (constraints.maxWidth - 16 * (columns - 1)) / columns;
-            return Wrap(
-              spacing: 16,
-              runSpacing: 16,
-              children: [
-                for (final card in cards) SizedBox(width: width, child: card),
-              ],
-            );
-          },
+        AnalyticsMetricGrid(
+          children: [
+            AnalyticsMetricCard(
+              key: const Key('analytics-on-time'),
+              label: tr(context, 'Ready on Time'),
+              value: '—',
+              description: unavailable,
+              icon: Icons.schedule,
+            ),
+            AnalyticsMetricCard(
+              key: const Key('analytics-operational-cancellation'),
+              label: tr(context, 'Cancellation Rate'),
+              value: period.cancellationRate == null
+                  ? '—'
+                  : '${percent.format(period.cancellationRate)}%',
+              description: tr(
+                context,
+                'Cancelled eligible orders / all eligible orders.',
+              ),
+              icon: Icons.cancel_outlined,
+            ),
+            AnalyticsMetricCard(
+              key: const Key('analytics-approval-rate'),
+              label: tr(context, 'Approval Rate'),
+              value: '—',
+              description: unavailable,
+              icon: Icons.percent,
+            ),
+            AnalyticsMetricCard(
+              key: const Key('analytics-approval-time'),
+              label: tr(context, 'Avg. Approval Time'),
+              value: '—',
+              description: unavailable,
+              icon: Icons.timer_outlined,
+            ),
+            AnalyticsMetricCard(
+              key: const Key('analytics-waiting'),
+              label: tr(context, 'Waiting for Approval'),
+              value: number.format(values.waiting),
+              description: tr(
+                context,
+                'Current status of orders received in the selected period.',
+              ),
+              icon: Icons.pending_actions,
+            ),
+            AnalyticsMetricCard(
+              key: const Key('analytics-ready'),
+              label: tr(context, 'Marked Ready'),
+              value: number.format(values.ready),
+              description: tr(
+                context,
+                'Current status of orders received in the selected period.',
+              ),
+              icon: Icons.check_circle_outline,
+            ),
+            AnalyticsMetricCard(
+              key: const Key('analytics-accuracy'),
+              label: tr(context, 'Order Accuracy'),
+              value: '—',
+              description: unavailable,
+              icon: Icons.analytics_outlined,
+            ),
+          ],
         ),
       ],
     );

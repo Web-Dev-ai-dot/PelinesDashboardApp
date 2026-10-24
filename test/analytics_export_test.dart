@@ -236,7 +236,6 @@ void main() {
           expect(container.read(analyticsRangeProvider).dayCount, n);
           if (n != 90) await tap(tester, 'analytics-date-range');
         }
-        await tap(tester, 'analytics-export');
         await tap(tester, 'analytics-export-revenue');
         expect(sent!.files, hasLength(1));
         expect(sent!.fileNameOverrides!.single, startsWith('pelines-revenue-'));
@@ -260,7 +259,6 @@ void main() {
           return const ShareResult('', ShareResultStatus.success);
         },
       );
-      await tap(tester, 'analytics-export');
       await tester.tap(find.byKey(const Key('analytics-export-revenue')));
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
@@ -285,6 +283,32 @@ void main() {
       );
     });
   }
+  testWidgets('three vertical exports expose unavailable Orders honestly', (
+    tester,
+  ) async {
+    await mount(tester);
+    final buttons = [
+      for (final name in ['orders', 'revenue', 'operational'])
+        find.byKey(Key('analytics-export-$name')),
+    ];
+    expect(tester.widget<OutlinedButton>(buttons.first).onPressed, isNull);
+    expect(
+      find.text('Orders CSV export is not available in this app.'),
+      findsOneWidget,
+    );
+    for (var i = 1; i < buttons.length; i++) {
+      expect(
+        tester.getRect(buttons[i]).top,
+        greaterThan(tester.getRect(buttons[i - 1]).bottom),
+      );
+      expect(
+        tester.getRect(buttons[i]).width,
+        tester.getRect(buttons.first).width,
+      );
+    }
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('loading stale error incomplete coverage block export', (
     tester,
   ) async {
@@ -314,7 +338,9 @@ void main() {
       await tester.pump();
       expect(
         tester
-            .widget<FilledButton>(find.byKey(const Key('analytics-export')))
+            .widget<OutlinedButton>(
+              find.byKey(const Key('analytics-export-revenue')),
+            )
             .onPressed,
         isNull,
       );
@@ -332,7 +358,6 @@ void main() {
           return pending.future;
         },
       );
-      await tap(tester, 'analytics-export');
       // Do not pumpAndSettle while the loading spinner is running.
       await tester.tap(find.byKey(const Key('analytics-export-operational')));
       await tester.pump();
@@ -340,7 +365,9 @@ void main() {
       expect(calls, 1);
       expect(
         tester
-            .widget<FilledButton>(find.byKey(const Key('analytics-export')))
+            .widget<OutlinedButton>(
+              find.byKey(const Key('analytics-export-revenue')),
+            )
             .onPressed,
         isNull,
       );
@@ -352,7 +379,6 @@ void main() {
         tester,
         generate: (_) async => throw Exception('generation failed'),
       );
-      await tap(tester, 'analytics-export');
       await tap(tester, 'analytics-export-revenue');
       expect(find.text('Export failed. Please try again.'), findsOneWidget);
     },

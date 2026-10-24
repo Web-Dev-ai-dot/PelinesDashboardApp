@@ -3,7 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../app/l10n/admin_localizations.dart';
-import '../../../app/theme/app_theme.dart';
+import '../../../app/theme/pelines_tokens.dart';
+import '../../../app/theme/pelines_components.dart';
 import '../../locations/providers/locations_providers.dart';
 import '../application/analytics_export.dart';
 import '../application/analytics_visualization_data.dart';
@@ -31,7 +32,6 @@ class AnalyticsExportAction extends ConsumerStatefulWidget {
 
 class _AnalyticsExportActionState extends ConsumerState<AnalyticsExportAction> {
   bool _busy = false;
-  bool _choosing = false;
   String? _error;
 
   String? unavailable() {
@@ -63,60 +63,13 @@ class _AnalyticsExportActionState extends ConsumerState<AnalyticsExportAction> {
     return null;
   }
 
-  Future<void> export() async {
-    if (_busy || _choosing) return;
+  Future<void> export(AnalyticsReport report) async {
+    if (_busy) return;
     setState(() {
-      _choosing = true;
+      _busy = true;
       _error = null;
     });
     try {
-      final report = await showModalBottomSheet<AnalyticsReport>(
-        context: context,
-        isScrollControlled: true,
-        builder: (context) => SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  tr(context, 'Export / Reports'),
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 12),
-                for (final report in AnalyticsReport.values)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: OutlinedButton(
-                      key: Key('analytics-export-${report.name}'),
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size(48, 48),
-                      ),
-                      onPressed: () => Navigator.pop(context, report),
-                      child: Padding(
-                        padding: const EdgeInsets.all(8),
-                        child: Text(
-                          tr(
-                            context,
-                            report == AnalyticsReport.revenue
-                                ? 'Revenue Report'
-                                : 'Operational Report',
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      );
-      if (report == null || !mounted) return;
-      setState(() {
-        _choosing = false;
-        _busy = true;
-      });
       final blocked = unavailable();
       if (blocked != null) {
         setState(() => _error = blocked);
@@ -162,7 +115,6 @@ class _AnalyticsExportActionState extends ConsumerState<AnalyticsExportAction> {
       if (mounted) {
         setState(() {
           _busy = false;
-          _choosing = false;
         });
       }
     }
@@ -175,31 +127,51 @@ class _AnalyticsExportActionState extends ConsumerState<AnalyticsExportAction> {
     ref.watch(currentLocationProvider);
     final blocked = unavailable();
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      key: const Key('analytics-export'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Wrap(
-          spacing: 12,
-          runSpacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            FilledButton.icon(
-              key: const Key('analytics-export'),
-              style: PelinesControlStyles.button(PelinesButtonVariant.primary),
-              onPressed: _busy || _choosing || blocked != null ? null : export,
-              icon: _busy
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.ios_share),
-              label: Text(
-                tr(context, _busy ? 'Preparing export…' : 'Export / Reports'),
-              ),
-            ),
-            if (widget.secondaryAction != null) widget.secondaryAction!,
-          ],
+        PelinesSectionHeading(tr(context, 'Export / Reports')),
+        const SizedBox(height: 8),
+        Text(
+          tr(
+            context,
+            'Download data for the selected location and date range.',
+          ),
         ),
+        const SizedBox(height: 16),
+        _button(
+          'orders',
+          'Export Orders CSV',
+          Icons.inventory_2_outlined,
+          null,
+        ),
+        _button(
+          'revenue',
+          'Export Revenue CSV',
+          Icons.attach_money,
+          _busy || blocked != null
+              ? null
+              : () => export(AnalyticsReport.revenue),
+        ),
+        _button(
+          'operational',
+          'Export Operational Report CSV',
+          Icons.cancel_outlined,
+          _busy || blocked != null
+              ? null
+              : () => export(AnalyticsReport.operational),
+        ),
+        if (_busy) ...[
+          const LinearProgressIndicator(),
+          Text(tr(context, 'Preparing export…')),
+        ],
+        Text(tr(context, 'Orders CSV export is not available in this app.')),
+        const SizedBox(height: 12),
+        Text(
+          tr(context, 'Exports respect the selected location and date range.'),
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        if (widget.secondaryAction != null) widget.secondaryAction!,
         if (_error ?? blocked case final String message)
           Padding(
             padding: const EdgeInsets.only(top: 8),
@@ -211,4 +183,39 @@ class _AnalyticsExportActionState extends ConsumerState<AnalyticsExportAction> {
       ],
     );
   }
+
+  Widget _button(
+    String name,
+    String label,
+    IconData icon,
+    VoidCallback? onPressed,
+  ) => Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: OutlinedButton(
+      key: Key('analytics-export-$name'),
+      style: OutlinedButton.styleFrom(
+        backgroundColor: PelinesColors.card,
+        foregroundColor: PelinesColors.textPrimary,
+        side: const BorderSide(color: PelinesColors.border),
+        minimumSize: const Size(48, 56),
+        padding: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(PelinesRadius.pageCard),
+        ),
+      ),
+      onPressed: onPressed,
+      child: Row(
+        children: [
+          Icon(icon, color: PelinesColors.brandPrimary),
+          const SizedBox(width: 12),
+          Expanded(child: Text(tr(context, label))),
+          const SizedBox(width: 12),
+          const Icon(
+            Icons.download_outlined,
+            color: PelinesColors.textSecondary,
+          ),
+        ],
+      ),
+    ),
+  );
 }

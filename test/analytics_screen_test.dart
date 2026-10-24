@@ -298,18 +298,18 @@ void main() {
             viewport.$1 - 32,
             chevron: true,
           );
-          final export = find.byKey(const Key('analytics-export'));
+          final export = find.byKey(const Key('analytics-export-revenue'));
           final refresh = find.descendant(
             of: find.byKey(const Key('analytics-refresh')),
             matching: find.byType(OutlinedButton),
           );
-          final primary = tester.widget<FilledButton>(export);
+          final primary = tester.widget<OutlinedButton>(export);
           final secondary = tester.widget<OutlinedButton>(refresh);
           expect(primary.onPressed, isNotNull);
           expect(secondary.onPressed, isNotNull);
           expect(
             primary.style!.backgroundColor!.resolve({}),
-            PelinesColors.brandPrimary,
+            PelinesColors.card,
           );
           expect(
             secondary.style!.foregroundColor!.resolve({}),
@@ -318,7 +318,10 @@ void main() {
           expect(tester.getSize(export).height, greaterThanOrEqualTo(48));
           expect(tester.getSize(refresh).height, greaterThanOrEqualTo(48));
           expect(
-            find.descendant(of: export, matching: find.byIcon(Icons.ios_share)),
+            find.descendant(
+              of: export,
+              matching: find.byIcon(Icons.download_outlined),
+            ),
             findsOneWidget,
           );
           expect(
@@ -348,17 +351,19 @@ void main() {
           final status = find.byKey(
             const Key('analytics-section-Order Status'),
           );
-          final statusTexts = find.descendant(
-            of: status,
-            matching: find.byType(Text),
+          final completed = tester.getRect(
+            find.byKey(const Key('analytics-status-completed')),
           );
-          final left = tester.getTopLeft(statusTexts.first).dx;
-          for (final element in statusTexts.evaluate()) {
-            expect(
-              tester.getTopLeft(find.byWidget(element.widget)).dx,
-              closeTo(left, 0.01),
-            );
-          }
+          final pending = tester.getRect(
+            find.byKey(const Key('analytics-status-pending')),
+          );
+          final confirmed = tester.getRect(
+            find.byKey(const Key('analytics-status-confirmed')),
+          );
+          expect(completed.width, greaterThan(pending.width));
+          expect(pending.top, closeTo(confirmed.top, 0.01));
+          expect(completed.bottom, lessThan(pending.top));
+          expect(exportRect.top, greaterThan(tester.getRect(status).bottom));
           expect(find.byKey(const Key('analytics-filter-bar')), findsOneWidget);
           expect(find.byType(PelinesLocationContext), findsOneWidget);
           expect(
@@ -384,10 +389,7 @@ void main() {
           }
           expect(find.text('Backend Taco'), findsOneWidget);
           expect(find.text('#1'), findsOneWidget);
-          expect(
-            find.byKey(const Key('analytics-sales-chart')),
-            findsOneWidget,
-          );
+          expect(find.byKey(const Key('analytics-sales-chart')), findsNothing);
           expect(
             find.byKey(const Key('analytics-cancellation-comparison')),
             findsOneWidget,
@@ -422,7 +424,9 @@ void main() {
     );
     expect(
       tester
-          .widget<FilledButton>(find.byKey(const Key('analytics-export')))
+          .widget<OutlinedButton>(
+            find.byKey(const Key('analytics-export-revenue')),
+          )
           .onPressed,
       isNull,
     );
@@ -462,7 +466,9 @@ void main() {
     );
     expect(
       tester
-          .widget<FilledButton>(find.byKey(const Key('analytics-export')))
+          .widget<OutlinedButton>(
+            find.byKey(const Key('analytics-export-revenue')),
+          )
           .onPressed,
       isNull,
     );

@@ -80,8 +80,6 @@ class AnalyticsScreen extends ConsumerWidget {
                                 style: Theme.of(context).textTheme.bodySmall,
                               ),
                             ),
-                          const AnalyticsExportAction(),
-                          const SizedBox(height: 12),
                           if (dataset.isLoading) ...[
                             const Center(child: CircularProgressIndicator()),
                             Text(
@@ -202,6 +200,8 @@ class AnalyticsScreen extends ConsumerWidget {
                               result: analytics,
                             ),
                           ],
+                          const SizedBox(height: 24),
+                          const AnalyticsExportAction(),
                         ],
                       ),
                     ),

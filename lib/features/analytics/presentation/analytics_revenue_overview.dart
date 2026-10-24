@@ -140,6 +140,42 @@ class AnalyticsRevenueOverview extends StatelessWidget {
                   );
                 },
               ),
+            for (final type in [
+              FulfillmentType.pickup,
+              FulfillmentType.delivery,
+            ])
+              Builder(
+                builder: (context) {
+                  final current = result.current.fulfillmentTypes[type]!;
+                  final previous = result.previous.fulfillmentTypes[type]!;
+                  return _RevenueCard(
+                    key: ValueKey('analytics-revenue-${type.name}'),
+                    title: type == FulfillmentType.pickup
+                        ? 'Pickup'
+                        : 'Delivery',
+                    icon: type == FulfillmentType.pickup
+                        ? Icons.shopping_bag_outlined
+                        : Icons.local_shipping_outlined,
+                    value: amount(current.salesCents),
+                    detail:
+                        '${tr(context, 'Orders')}: ${count(current.orders)}',
+                    previous: comparisonCovered
+                        ? amount(previous.salesCents)
+                        : '—',
+                    previousDetail: comparisonCovered
+                        ? '${tr(context, 'Orders')}: ${count(previous.orders)}'
+                        : null,
+                    change: _Change(
+                      metric: MetricComparison(
+                        current.salesCents,
+                        previous.salesCents,
+                      ),
+                      covered: comparisonCovered,
+                      revenue: true,
+                    ),
+                  );
+                },
+              ),
           ],
         ),
       ],
