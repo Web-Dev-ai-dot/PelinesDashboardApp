@@ -425,10 +425,10 @@ void main() {
       expect(find.text('Percentage'), findsOneWidget);
       expect(find.text('Regular & Catering'), findsOneWidget);
       await tester.enterText(
-        find.widgetWithText(TextField, 'Code'),
+        find.byKey(const Key('promotion-code')),
         'BAD CODE',
       );
-      await tester.enterText(find.widgetWithText(TextField, 'Discount'), '10');
+      await tester.enterText(find.byKey(const Key('promotion-value')), '10');
       await tester.pump();
       await tester.drag(find.byType(ListView).first, const Offset(0, -700));
       await tester.pumpAndSettle();

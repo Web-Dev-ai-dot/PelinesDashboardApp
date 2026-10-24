@@ -509,7 +509,8 @@ class PromotionFormMutationController
           : values
                 .where(
                   (Discount d) =>
-                      d.code == body['code'] && d.locationId == locationId,
+                      d.code == body['code'] &&
+                      d.locationId == body['locationId'],
                 )
                 .toList();
       if (candidates.length == 1 && _matchesForm(candidates.single, body)) {

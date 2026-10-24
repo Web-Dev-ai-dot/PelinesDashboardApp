@@ -1,5 +1,6 @@
 // English source messages and their Spanish UI translations. Backend values are never catalog keys.
 const spanishCatalog = <String, String>{
+  "Generate another code": "Generar otro código",
   "Edit discount code": "Editar código de descuento",
   "Configure the discount code customers can use at checkout.": "Configura el código de descuento que los clientes pueden usar al pagar.",
   "Discount code": "Código de descuento",

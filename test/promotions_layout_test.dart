@@ -148,7 +148,9 @@ Future<({ProviderContainer c, GoRouter router})> pump(
       ),
       GoRoute(
         path: '/app/promotions/new',
-        builder: (_, _) => const PromotionFormScreen(),
+        builder: (_, state) => PromotionFormScreen(
+          generateCode: state.uri.queryParameters['generate'] == 'true',
+        ),
       ),
       GoRoute(
         path: '/app/promotions/:id/edit',
@@ -416,7 +418,7 @@ void main() {
                   find.byKey(const Key('generate-promotion-code')),
                 )
                 .onPressed,
-            isNull,
+            isNotNull,
           );
           expect(find.byType(DataTable), findsNothing);
           await tester.scrollUntilVisible(

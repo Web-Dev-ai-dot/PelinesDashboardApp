@@ -141,7 +141,9 @@ final routerProvider = Provider<GoRouter>((Ref ref) {
               ),
               GoRoute(
                 path: 'promotions/new',
-                builder: (_, _) => const PromotionFormScreen(),
+                builder: (_, state) => PromotionFormScreen(
+                  generateCode: state.uri.queryParameters['generate'] == 'true',
+                ),
               ),
               GoRoute(
                 path: 'promotions/:id/edit',

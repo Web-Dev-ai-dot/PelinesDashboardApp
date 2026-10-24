@@ -15,11 +15,17 @@ import '../../../app/theme/pelines_tokens.dart';
 import '../../locations/models/location.dart';
 import '../../locations/providers/locations_providers.dart';
 import '../models/discount.dart';
+import '../models/promotion_code_generator.dart';
 import '../models/promotion_write.dart';
 import '../providers/promotions_providers.dart';
 
 class PromotionFormScreen extends ConsumerWidget {
-  const PromotionFormScreen({super.key, this.discountId});
+  const PromotionFormScreen({
+    super.key,
+    this.discountId,
+    this.generateCode = false,
+  });
+  final bool generateCode;
   final String? discountId;
 
   @override
@@ -33,7 +39,11 @@ class PromotionFormScreen extends ConsumerWidget {
       );
     }
     if (discountId == null) {
-      return _PromotionForm(location: location);
+      return _PromotionForm(
+        key: ValueKey('create-$generateCode'),
+        location: location,
+        generateCode: generateCode,
+      );
     }
     return ref
         .watch(promotionsProvider)
@@ -101,7 +111,13 @@ class PromotionFormScreen extends ConsumerWidget {
 }
 
 class _PromotionForm extends ConsumerStatefulWidget {
-  const _PromotionForm({super.key, required this.location, this.initial});
+  const _PromotionForm({
+    super.key,
+    required this.location,
+    this.initial,
+    this.generateCode = false,
+  });
+  final bool generateCode;
   final Location location;
   final Discount? initial;
 
@@ -123,6 +139,7 @@ class _PromotionFormState extends ConsumerState<_PromotionForm> {
   late Discount? _snapshot;
   late final Location _openedLocation;
   bool _leaving = false;
+  bool _createGlobal = false;
   bool get _busy =>
       _confirming || _leaving || ref.read(promotionFormMutationProvider).isBusy;
   bool _attempted = false;
@@ -139,7 +156,9 @@ class _PromotionFormState extends ConsumerState<_PromotionForm> {
     final PromotionDraft initial = _snapshot == null
         ? PromotionDraft.create()
         : PromotionDraft.fromDiscount(_snapshot!);
-    _code = TextEditingController(text: initial.code);
+    _code = TextEditingController(
+      text: widget.generateCode ? generatePromotionCode() : initial.code,
+    );
     _value = TextEditingController(text: initial.valueText);
     _minimum = TextEditingController(text: initial.minimumText);
     _usage = TextEditingController(text: initial.usageLimitText);
@@ -188,7 +207,13 @@ class _PromotionFormState extends ConsumerState<_PromotionForm> {
 
   PromotionWriteResult get _validation {
     final result = _draft.validate(_openedLocation.id);
-    if (!_editing || result.body == null) return result;
+    if (result.body == null) return result;
+    if (!_editing) {
+      return PromotionWriteResult.valid({
+        ...result.body!,
+        'locationId': _createGlobal ? null : _openedLocation.id,
+      });
+    }
     final initial = PromotionDraft.fromDiscount(_snapshot!);
     final body = {...result.body!};
     // Preserve original instants when their calendar fields were not changed.
@@ -214,7 +239,8 @@ class _PromotionFormState extends ConsumerState<_PromotionForm> {
           _usage.text.isNotEmpty ||
           _startDate != null ||
           _endDate != null ||
-          !_active;
+          !_active ||
+          _createGlobal;
     }
     if (desired == null) {
       final initial = PromotionDraft.fromDiscount(_snapshot!);
@@ -270,198 +296,12 @@ class _PromotionFormState extends ConsumerState<_PromotionForm> {
             icon: const Icon(Icons.arrow_back),
           ),
         ),
-        body: _editing
-            ? _editBody(operation, validation)
-            : OperationsFormList(
-                padding: const EdgeInsets.all(PelinesSpacing.lg),
-                children: <Widget>[
-                  PelinesReadOnlyField(
-                    label: tr(context, 'Location'),
-                    value: _global
-                        ? tr(context, 'All locations')
-                        : _openedLocation.name,
-                  ),
-                  const SizedBox(height: PelinesSpacing.lg),
-                  _textField(
-                    controller: _code,
-                    label: tr(context, 'Code'),
-                    capitalization: TextCapitalization.characters,
-                    formatters: <TextInputFormatter>[
-                      LengthLimitingTextInputFormatter(40),
-                    ],
-                  ),
-                  DropdownButtonFormField<String>(
-                    isExpanded: true,
-                    itemHeight: null,
-                    initialValue: _type,
-                    decoration: PelinesControlStyles.input(
-                      label: tr(context, 'Discount Type'),
-                    ),
-                    items: <DropdownMenuItem<String>>[
-                      DropdownMenuItem(
-                        value: 'percent',
-                        child: Text(tr(context, 'Percentage')),
-                      ),
-                      DropdownMenuItem(
-                        value: 'fixed',
-                        child: Text(tr(context, 'Fixed amount')),
-                      ),
-                    ],
-                    onChanged: operation.isBusy
-                        ? null
-                        : (String? value) => setState(() => _type = value!),
-                  ),
-                  const SizedBox(height: 12),
-                  _textField(
-                    controller: _value,
-                    label: tr(context, 'Discount'),
-                    prefix: _type == 'fixed' ? r'$' : null,
-                    suffix: _type == 'percent' ? '%' : null,
-                    number: true,
-                  ),
-                  DropdownButtonFormField<String>(
-                    isExpanded: true,
-                    itemHeight: null,
-                    initialValue: _appliesTo,
-                    decoration: PelinesControlStyles.input(
-                      label: tr(context, 'Applies To'),
-                    ),
-                    items: <DropdownMenuItem<String>>[
-                      DropdownMenuItem(
-                        value: 'regular',
-                        child: Text(tr(context, 'Regular orders')),
-                      ),
-                      DropdownMenuItem(
-                        value: 'catering',
-                        child: Text(tr(context, 'Catering orders')),
-                      ),
-                      DropdownMenuItem(
-                        value: 'both',
-                        child: Text(tr(context, 'Regular & Catering')),
-                      ),
-                    ],
-                    onChanged: operation.isBusy
-                        ? null
-                        : (String? value) =>
-                              setState(() => _appliesTo = value!),
-                  ),
-                  const SizedBox(height: 12),
-                  _textField(
-                    controller: _minimum,
-                    label: tr(context, 'Minimum Subtotal'),
-                    prefix: r'$',
-                    number: true,
-                  ),
-                  _dateTile(tr(context, 'Start Date'), _startDate, (
-                    DateTime? value,
-                  ) {
-                    setState(() => _startDate = value);
-                  }),
-                  _dateTile(tr(context, 'End Date'), _endDate, (
-                    DateTime? value,
-                  ) {
-                    setState(() => _endDate = value);
-                  }),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(tr(context, 'Unlimited usage')),
-                    value: _unlimited,
-                    onChanged: operation.isBusy
-                        ? null
-                        : (bool value) => setState(() => _unlimited = value),
-                  ),
-                  if (!_unlimited)
-                    _textField(
-                      controller: _usage,
-                      label: tr(context, 'Usage Limit'),
-                      number: true,
-                    ),
-                  if (_editing) ...<Widget>[
-                    Text(
-                      tr(context, 'Usage claimed'),
-                      style: Theme.of(context).textTheme.labelLarge,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(_snapshot!.usageLabel),
-                    const SizedBox(height: 4),
-                    Text(
-                      tr(
-                        context,
-                        'Usage claimed may include orders that were created but not completed.',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(tr(context, 'Active')),
-                    value: _active,
-                    onChanged: operation.isBusy
-                        ? null
-                        : (bool value) => setState(() => _active = value),
-                  ),
-                  if ((_attempted || _dirty) && validation.message != null)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: Text(
-                        tr(context, validation.message!),
-                        key: const Key('promotion-validation-error'),
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                      ),
-                    ),
-                  if (operation.message != null &&
-                      operation.phase == PromotionFormPhase.error)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: Text(
-                        tr(context, operation.message!),
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                      ),
-                    ),
-                  OutlinedButton(
-                    style: PelinesControlStyles.button(
-                      PelinesButtonVariant.secondary,
-                    ),
-                    onPressed: operation.isBusy ? null : _leave,
-                    child: Text(tr(context, 'Cancel')),
-                  ),
-                  const SizedBox(height: 12),
-                  FilledButton(
-                    style: PelinesControlStyles.button(
-                      PelinesButtonVariant.primary,
-                    ),
-                    key: const Key('promotion-form-save'),
-                    onPressed:
-                        operation.isBusy ||
-                            _confirming ||
-                            !_dirty ||
-                            !validation.isValid
-                        ? null
-                        : _save,
-                    child: Text(
-                      operation.isBusy
-                          ? tr(context, 'Saving…')
-                          : _editing
-                          ? tr(context, 'Save Changes')
-                          : tr(context, 'Create Promotion'),
-                    ),
-                  ),
-                  if (operation.isBusy)
-                    const Padding(
-                      padding: EdgeInsets.only(top: 12),
-                      child: LinearProgressIndicator(),
-                    ),
-                ],
-              ),
+        body: _formBody(operation, validation),
       ),
     );
   }
 
-  Widget _editBody(
+  Widget _formBody(
     PromotionFormMutationState operation,
     PromotionWriteResult validation,
   ) {
@@ -479,7 +319,12 @@ class _PromotionFormState extends ConsumerState<_PromotionForm> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      tr(context, 'Edit discount code'),
+                      tr(
+                        context,
+                        _editing
+                            ? 'Edit discount code'
+                            : 'Create discount code',
+                      ),
                       style: Theme.of(context).textTheme.titleLarge
                           ?.copyWith(fontWeight: FontWeight.w700),
                     ),
@@ -517,6 +362,18 @@ class _PromotionFormState extends ConsumerState<_PromotionForm> {
             style: Theme.of(context).textTheme.bodySmall
                 ?.copyWith(color: PelinesColors.textSecondary),
           ),
+          if (!_editing) ...[
+            const SizedBox(height: 8),
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: TextButton.icon(
+                key: const Key('promotion-regenerate-code'),
+                onPressed: busy ? null : _regenerate,
+                icon: const Icon(Icons.auto_fix_high_outlined),
+                label: Text(tr(context, 'Generate another code')),
+              ),
+            ),
+          ],
           const SizedBox(height: 24),
           _pair(
             'promotion-type-value',
@@ -549,12 +406,27 @@ class _PromotionFormState extends ConsumerState<_PromotionForm> {
             busy,
           ),
           const SizedBox(height: 20),
-          PelinesReadOnlyField(
-            label: tr(context, 'Location'),
-            value: _global
-                ? tr(context, 'All locations')
-                : _openedLocation.name,
-          ),
+          if (_editing)
+            PelinesReadOnlyField(
+              label: tr(context, 'Location'),
+              value: _global
+                  ? tr(context, 'All locations')
+                  : _openedLocation.name,
+            )
+          else ...[
+            _editSelect(
+              'Location',
+              _createGlobal ? 'global' : 'local',
+              {
+                'local': _openedLocation.name,
+                'global': tr(context, 'All locations'),
+              },
+              (value) => setState(() => _createGlobal = value == 'global'),
+              busy,
+            ),
+            if (_createGlobal)
+              Text(tr(context, 'This promotion applies to all locations.')),
+          ],
           const SizedBox(height: 24),
           _editText(
             'Minimum order amount',
@@ -587,22 +459,24 @@ class _PromotionFormState extends ConsumerState<_PromotionForm> {
                 ?.copyWith(color: PelinesColors.textSecondary),
           ),
           const SizedBox(height: 16),
-          Text(
-            tr(context, 'Usage claimed'),
-            style: Theme.of(context).textTheme.labelLarge,
-          ),
-          Text(
-            _snapshot!.usageLabel
-                .replaceFirst('claimed', tr(context, 'claimed'))
-                .replaceFirst('Unlimited', tr(context, 'Unlimited')),
-          ),
-          Text(
-            tr(
-              context,
-              'Usage claimed may include orders that were created but not completed.',
+          if (_editing) ...[
+            Text(
+              tr(context, 'Usage claimed'),
+              style: Theme.of(context).textTheme.labelLarge,
             ),
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
+            Text(
+              _snapshot!.usageLabel
+                  .replaceFirst('claimed', tr(context, 'claimed'))
+                  .replaceFirst('Unlimited', tr(context, 'Unlimited')),
+            ),
+            Text(
+              tr(
+                context,
+                'Usage claimed may include orders that were created but not completed.',
+              ),
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
           const SizedBox(height: 24),
           PelinesCard(
             variant: PelinesCardVariant.compact,
@@ -782,51 +656,6 @@ class _PromotionFormState extends ConsumerState<_PromotionForm> {
     ],
   );
 
-  Widget _textField({
-    required TextEditingController controller,
-    required String label,
-    String? prefix,
-    String? suffix,
-    bool number = false,
-    TextCapitalization capitalization = TextCapitalization.none,
-    List<TextInputFormatter>? formatters,
-  }) => Padding(
-    padding: const EdgeInsets.only(bottom: 12),
-    child: TextField(
-      controller: controller,
-      textCapitalization: capitalization,
-      inputFormatters: formatters,
-      keyboardType: number
-          ? const TextInputType.numberWithOptions(decimal: true)
-          : null,
-      decoration: PelinesControlStyles.input(label: label)
-          .copyWith(prefixText: prefix, suffixText: suffix),
-    ),
-  );
-
-  Widget _dateTile(
-    String label,
-    DateTime? value,
-    ValueChanged<DateTime?> changed,
-  ) => ListTile(
-    contentPadding: EdgeInsets.zero,
-    title: Text(label),
-    subtitle: Text(
-      value == null
-          ? tr(context, 'No date')
-          : DateFormat.yMMMd(Localizations.localeOf(context).toString())
-                .format(value),
-    ),
-    trailing: value == null
-        ? const Icon(Icons.calendar_month_outlined)
-        : IconButton(
-            tooltip: tr(context, 'Clear date'),
-            onPressed: _busy ? null : () => changed(null),
-            icon: const Icon(Icons.clear),
-          ),
-    onTap: _busy ? null : () => _pickDate(value, changed),
-  );
-
   Future<void> _pickDate(
     DateTime? value,
     ValueChanged<DateTime?> changed,
@@ -911,6 +740,12 @@ class _PromotionFormState extends ConsumerState<_PromotionForm> {
     ],
   );
 
+  void _regenerate() {
+    if (_busy) return;
+    _code.text = generatePromotionCode();
+    ref.read(promotionFormMutationProvider.notifier).reset();
+  }
+
   Future<void> _save() async {
     if (_confirming || ref.read(promotionFormMutationProvider).isBusy) return;
     setState(() => _attempted = true);
@@ -967,7 +802,9 @@ class _PromotionFormState extends ConsumerState<_PromotionForm> {
       promotionFormMutationProvider,
     );
     if (result.phase == PromotionFormPhase.success && result.resultId != null) {
-      context.go('/app/promotions/${result.resultId}');
+      context.go(
+        _editing ? '/app/promotions/${result.resultId}' : '/app/promotions',
+      );
       return;
     }
     if (result.phase == PromotionFormPhase.conflict) {

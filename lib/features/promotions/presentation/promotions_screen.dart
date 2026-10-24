@@ -22,6 +22,27 @@ class PromotionsScreen extends ConsumerStatefulWidget {
 
 class _PromotionsScreenState extends ConsumerState<PromotionsScreen> {
   bool _confirming = false;
+  bool _openingForm = false;
+  void _openCreate(bool generate) {
+    if (_openingForm ||
+        _confirming ||
+        ref.read(promotionMutationProvider).isBusy) {
+      return;
+    }
+    setState(() => _openingForm = true);
+    try {
+      context.push<void>(
+        generate ? '/app/promotions/new?generate=true' : '/app/promotions/new',
+      );
+    } finally {
+      // Guard repeated taps until the destination is rendered. Do not depend on
+      // the push Future: a successful create returns using go(), not pop().
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _openingForm = false);
+      });
+    }
+  }
+
   Future<void> _delete(Discount discount, Location location) async {
     if (_confirming || ref.read(promotionMutationProvider).isBusy) return;
     setState(() => _confirming = true);
@@ -41,7 +62,10 @@ class _PromotionsScreenState extends ConsumerState<PromotionsScreen> {
   Widget build(BuildContext context) {
     final location = ref.watch(currentLocationProvider);
     final promotions = ref.watch(promotionsProvider);
-    final busy = _confirming || ref.watch(promotionMutationProvider).isBusy;
+    final busy =
+        _openingForm ||
+        _confirming ||
+        ref.watch(promotionMutationProvider).isBusy;
     return AdminSectionScaffold(
       appBar: AdminAppBar(
         title: Text(
@@ -99,14 +123,7 @@ class _PromotionsScreenState extends ConsumerState<PromotionsScreen> {
                       ),
                     ),
                     const SizedBox(height: 28),
-                    _PromotionActions(enabled: !busy),
-                    const SizedBox(height: 8),
-                    Text(
-                      tr(context, 'Generate code is not available yet (T05).'),
-                      style: const TextStyle(
-                        color: PelinesColors.textSecondary,
-                      ),
-                    ),
+                    _PromotionActions(enabled: !busy, onCreate: _openCreate),
                     const SizedBox(height: 28),
                     Wrap(
                       alignment: WrapAlignment.spaceBetween,
@@ -194,8 +211,9 @@ class _PromotionsScreenState extends ConsumerState<PromotionsScreen> {
 }
 
 class _PromotionActions extends StatelessWidget {
-  const _PromotionActions({required this.enabled});
+  const _PromotionActions({required this.enabled, required this.onCreate});
   final bool enabled;
+  final ValueChanged<bool> onCreate;
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
@@ -211,7 +229,7 @@ class _PromotionActions extends StatelessWidget {
           SizedBox(
             width: width,
             child: Tooltip(
-              message: tr(context, 'Generate code is not available yet (T05).'),
+              message: tr(context, 'Generate code'),
               child: OutlinedButton.icon(
                 key: const Key('generate-promotion-code'),
                 style:
@@ -221,7 +239,7 @@ class _PromotionActions extends StatelessWidget {
                             BorderSide(color: PelinesColors.brandPrimary),
                           ),
                         ),
-                onPressed: null,
+                onPressed: enabled ? () => onCreate(true) : null,
                 icon: const Icon(Icons.auto_fix_high_outlined),
                 label: Text(
                   tr(context, 'Generate code'),
@@ -235,9 +253,7 @@ class _PromotionActions extends StatelessWidget {
             child: FilledButton.icon(
               key: const Key('add-promotion'),
               style: PelinesControlStyles.button(PelinesButtonVariant.primary),
-              onPressed: enabled
-                  ? () => context.push('/app/promotions/new')
-                  : null,
+              onPressed: enabled ? () => onCreate(false) : null,
               icon: const Icon(Icons.add),
               label: Text(
                 tr(context, 'Create discount code'),
