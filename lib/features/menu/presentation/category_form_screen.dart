@@ -15,10 +15,34 @@ import 'menu_parity_widgets.dart';
 import '../../../app/theme/app_theme.dart';
 
 class CategoryFormScreen extends ConsumerWidget {
-  const CategoryFormScreen({required this.kind, this.categoryId, super.key});
+  const CategoryFormScreen({
+    required this.kind,
+    this.categoryId,
+    this.modal = false,
+    super.key,
+  });
 
   final MenuKind kind;
   final String? categoryId;
+  final bool modal;
+
+  Widget _pending(BuildContext context, Widget child) => Padding(
+    padding: const EdgeInsets.all(PelinesSpacing.md),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Align(
+          alignment: Alignment.centerRight,
+          child: IconButton(
+            tooltip: tr(context, 'Close'),
+            onPressed: () => Navigator.pop(context),
+            icon: const Icon(Icons.close),
+          ),
+        ),
+        Flexible(child: child),
+      ],
+    ),
+  );
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -37,21 +61,56 @@ class CategoryFormScreen extends ConsumerWidget {
       kind: kind,
       categoryId: categoryId!,
     );
-    return ref
+    final content = ref
         .watch(menuCategoryDetailProvider(query))
         .when(
-          loading: () =>
-              const Scaffold(body: Center(child: CircularProgressIndicator())),
-          error: (Object error, StackTrace stackTrace) => Scaffold(
-            appBar: AdminAppBar(title: Text(tr(context, 'Edit Category'))),
-            body: MenuError(
-              message: error.toString(),
-              onRetry: () => ref.invalidate(menuCategoryDetailProvider(query)),
-            ),
+          loading: () => modal
+              ? _pending(
+                  context,
+                  const Center(child: CircularProgressIndicator()),
+                )
+              : const Scaffold(
+                  body: Center(child: CircularProgressIndicator()),
+                ),
+          error: (Object error, StackTrace stackTrace) => modal
+              ? _pending(
+                  context,
+                  MenuError(
+                    message: error.toString(),
+                    onRetry: () =>
+                        ref.invalidate(menuCategoryDetailProvider(query)),
+                  ),
+                )
+              : Scaffold(
+                  appBar: AdminAppBar(
+                    title: Text(tr(context, 'Edit Category')),
+                  ),
+                  body: MenuError(
+                    message: error.toString(),
+                    onRetry: () =>
+                        ref.invalidate(menuCategoryDetailProvider(query)),
+                  ),
+                ),
+          data: (MenuCategory category) => _CategoryForm(
+            kind: kind,
+            location: location,
+            initial: category,
+            modal: modal,
           ),
-          data: (MenuCategory category) =>
-              _CategoryForm(kind: kind, location: location, initial: category),
         );
+    if (!modal) return content;
+    return Dialog(
+      backgroundColor: PelinesColors.card,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(PelinesRadius.dialog),
+      ),
+      insetPadding: const EdgeInsets.all(PelinesSpacing.md),
+      child: ConstrainedBox(
+        key: const ValueKey('category-modal-content'),
+        constraints: const BoxConstraints(maxWidth: 640, maxHeight: 840),
+        child: content,
+      ),
+    );
   }
 }
 
@@ -60,11 +119,13 @@ class _CategoryForm extends ConsumerStatefulWidget {
     required this.kind,
     required this.location,
     this.initial,
+    this.modal = false,
   });
 
   final MenuKind kind;
   final Location location;
   final MenuCategory? initial;
+  final bool modal;
 
   @override
   ConsumerState<_CategoryForm> createState() => _CategoryFormState();
@@ -148,6 +209,166 @@ class _CategoryFormState extends ConsumerState<_CategoryForm> {
     if (discard == true && mounted) Navigator.pop(context);
   }
 
+  bool _saving = false;
+
+  Future<void> _save(CategoryMutationKey key, CategoryWriteInput input) async {
+    if (_saving) return;
+    setState(() => _saving = true);
+    try {
+      final saved = await ref
+          .read(categoryMutationProvider(key).notifier)
+          .save(input);
+      if (saved && mounted) Navigator.pop(context, true);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Widget _modal(
+    CategoryMutationKey key,
+    CategoryMutationState mutation,
+    CategoryWriteInput? input,
+  ) {
+    final busy = mutation.isBusy || _saving;
+    Widget label(String text) => Padding(
+      padding: const EdgeInsets.only(bottom: PelinesSpacing.xs),
+      child: Text(
+        tr(context, text).toUpperCase(),
+        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+          color: PelinesColors.textSecondary,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+    return AdminPopScope(
+      canPop: !_dirty && !busy,
+      onPopInvokedWithResult: (popped, result) async {
+        if (!popped && !busy) await _leave();
+      },
+      child: Padding(
+        padding: const EdgeInsets.all(PelinesSpacing.xl),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    tr(context, 'Edit category'),
+                    style: Theme.of(context).textTheme.headlineSmall
+                        ?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                IconButton(
+                  tooltip: tr(context, 'Close'),
+                  onPressed: busy ? null : _leave,
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+            ),
+            const SizedBox(height: PelinesSpacing.lg),
+            Flexible(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    label('Name'),
+                    Semantics(
+                      label: tr(context, 'Name'),
+                      child: TextField(
+                        key: const ValueKey('category-name'),
+                        controller: _name,
+                        enabled: !busy,
+                        maxLength: 80,
+                        decoration: PelinesControlStyles.input(),
+                      ),
+                    ),
+                    const SizedBox(height: PelinesSpacing.md),
+                    label('Display order'),
+                    Semantics(
+                      label: tr(context, 'Display order'),
+                      child: TextField(
+                        key: const ValueKey('category-order'),
+                        controller: _sortOrder,
+                        enabled: !busy,
+                        keyboardType: TextInputType.number,
+                        decoration: PelinesControlStyles.input(),
+                      ),
+                    ),
+                    const SizedBox(height: PelinesSpacing.md),
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      activeColor: PelinesColors.brandPrimary,
+                      title: Text(tr(context, 'Active')),
+                      value: _active,
+                      onChanged: busy
+                          ? null
+                          : (value) => setState(() => _active = value!),
+                    ),
+                    const Divider(height: PelinesSpacing.xxl),
+                    label('Subcategory visibility schedule'),
+                    Text(
+                      tr(
+                        context,
+                        'Subcategory schedules are read-only here. Existing settings are preserved when you save.',
+                      ),
+                    ),
+                    const SizedBox(height: PelinesSpacing.md),
+                    _CategorySchedules(
+                      category: widget.initial!,
+                      location: widget.location,
+                    ),
+                    if (input == null)
+                      Text(
+                        tr(
+                          context,
+                          'Enter a name up to 80 characters and a non-negative sort order.',
+                        ),
+                        style: const TextStyle(
+                          color: PelinesColors.destructive,
+                        ),
+                      ),
+                    if (mutation.message != null)
+                      Text(tr(context, mutation.message!)),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: PelinesSpacing.lg),
+            Wrap(
+              alignment: WrapAlignment.end,
+              spacing: PelinesSpacing.sm,
+              runSpacing: PelinesSpacing.sm,
+              children: [
+                OutlinedButton(
+                  style: PelinesControlStyles.button(
+                    PelinesButtonVariant.secondary,
+                  ),
+                  onPressed: busy ? null : _leave,
+                  child: Text(tr(context, 'Cancel')),
+                ),
+                FilledButton(
+                  style: PelinesControlStyles.button(
+                    PelinesButtonVariant.primary,
+                  ),
+                  onPressed: busy || input == null || !_dirty
+                      ? null
+                      : () => _save(key, input),
+                  child: PelinesButtonLabel(
+                    busy: busy,
+                    label: tr(context, busy ? 'Saving...' : 'Save'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final CategoryMutationKey key = (
@@ -160,6 +381,8 @@ class _CategoryFormState extends ConsumerState<_CategoryForm> {
       categoryMutationProvider(key),
     );
     final CategoryWriteInput? input = _input;
+
+    if (widget.modal) return _modal(key, mutation, input);
 
     return AdminPopScope(
       canPop: !_dirty,
@@ -266,5 +489,126 @@ class _CategoryFormState extends ConsumerState<_CategoryForm> {
         ),
       ),
     );
+  }
+}
+
+class _CategorySchedules extends ConsumerWidget {
+  const _CategorySchedules({required this.category, required this.location});
+  final MenuCategory category;
+  final Location location;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final query = (
+      locationId: location.id,
+      locationSlug: location.slug,
+      categoryId: category.id,
+    );
+    return ref
+        .watch(menuProductsProvider(query))
+        .when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, stack) => MenuError(
+            message: tr(context, 'Subcategories could not be loaded.'),
+            onRetry: () => ref.invalidate(menuProductsProvider(query)),
+          ),
+          data: (products) {
+            final schedules =
+                category.subcategorySchedules ?? <String, dynamic>{};
+            final names = {
+              ...products
+                  .map((p) => p.subcategory?.trim() ?? '')
+                  .where((name) => name.isNotEmpty),
+              ...schedules.keys,
+            }.toList()..sort();
+            if (names.isEmpty) {
+              return Text(tr(context, 'No subcategories in this category.'));
+            }
+            return Column(
+              children: names.map((name) {
+                final raw = schedules[name];
+                final schedule = raw is Map ? raw : null;
+                final bool? always = raw == null
+                    ? true
+                    : schedule?['enabled'] is bool
+                    ? !(schedule!['enabled'] as bool)
+                    : null;
+                final days = schedule?['days'];
+                final weekdayLabels = [
+                  'Mon',
+                  'Tue',
+                  'Wed',
+                  'Thu',
+                  'Fri',
+                  'Sat',
+                  'Sun',
+                ];
+                final dayText = days is List
+                    ? days
+                          .map(
+                            (day) => day is int && day >= 0 && day < 7
+                                ? tr(context, weekdayLabels[day])
+                                : day.toString(),
+                          )
+                          .join(', ')
+                    : '';
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: PelinesSpacing.xs),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: PelinesColors.border),
+                      borderRadius: BorderRadius.circular(
+                        PelinesRadius.prominentCard,
+                      ),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(PelinesSpacing.sm),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            name,
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                          CheckboxListTile(
+                            contentPadding: EdgeInsets.zero,
+                            controlAffinity: ListTileControlAffinity.leading,
+                            tristate: true,
+                            value: always,
+                            onChanged: null,
+                            title: Text(tr(context, 'Always visible')),
+                          ),
+                          if (always == false)
+                            Text(
+                              '$dayText · ${schedule?['start'] ?? '—'} – ${schedule?['end'] ?? '—'}',
+                            ),
+                          if (always == false)
+                            Text(tr(context, 'Restaurant-local time')),
+                          if (!products.any(
+                            (product) => product.subcategory?.trim() == name,
+                          ))
+                            Text(
+                              tr(
+                                context,
+                                'Saved schedule; no items currently use this subcategory.',
+                              ),
+                            ),
+                          if (always == null)
+                            Text(
+                              tr(
+                                context,
+                                'Unrecognized schedule. Preserved without changes.',
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            );
+          },
+        );
   }
 }

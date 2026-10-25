@@ -16,6 +16,8 @@ import '../../../app/theme/app_theme.dart';
 import 'menu_parity_widgets.dart';
 import '../providers/catering_actions.dart';
 
+import 'category_form_screen.dart';
+
 part 'catering_catalog.dart';
 
 class MenuLandingScreen extends StatelessWidget {

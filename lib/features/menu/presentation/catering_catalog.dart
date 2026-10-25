@@ -423,9 +423,26 @@ class _CateringCatalogState extends ConsumerState<MenuCatalogScreen> {
                                         filled: true,
                                         onPressed: busy
                                             ? null
-                                            : () => context.push(
-                                                '/app/menu/${widget.kind.name}/categories/${category.id}/edit',
-                                              ),
+                                            : () {
+                                                if (widget.kind ==
+                                                    MenuKind.catering) {
+                                                  showDialog<bool>(
+                                                    context: context,
+                                                    barrierDismissible: false,
+                                                    builder: (_) =>
+                                                        CategoryFormScreen(
+                                                          kind: widget.kind,
+                                                          categoryId:
+                                                              category.id,
+                                                          modal: true,
+                                                        ),
+                                                  );
+                                                } else {
+                                                  context.push(
+                                                    '/app/menu/${widget.kind.name}/categories/${category.id}/edit',
+                                                  );
+                                                }
+                                              },
                                       ),
                                       CateringDeleteButton(
                                         query: query,
