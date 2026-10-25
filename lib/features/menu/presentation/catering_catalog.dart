@@ -647,12 +647,18 @@ class CateringDeleteButton extends ConsumerStatefulWidget {
     required this.name,
     this.productId,
     this.groupId,
+    this.onBusyChanged,
+    this.onSettled,
+    this.compact = false,
     super.key,
   });
+  final bool compact;
   final CategoryQuery query;
   final String categoryId, id, name;
   final String? productId, groupId;
   final CateringEntity entity;
+  final ValueChanged<bool>? onBusyChanged;
+  final VoidCallback? onSettled;
   @override
   ConsumerState<CateringDeleteButton> createState() =>
       _CateringDeleteButtonState();
@@ -681,6 +687,7 @@ class _CateringDeleteButtonState extends ConsumerState<CateringDeleteButton> {
     );
     if (confirm != true || !mounted || busy) return;
     setState(() => busy = true);
+    widget.onBusyChanged?.call(true);
     try {
       await validateCateringContext(ref, widget.query, widget.categoryId);
       if (widget.productId != null) {
@@ -725,12 +732,15 @@ class _CateringDeleteButtonState extends ConsumerState<CateringDeleteButton> {
           );
         }
         setState(() => busy = false);
+        widget.onBusyChanged?.call(false);
+        widget.onSettled?.call();
       }
     }
   }
 
   @override
-  Widget build(BuildContext context) => widget.entity == CateringEntity.option
+  Widget build(BuildContext context) =>
+      (widget.entity == CateringEntity.option || widget.compact)
       ? IconButton(
           key: ValueKey('catering-delete-${widget.id}'),
           constraints: const BoxConstraints(minWidth: 48, minHeight: 48),

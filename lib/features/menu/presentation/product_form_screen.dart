@@ -13,6 +13,7 @@ import '../models/menu_models.dart';
 import '../providers/menu_providers.dart';
 import 'menu_screens.dart';
 import 'menu_parity_widgets.dart';
+import 'catering_inline_addons.dart';
 import '../../../app/theme/app_theme.dart';
 
 class ProductFormScreen extends ConsumerWidget {
@@ -51,6 +52,8 @@ class ProductFormScreen extends ConsumerWidget {
     return ref
         .watch(menuProductDetailProvider(query))
         .when(
+          skipLoadingOnReload: true,
+          skipError: true,
           loading: () =>
               const Scaffold(body: Center(child: CircularProgressIndicator())),
           error: (error, stack) => Scaffold(
@@ -98,6 +101,8 @@ class _FormState extends ConsumerState<_Form> {
   TextEditingController get disclaimer => fields[5];
   TextEditingController get sortOrder => fields[6];
   late bool available;
+  bool addonDirty = false, addonBusy = false;
+  bool get anyDirty => dirty || addonDirty;
   late String selectedCategoryId;
   @override
   void initState() {
@@ -182,7 +187,8 @@ class _FormState extends ConsumerState<_Form> {
   }
 
   Future<void> _leave() async {
-    if (!dirty) {
+    if (addonBusy) return;
+    if (!anyDirty) {
       Navigator.pop(context);
       return;
     }
@@ -220,233 +226,439 @@ class _FormState extends ConsumerState<_Form> {
     );
     final mutation = ref.watch(productMutationProvider(key));
     return AdminPopScope(
-      canPop: !dirty,
+      canPop: !anyDirty && !addonBusy,
       onPopInvokedWithResult: (popped, result) async {
         if (!popped) await _leave();
       },
       child: Scaffold(
         appBar: AdminAppBar(
           title: Text(
-            widget.initial == null
+            widget.kind == MenuKind.catering && widget.initial != null
+                ? tr(context, 'Edit item')
+                : widget.initial == null
                 ? tr(context, 'New Product')
                 : tr(context, 'Edit Product'),
             style: PelinesTypography.pageTitle(Theme.of(context).textTheme),
           ),
-          leading: IconButton(
-            onPressed: _leave,
-            icon: const Icon(Icons.arrow_back),
-          ),
-        ),
-        body: PelinesPageBody(
-          child: MenuFormList(
-            padding: const EdgeInsets.all(PelinesSpacing.lg),
-            children: <Widget>[
-              Text('${widget.categoryName} · ${widget.location.name}'),
-              const SizedBox(height: 16),
-              if (widget.initial != null) ...[
-                ProductImageAdministration(
-                  imageUrl: widget.initial!.imageUrl,
-                  locationId: widget.location.id,
-                  locationSlug: widget.location.slug,
-                  kind: widget.kind,
-                  categoryId: widget.categoryId,
-                  productId: widget.initial!.id,
+          leading: widget.kind == MenuKind.catering
+              ? null
+              : IconButton(
+                  onPressed: _leave,
+                  icon: const Icon(Icons.arrow_back),
                 ),
-                Text(tr(context, 'Photo changes are saved separately.')),
-                TextButton(
-                  onPressed: mutation.isBusy
-                      ? null
-                      : () => context.push(
-                          '/app/menu/${widget.kind.name}/categories/${widget.categoryId}/products/${widget.initial!.id}?category=${Uri.encodeQueryComponent(widget.categoryName)}',
-                        ),
-                  child: Text(tr(context, 'Manage modifiers')),
-                ),
-              ],
-              ...[
-                if (widget.initial == null)
-                  Text(
-                    tr(
-                      context,
-                      'Save the item to add its photo and modifiers.',
-                    ),
+          actions: widget.kind == MenuKind.catering
+              ? [
+                  IconButton(
+                    tooltip: tr(context, 'Close'),
+                    onPressed: mutation.isBusy || addonBusy ? null : _leave,
+                    icon: const Icon(Icons.close),
                   ),
-                ref
-                    .watch(
-                      menuCategoriesProvider((
-                        locationId: widget.location.id,
-                        locationSlug: widget.location.slug,
-                        kind: widget.kind,
-                      )),
-                    )
-                    .when(
-                      loading: () => const LinearProgressIndicator(),
-                      error: (e, _) => Text(e.toString()),
-                      data: (categories) => DropdownButtonFormField<String>(
-                        key: ValueKey(
-                          '${widget.kind.name}-edit-category-$selectedCategoryId',
-                        ),
-                        initialValue:
-                            categories.any((c) => c.id == selectedCategoryId)
-                            ? selectedCategoryId
-                            : null,
-                        isExpanded: true,
-                        decoration: PelinesControlStyles.input(
-                          label: tr(context, 'Category'),
-                        ),
-                        items: [
-                          for (final c in categories)
-                            DropdownMenuItem(value: c.id, child: Text(c.name)),
-                        ],
-                        onChanged: mutation.isBusy
-                            ? null
-                            : (id) {
-                                if (id != null) {
-                                  setState(() => selectedCategoryId = id);
-                                }
-                              },
-                      ),
-                    ),
+                ]
+              : null,
+        ),
+        body: SafeArea(
+          top: false,
+          bottom: widget.kind == MenuKind.catering,
+          child: PelinesPageBody(
+            child: MenuFormList(
+              padding: const EdgeInsets.all(PelinesSpacing.lg),
+              children: <Widget>[
+                Text('${widget.categoryName} · ${widget.location.name}'),
                 const SizedBox(height: 16),
-              ],
-              _text(name, tr(context, 'Name')),
-              _text(description, tr(context, 'Description'), lines: 3),
-              MenuFieldPair(
-                first: _text(price, tr(context, 'Price'), number: true),
-                second: Column(
-                  children: [
+                if (widget.kind == MenuKind.catering)
+                  ..._cateringFields(mutation.isBusy)
+                else ...[
+                  if (widget.initial != null) ...[
+                    ProductImageAdministration(
+                      imageUrl: widget.initial!.imageUrl,
+                      locationId: widget.location.id,
+                      locationSlug: widget.location.slug,
+                      kind: widget.kind,
+                      categoryId: widget.categoryId,
+                      productId: widget.initial!.id,
+                    ),
+                    Text(tr(context, 'Photo changes are saved separately.')),
+                    TextButton(
+                      onPressed: mutation.isBusy
+                          ? null
+                          : () => context.push(
+                              '/app/menu/${widget.kind.name}/categories/${widget.categoryId}/products/${widget.initial!.id}?category=${Uri.encodeQueryComponent(widget.categoryName)}',
+                            ),
+                      child: Text(tr(context, 'Manage modifiers')),
+                    ),
+                  ],
+                  ...[
+                    if (widget.initial == null)
+                      Text(
+                        tr(
+                          context,
+                          'Save the item to add its photo and modifiers.',
+                        ),
+                      ),
                     ref
                         .watch(
-                          menuProductsProvider((
+                          menuCategoriesProvider((
                             locationId: widget.location.id,
                             locationSlug: widget.location.slug,
-                            categoryId: selectedCategoryId,
+                            kind: widget.kind,
                           )),
                         )
                         .when(
                           loading: () => const LinearProgressIndicator(),
-                          error: (error, _) => Text(error.toString()),
-                          data: (products) {
-                            final labels =
-                                products
-                                    .map((p) => p.subcategory?.trim() ?? '')
-                                    .where((s) => s.isNotEmpty)
-                                    .toSet()
-                                    .toList()
-                                  ..sort();
-                            return DropdownButtonFormField<String>(
-                              key: ValueKey(
-                                '${widget.kind.name}-subcategory-$selectedCategoryId-${subcategory.text}',
-                              ),
-                              initialValue: labels.contains(subcategory.text)
-                                  ? subcategory.text
-                                  : null,
-                              isExpanded: true,
-                              decoration: PelinesControlStyles.input(
-                                label: tr(context, 'Subcategory'),
-                              ),
-                              items: [
-                                for (final label in labels)
-                                  DropdownMenuItem(
-                                    value: label,
-                                    child: Text(label),
-                                  ),
-                              ],
-                              onChanged: mutation.isBusy
-                                  ? null
-                                  : (label) {
-                                      if (label != null) {
-                                        subcategory.text = label;
-                                      }
-                                    },
-                            );
-                          },
+                          error: (e, _) => Text(e.toString()),
+                          data: (categories) => DropdownButtonFormField<String>(
+                            key: ValueKey(
+                              '${widget.kind.name}-edit-category-$selectedCategoryId',
+                            ),
+                            initialValue:
+                                categories.any(
+                                  (c) => c.id == selectedCategoryId,
+                                )
+                                ? selectedCategoryId
+                                : null,
+                            isExpanded: true,
+                            decoration: PelinesControlStyles.input(
+                              label: tr(context, 'Category'),
+                            ),
+                            items: [
+                              for (final c in categories)
+                                DropdownMenuItem(
+                                  value: c.id,
+                                  child: Text(c.name),
+                                ),
+                            ],
+                            onChanged: mutation.isBusy
+                                ? null
+                                : (id) {
+                                    if (id != null) {
+                                      setState(() => selectedCategoryId = id);
+                                    }
+                                  },
+                          ),
                         ),
-                    _text(subcategory, tr(context, 'Subcategory name')),
+                    const SizedBox(height: 16),
                   ],
-                ),
-              ),
-              if (widget.kind == MenuKind.catering)
-                _text(serves, tr(context, 'Serves'), number: true),
-              _text(disclaimer, tr(context, 'Disclaimer'), lines: 2),
-              _text(sortOrder, tr(context, 'Sort order'), number: true),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(tr(context, 'Available')),
-                value: available,
-                onChanged: mutation.isBusy
-                    ? null
-                    : (value) => setState(() => available = value),
-              ),
-              if (input == null)
-                Text(
-                  tr(
-                    context,
-                    'Enter a name, a valid non-negative price, and valid numeric values.',
-                  ),
-                  style: TextStyle(color: PelinesColors.destructive),
-                ),
-              if (mutation.message != null) Text(mutation.message!),
-              const SizedBox(height: 12),
-              PelinesActionBar(
-                children: <Widget>[
-                  OutlinedButton(
-                    style: PelinesControlStyles.button(
-                      PelinesButtonVariant.secondary,
+                  _text(name, tr(context, 'Name')),
+                  _text(description, tr(context, 'Description'), lines: 3),
+                  MenuFieldPair(
+                    first: _text(price, tr(context, 'Price'), number: true),
+                    second: Column(
+                      children: [
+                        ref
+                            .watch(
+                              menuProductsProvider((
+                                locationId: widget.location.id,
+                                locationSlug: widget.location.slug,
+                                categoryId: selectedCategoryId,
+                              )),
+                            )
+                            .when(
+                              loading: () => const LinearProgressIndicator(),
+                              error: (error, _) => Text(error.toString()),
+                              data: (products) {
+                                final labels =
+                                    products
+                                        .map((p) => p.subcategory?.trim() ?? '')
+                                        .where((s) => s.isNotEmpty)
+                                        .toSet()
+                                        .toList()
+                                      ..sort();
+                                return DropdownButtonFormField<String>(
+                                  key: ValueKey(
+                                    '${widget.kind.name}-subcategory-$selectedCategoryId-${subcategory.text}',
+                                  ),
+                                  initialValue:
+                                      labels.contains(subcategory.text)
+                                      ? subcategory.text
+                                      : null,
+                                  isExpanded: true,
+                                  decoration: PelinesControlStyles.input(
+                                    label: tr(context, 'Subcategory'),
+                                  ),
+                                  items: [
+                                    for (final label in labels)
+                                      DropdownMenuItem(
+                                        value: label,
+                                        child: Text(label),
+                                      ),
+                                  ],
+                                  onChanged: mutation.isBusy
+                                      ? null
+                                      : (label) {
+                                          if (label != null) {
+                                            subcategory.text = label;
+                                          }
+                                        },
+                                );
+                              },
+                            ),
+                        _text(subcategory, tr(context, 'Subcategory name')),
+                      ],
                     ),
-                    onPressed: mutation.isBusy ? null : _leave,
-                    child: Text(tr(context, 'Cancel')),
                   ),
-                  FilledButton(
-                    style: PelinesControlStyles.button(
-                      PelinesButtonVariant.primary,
-                    ),
-                    onPressed: input == null || !dirty || mutation.isBusy
+                  if (widget.kind == MenuKind.catering)
+                    _text(serves, tr(context, 'Serves'), number: true),
+                  _text(disclaimer, tr(context, 'Disclaimer'), lines: 2),
+                  _text(sortOrder, tr(context, 'Sort order'), number: true),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(tr(context, 'Available')),
+                    value: available,
+                    onChanged: mutation.isBusy
                         ? null
-                        : () async {
-                            final ok = await ref
-                                .read(productMutationProvider(key).notifier)
-                                .save(input!);
-                            if (ok && mounted) {
-                              final saved = ref
-                                  .read(productMutationProvider(key))
-                                  .product!;
-                              final categories = ref
-                                  .read(
-                                    menuCategoriesProvider((
-                                      locationId: widget.location.id,
-                                      locationSlug: widget.location.slug,
-                                      kind: widget.kind,
-                                    )),
-                                  )
-                                  .value;
-                              final categoryName =
-                                  categories
-                                      ?.where((c) => c.id == saved.categoryId)
-                                      .firstOrNull
-                                      ?.name ??
-                                  widget.categoryName;
-                              this.context.pushReplacement(
-                                '/app/menu/${widget.kind.name}/categories/${saved.categoryId}/products/${saved.id}?category=${Uri.encodeQueryComponent(categoryName)}',
-                              );
-                            }
-                          },
-                    child: PelinesButtonLabel(
-                      busy: mutation.isBusy,
-                      label: mutation.isBusy
-                          ? tr(context, 'Saving...')
-                          : widget.initial == null
-                          ? tr(context, 'Create Product')
-                          : tr(context, 'Save'),
-                    ),
+                        : (value) => setState(() => available = value),
                   ),
                 ],
-              ),
-            ],
+                if (input == null)
+                  Text(
+                    tr(
+                      context,
+                      'Enter a name, a valid non-negative price, and valid numeric values.',
+                    ),
+                    style: TextStyle(color: PelinesColors.destructive),
+                  ),
+                if (mutation.message != null) Text(mutation.message!),
+                const SizedBox(height: 12),
+                if (addonDirty)
+                  Text(
+                    tr(
+                      context,
+                      'Save or reset add-on drafts before saving the item.',
+                    ),
+                  ),
+                _EditorActions(
+                  sideBySide: widget.kind == MenuKind.catering,
+                  children: <Widget>[
+                    OutlinedButton(
+                      style: PelinesControlStyles.button(
+                        PelinesButtonVariant.secondary,
+                      ),
+                      onPressed: mutation.isBusy || addonBusy ? null : _leave,
+                      child: Text(tr(context, 'Cancel')),
+                    ),
+                    FilledButton(
+                      style: PelinesControlStyles.button(
+                        PelinesButtonVariant.primary,
+                      ),
+                      onPressed:
+                          input == null ||
+                              !dirty ||
+                              mutation.isBusy ||
+                              addonBusy ||
+                              addonDirty
+                          ? null
+                          : () async {
+                              final ok = await ref
+                                  .read(productMutationProvider(key).notifier)
+                                  .save(input!);
+                              if (ok && mounted) {
+                                final saved = ref
+                                    .read(productMutationProvider(key))
+                                    .product!;
+                                final categories = ref
+                                    .read(
+                                      menuCategoriesProvider((
+                                        locationId: widget.location.id,
+                                        locationSlug: widget.location.slug,
+                                        kind: widget.kind,
+                                      )),
+                                    )
+                                    .value;
+                                final categoryName =
+                                    categories
+                                        ?.where((c) => c.id == saved.categoryId)
+                                        .firstOrNull
+                                        ?.name ??
+                                    widget.categoryName;
+                                this.context.pushReplacement(
+                                  '/app/menu/${widget.kind.name}/categories/${saved.categoryId}/products/${saved.id}?category=${Uri.encodeQueryComponent(categoryName)}',
+                                );
+                              }
+                            },
+                      child: PelinesButtonLabel(
+                        busy: mutation.isBusy,
+                        label: mutation.isBusy
+                            ? tr(context, 'Saving...')
+                            : widget.initial == null
+                            ? tr(context, 'Create Product')
+                            : tr(context, 'Save'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
+
+  List<Widget> _cateringFields(bool busy) => [
+    _text(name, tr(context, 'Name')),
+    ref
+        .watch(
+          menuCategoriesProvider((
+            locationId: widget.location.id,
+            locationSlug: widget.location.slug,
+            kind: widget.kind,
+          )),
+        )
+        .when(
+          loading: () => const LinearProgressIndicator(),
+          error: (e, _) => Text(e.toString()),
+          data: (categories) => DropdownButtonFormField<String>(
+            key: ValueKey(
+              '${widget.kind.name}-edit-category-$selectedCategoryId',
+            ),
+            initialValue: categories.any((c) => c.id == selectedCategoryId)
+                ? selectedCategoryId
+                : null,
+            isExpanded: true,
+            decoration: PelinesControlStyles.input(
+              label: tr(context, 'Category'),
+            ),
+            items: [
+              for (final c in categories)
+                DropdownMenuItem(value: c.id, child: Text(c.name)),
+            ],
+            onChanged: busy
+                ? null
+                : (id) {
+                    if (id != null) setState(() => selectedCategoryId = id);
+                  },
+          ),
+        ),
+    const SizedBox(height: 16),
+    ref
+        .watch(
+          menuProductsProvider((
+            locationId: widget.location.id,
+            locationSlug: widget.location.slug,
+            categoryId: selectedCategoryId,
+          )),
+        )
+        .when(
+          loading: () => const LinearProgressIndicator(),
+          error: (e, _) => Text(e.toString()),
+          data: (products) {
+            final labels =
+                products
+                    .map((p) => p.subcategory?.trim() ?? '')
+                    .where((s) => s.isNotEmpty)
+                    .toSet()
+                    .toList()
+                  ..sort();
+            return DropdownButtonFormField<String>(
+              key: ValueKey(
+                'catering-subcategory-$selectedCategoryId-${subcategory.text}',
+              ),
+              initialValue: labels.contains(subcategory.text)
+                  ? subcategory.text
+                  : '',
+              isExpanded: true,
+              decoration: PelinesControlStyles.input(
+                label: tr(context, 'Subcategory (Optional)'),
+              ),
+              items: [
+                DropdownMenuItem(value: '', child: Text(tr(context, 'None'))),
+                for (final label in labels)
+                  DropdownMenuItem(value: label, child: Text(label)),
+              ],
+              onChanged: busy
+                  ? null
+                  : (label) {
+                      if (label != null) subcategory.text = label;
+                    },
+            );
+          },
+        ),
+    const SizedBox(height: 8),
+    Text(
+      tr(
+        context,
+        'Groups this item under a subheading on the menu (e.g. Burritos, Enchiladas, Combos).',
+      ),
+      style: Theme.of(context).textTheme.bodySmall,
+    ),
+    const SizedBox(height: 12),
+    _text(subcategory, tr(context, 'Subcategory name')),
+    if (widget.initial != null) ...[
+      ProductImageAdministration(
+        imageUrl: widget.initial!.imageUrl,
+        locationId: widget.location.id,
+        locationSlug: widget.location.slug,
+        kind: widget.kind,
+        categoryId: widget.categoryId,
+        productId: widget.initial!.id,
+        editor: true,
+      ),
+      Text(tr(context, 'Photo changes are saved separately.')),
+    ] else
+      Text(tr(context, 'Save the item to add its photo and modifiers.')),
+    const SizedBox(height: 16),
+    _text(description, tr(context, 'Description (Optional)'), lines: 4),
+    _text(disclaimer, tr(context, 'Disclaimer (Optional)'), lines: 2),
+    Text(
+      tr(
+        context,
+        'Shown under the description in item details. Leave empty to hide it.',
+      ),
+      style: Theme.of(context).textTheme.bodySmall,
+    ),
+    const SizedBox(height: 16),
+    MenuFieldPair(
+      first: _text(price, tr(context, 'Price (USD)'), number: true),
+      second: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _text(serves, tr(context, 'Portions For'), number: true),
+          Text(
+            tr(
+              context,
+              'Number of people this catering item is intended to serve.',
+            ),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      ),
+    ),
+    const SizedBox(height: 20),
+    _text(sortOrder, tr(context, 'Sort order'), number: true),
+    CheckboxListTile(
+      contentPadding: EdgeInsets.zero,
+      controlAffinity: ListTileControlAffinity.leading,
+      title: Text(tr(context, 'Active')),
+      value: available,
+      onChanged: busy
+          ? null
+          : (value) {
+              if (value != null) setState(() => available = value);
+            },
+    ),
+    if (widget.initial != null) ...[
+      const Divider(height: 24),
+      CateringInlineAddons(
+        key: ValueKey('addons-${widget.location.id}-${widget.initial!.id}'),
+        contextKey: (
+          locationId: widget.location.id,
+          locationSlug: widget.location.slug,
+          kind: widget.kind,
+          categoryId: widget.categoryId,
+          productId: widget.initial!.id,
+        ),
+        productBusy: busy,
+        onStateChanged: (d, b) {
+          if (mounted && (addonDirty != d || addonBusy != b)) {
+            setState(() {
+              addonDirty = d;
+              addonBusy = b;
+            });
+          }
+        },
+      ),
+    ],
+  ];
 
   Widget _text(
     TextEditingController controller,
@@ -461,8 +673,39 @@ class _FormState extends ConsumerState<_Form> {
       keyboardType: number
           ? const TextInputType.numberWithOptions(decimal: true)
           : null,
-      decoration: PelinesControlStyles.input(label: label)
-          .copyWith(prefixText: controller == price ? r'$' : null),
+      decoration: PelinesControlStyles.input(label: label).copyWith(
+        prefixText: controller == price ? r'$' : null,
+        counterText: widget.kind != MenuKind.catering
+            ? null
+            : controller == name
+            ? '${controller.text.length}/120'
+            : controller == description
+            ? '${controller.text.length}'
+            : null,
+      ),
     ),
+  );
+}
+
+class _EditorActions extends StatelessWidget {
+  const _EditorActions({required this.children, required this.sideBySide});
+  final List<Widget> children;
+  final bool sideBySide;
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      if (sideBySide &&
+          constraints.maxWidth >=
+              250 * MediaQuery.textScalerOf(context).scale(1)) {
+        return Row(
+          children: [
+            Expanded(child: children[0]),
+            const SizedBox(width: 16),
+            Expanded(child: children[1]),
+          ],
+        );
+      }
+      return PelinesActionBar(children: children);
+    },
   );
 }

@@ -737,6 +737,7 @@ class ProductImageAdministration extends ConsumerWidget {
     required this.kind,
     required this.categoryId,
     required this.productId,
+    this.editor = false,
     super.key,
   });
   final String? imageUrl;
@@ -745,6 +746,7 @@ class ProductImageAdministration extends ConsumerWidget {
   final MenuKind kind;
   final String categoryId;
   final String productId;
+  final bool editor;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -773,6 +775,77 @@ class ProductImageAdministration extends ConsumerWidget {
       ProductImagePhase.reconciling => tr(context, 'Verifying product...'),
       _ => null,
     };
+    if (editor) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            tr(context, 'Photo'),
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+          const SizedBox(height: 12),
+          AspectRatio(
+            aspectRatio: 1.5,
+            child: MenuPhoto(url: imageUrl, height: 220),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  backgroundColor: PelinesColors.card,
+                  foregroundColor: PelinesColors.textPrimary,
+                  side: const BorderSide(color: PelinesColors.border),
+                  minimumSize: const Size(48, 48),
+                  shape: const StadiumBorder(),
+                ),
+                onPressed: state.isBusy
+                    ? null
+                    : () => ref
+                          .read(
+                            productImageMutationProvider(imageContext).notifier,
+                          )
+                          .changeImage(),
+                icon: const Icon(Icons.photo_library_outlined),
+                label: Text(tr(context, 'Change image')),
+              ),
+              TextButton.icon(
+                onPressed: null,
+                icon: const Icon(Icons.close),
+                label: Text(tr(context, 'Remove image')),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            tr(
+              context,
+              'Recommended: JPG or PNG, square or horizontal image. WebP is also supported. Processed image limit: 5 MiB. For best results, use images under 2 MB.',
+            ),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            tr(context, 'Image removal is currently unavailable.'),
+            style: Theme.of(context).textTheme.bodySmall
+                ?.copyWith(color: PelinesColors.textSecondary),
+          ),
+          if (state.canRetryPatch)
+            TextButton(
+              onPressed: () => ref
+                  .read(productImageMutationProvider(imageContext).notifier)
+                  .retryProductUpdate(),
+              child: Text(tr(context, 'Retry saving uploaded image')),
+            ),
+          if (stage != null) ...[const LinearProgressIndicator(), Text(stage)],
+          if (!state.isBusy && state.message != null)
+            Semantics(liveRegion: true, child: Text(state.message!)),
+        ],
+      );
+    }
     return PelinesCard(
       child: Padding(
         padding: const EdgeInsets.all(16),

@@ -129,6 +129,9 @@ class ModifierMutationController extends Notifier<ModifierMutationState> {
     required String successMessage,
   }) async {
     if (state.isBusy) return false;
+    state = const ModifierMutationState(
+      phase: ModifierMutationPhase.submitting,
+    );
     try {
       final groups = await _validateModifierContext(ref, context);
       if (existingGroupId != null) {

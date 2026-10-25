@@ -941,10 +941,13 @@ void menuCatalogTests(MenuKind kind) {
         findsOneWidget,
       );
       expect(
-        find.text(kind == MenuKind.catering ? 'Replace Photo' : 'Change Image'),
+        find.text(kind == MenuKind.catering ? 'Change image' : 'Change Image'),
         findsOneWidget,
       );
-      expect(find.text('Manage modifiers'), findsOneWidget);
+      expect(
+        find.text(kind == MenuKind.catering ? 'Add-ons' : 'Manage modifiers'),
+        findsOneWidget,
+      );
     },
   );
   testWidgets('delete requires confirmation and protects double taps', (
