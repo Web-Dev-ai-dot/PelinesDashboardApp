@@ -554,6 +554,13 @@ class _CateringCatalogState extends ConsumerState<MenuCatalogScreen> {
                               ),
                             ],
                           ],
+                        if (widget.kind == MenuKind.catering) ...[
+                          const SizedBox(height: PelinesSpacing.xxl),
+                          _CateringCategorySection(
+                            query: query,
+                            categories: data.categories,
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -667,8 +674,10 @@ class CateringDeleteButton extends ConsumerStatefulWidget {
     this.onBusyChanged,
     this.onSettled,
     this.compact = false,
+    this.enabled = true,
     super.key,
   });
+  final bool enabled;
   final bool compact;
   final CategoryQuery query;
   final String categoryId, id, name;
@@ -684,7 +693,7 @@ class CateringDeleteButton extends ConsumerStatefulWidget {
 class _CateringDeleteButtonState extends ConsumerState<CateringDeleteButton> {
   bool busy = false;
   Future<void> remove() async {
-    if (busy) return;
+    if (busy || !widget.enabled) return;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -702,7 +711,7 @@ class _CateringDeleteButtonState extends ConsumerState<CateringDeleteButton> {
         ],
       ),
     );
-    if (confirm != true || !mounted || busy) return;
+    if (confirm != true || !mounted || busy || !widget.enabled) return;
     setState(() => busy = true);
     widget.onBusyChanged?.call(true);
     try {
@@ -762,7 +771,7 @@ class _CateringDeleteButtonState extends ConsumerState<CateringDeleteButton> {
           key: ValueKey('catering-delete-${widget.id}'),
           constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
           tooltip: tr(context, 'Delete'),
-          onPressed: busy ? null : remove,
+          onPressed: busy || !widget.enabled ? null : remove,
           icon: busy
               ? const SizedBox(
                   width: 20,
@@ -777,7 +786,7 @@ class _CateringDeleteButtonState extends ConsumerState<CateringDeleteButton> {
             destructive: true,
             backgroundColor: PelinesColors.card,
           ),
-          onPressed: busy ? null : remove,
+          onPressed: busy || !widget.enabled ? null : remove,
           icon: busy
               ? const SizedBox(
                   width: 20,

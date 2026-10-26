@@ -10,6 +10,7 @@ import '../../locations/models/location.dart';
 import '../../locations/providers/locations_providers.dart';
 import '../../orders/presentation/order_ui_helpers.dart';
 import '../models/menu_models.dart';
+import '../data/menu_repository.dart';
 import '../providers/menu_providers.dart';
 import '../providers/product_image_providers.dart';
 import '../../../app/theme/app_theme.dart';
@@ -19,6 +20,7 @@ import '../providers/catering_actions.dart';
 import 'category_form_screen.dart';
 
 part 'catering_catalog.dart';
+part 'catering_category_section.dart';
 
 class MenuLandingScreen extends StatelessWidget {
   const MenuLandingScreen({super.key});

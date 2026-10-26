@@ -762,7 +762,10 @@ void menuCatalogTests(MenuKind kind) {
                         lang == 'en' ? 'Edit Category' : 'Editar categoría',
                       ),
                     )
-                  : find.byKey(const ValueKey('catering-delete-c'));
+                  : find.descendant(
+                      of: header,
+                      matching: find.byKey(const ValueKey('catering-delete-c')),
+                    );
               final button = tester.widget<TextButton>(action);
               expect(tester.getSize(action).height, greaterThanOrEqualTo(48));
               expect(
@@ -955,7 +958,10 @@ void menuCatalogTests(MenuKind kind) {
   ) async {
     final api = DeleteApi()..hold = Completer<void>();
     await mount(tester, Repo(kind: kind), deletion: api);
-    final button = find.byKey(const ValueKey('catering-delete-c'));
+    final button = find.descendant(
+      of: find.byKey(ValueKey('$prefix-category-header-c')),
+      matching: find.byKey(const ValueKey('catering-delete-c')),
+    );
     await tester.ensureVisible(button);
     await tester.tap(button);
     await tester.pumpAndSettle();
