@@ -239,7 +239,8 @@ Future<GoRouter> mount(
       ),
       GoRoute(
         path: '/app/menu/${kind.name}/categories/new',
-        builder: (_, _) => CategoryFormScreen(kind: kind),
+        pageBuilder: (_, state) =>
+            NewCategoryPage(key: state.pageKey, kind: kind),
       ),
       GoRoute(
         path: '/app/menu/${kind.name}/categories/:category/edit',

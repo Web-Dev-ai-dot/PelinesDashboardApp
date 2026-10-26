@@ -273,7 +273,7 @@ void main() {
     (
       'Category',
       const CategoryFormScreen(kind: MenuKind.store),
-      find.text('Create Category'),
+      find.text('Save'),
     ),
     (
       'Product',

@@ -14,17 +14,51 @@ import 'menu_screens.dart';
 import 'menu_parity_widgets.dart';
 import '../../../app/theme/app_theme.dart';
 
+/// Keeps the existing creation URL and Navigator result while presenting a modal.
+class NewCategoryPage extends Page<bool> {
+  const NewCategoryPage({required this.kind, super.key});
+  final MenuKind kind;
+
+  @override
+  Route<bool> createRoute(BuildContext context) {
+    if (MediaQuery.sizeOf(context).width < PelinesLayout.compactWidth) {
+      return ModalBottomSheetRoute<bool>(
+        settings: this,
+        builder: (_) => CategoryFormScreen(kind: kind, sheet: true),
+        isScrollControlled: true,
+        useSafeArea: true,
+        isDismissible: false,
+        enableDrag: false,
+        backgroundColor: PelinesColors.card,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(PelinesRadius.dialog),
+          ),
+        ),
+      );
+    }
+    return DialogRoute<bool>(
+      settings: this,
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => CategoryFormScreen(kind: kind),
+    );
+  }
+}
+
 class CategoryFormScreen extends ConsumerWidget {
   const CategoryFormScreen({
     required this.kind,
     this.categoryId,
     this.modal = false,
+    this.sheet = false,
     super.key,
   });
 
   final MenuKind kind;
   final String? categoryId;
   final bool modal;
+  final bool sheet;
 
   Widget _pending(BuildContext context, Widget child) => Padding(
     padding: const EdgeInsets.all(PelinesSpacing.md),
@@ -53,7 +87,26 @@ class CategoryFormScreen extends ConsumerWidget {
       );
     }
     if (categoryId == null) {
-      return _CategoryForm(kind: kind, location: location);
+      final form = _CategoryForm(kind: kind, location: location, modal: true);
+      if (sheet) {
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.viewInsetsOf(context).bottom,
+          ),
+          child: SafeArea(top: false, child: form),
+        );
+      }
+      return Dialog(
+        backgroundColor: PelinesColors.card,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(PelinesRadius.dialog),
+        ),
+        insetPadding: const EdgeInsets.all(PelinesSpacing.md),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 640),
+          child: form,
+        ),
+      );
     }
 
     final CategoryDetailQuery query = (
@@ -246,7 +299,9 @@ class _CategoryFormState extends ConsumerState<_CategoryForm> {
         if (!popped && !busy) await _leave();
       },
       child: Padding(
-        padding: const EdgeInsets.all(PelinesSpacing.xl),
+        padding: EdgeInsets.all(
+          widget.initial == null ? PelinesSpacing.md : PelinesSpacing.xl,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -255,7 +310,10 @@ class _CategoryFormState extends ConsumerState<_CategoryForm> {
               children: [
                 Expanded(
                   child: Text(
-                    tr(context, 'Edit category'),
+                    tr(
+                      context,
+                      widget.initial == null ? 'New category' : 'Edit category',
+                    ),
                     style: Theme.of(context).textTheme.headlineSmall
                         ?.copyWith(fontWeight: FontWeight.bold),
                   ),
@@ -281,7 +339,11 @@ class _CategoryFormState extends ConsumerState<_CategoryForm> {
                         controller: _name,
                         enabled: !busy,
                         maxLength: 80,
-                        decoration: PelinesControlStyles.input(),
+                        decoration: PelinesControlStyles.input(
+                          hint: widget.initial == null
+                              ? tr(context, 'e.g. Salads')
+                              : null,
+                        ),
                       ),
                     ),
                     const SizedBox(height: PelinesSpacing.md),
@@ -307,19 +369,21 @@ class _CategoryFormState extends ConsumerState<_CategoryForm> {
                           ? null
                           : (value) => setState(() => _active = value!),
                     ),
-                    const Divider(height: PelinesSpacing.xxl),
-                    label('Subcategory visibility schedule'),
-                    Text(
-                      tr(
-                        context,
-                        'Subcategory schedules are read-only here. Existing settings are preserved when you save.',
+                    if (widget.initial != null) ...[
+                      const Divider(height: PelinesSpacing.xxl),
+                      label('Subcategory visibility schedule'),
+                      Text(
+                        tr(
+                          context,
+                          'Subcategory schedules are read-only here. Existing settings are preserved when you save.',
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: PelinesSpacing.md),
-                    _CategorySchedules(
-                      category: widget.initial!,
-                      location: widget.location,
-                    ),
+                      const SizedBox(height: PelinesSpacing.md),
+                      _CategorySchedules(
+                        category: widget.initial!,
+                        location: widget.location,
+                      ),
+                    ],
                     if (input == null)
                       Text(
                         tr(

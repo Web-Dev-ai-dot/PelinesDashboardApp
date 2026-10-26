@@ -20,6 +20,8 @@ void main() {
       for (final path in [
         '/app/menu/catering',
         '/app/menu/store',
+        '/app/menu/store/categories/new',
+        '/app/menu/catering/categories/new',
         '/app/store/locations',
         '/app/promotions',
         '/app/store/pickup-settings',

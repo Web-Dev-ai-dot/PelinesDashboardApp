@@ -165,7 +165,8 @@ final routerProvider = Provider<GoRouter>((Ref ref) {
               ),
               GoRoute(
                 path: 'menu/:kind/categories/new',
-                builder: (_, state) => CategoryFormScreen(
+                pageBuilder: (_, state) => NewCategoryPage(
+                  key: state.pageKey,
                   kind: MenuKind.fromJson(state.pathParameters['kind']),
                 ),
               ),

@@ -1,5 +1,7 @@
 // English source messages and their Spanish UI translations. Backend values are never catalog keys.
 const spanishCatalog = <String, String>{
+  "e.g. Salads": "p. ej., Ensaladas",
+  "New category": "Nueva categoría",
   "Categories": "Categorías",
   "No categories yet.": "Todavía no hay categorías.",
   "Reorder, rename, and toggle category visibility.": "Reordena, cambia el nombre y modifica la visibilidad de las categorías.",
