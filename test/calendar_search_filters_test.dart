@@ -1,3 +1,5 @@
+import 'package:pelines_admin_app/features/orders/presentation/order_parity_content.dart';
+import 'package:pelines_admin_app/app/theme/pelines_components.dart';
 import 'package:flutter/material.dart';
 import 'package:pelines_admin_app/features/locations/presentation/pelines_location_context.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -176,6 +178,135 @@ Future<void> _select(WidgetTester tester, String key, String value) async {
 }
 
 void main() {
+  for (final width in [320.0, 390.0, 1000.0]) {
+    for (final lang in ['en', 'es']) {
+      testWidgets(
+        'Month compact cards preserve all items without prices $width $lang 2x',
+        (tester) async {
+          await _mount(
+            tester,
+            _CompactMonthRepo(),
+            width: width,
+            scale: 2,
+            lang: lang,
+          );
+          final selectedCard = find.byWidgetPredicate(
+            (w) => w is OrderPreviewCard && w.order.id == 'ref-one',
+          );
+          final todayHeight = tester.getSize(selectedCard).height;
+          await upcomingTap(tester, 'calendar-view-Month');
+          final card = find.byWidgetPredicate(
+            (w) => w is OrderPreviewCard && w.order.id == 'ref-one',
+          );
+          final texts = find
+              .descendant(of: card, matching: find.byType(Text))
+              .evaluate()
+              .map((e) => (e.widget as Text).data ?? '')
+              .toList();
+          expect(texts.any((text) => text.contains(r'$')), false);
+          expect(texts, isNot(contains('Total')));
+          expect(
+            texts,
+            isNot(contains(lang == 'en' ? 'Confirmed' : 'Confirmado')),
+          );
+          expect(texts, contains('2× Taco tray with a long product name'));
+          expect(texts, contains('1× Refreshments'));
+          expect(texts, contains('Extras: Guacamole'));
+          expect(
+            texts,
+            contains('${lang == 'en' ? 'Note' : 'Nota'}: No onions'),
+          );
+          expect(texts, contains(lang == 'en' ? '3 items' : '3 artículos'));
+          expect(texts, contains('Smith'));
+          expect(texts, contains('Wedding Fiesta'));
+          final items = find.descendant(
+            of: card,
+            matching: find.byType(OrderParityItem),
+          );
+          expect(items, findsNWidgets(2));
+          expect(
+            tester
+                .widgetList<OrderParityItem>(items)
+                .every((item) => !item.showAmounts),
+            true,
+          );
+          final date = find.descendant(
+            of: card,
+            matching: find.byKey(const ValueKey('month-order-date-ref-one')),
+          );
+          expect(
+            tester.getRect(date).right,
+            closeTo(tester.getRect(card).right - 16, 1),
+          );
+          final badges = find.byKey(
+            const ValueKey('month-order-badges-ref-one'),
+          );
+          expect(
+            find.descendant(
+              of: badges,
+              matching: find.byType(PelinesStateBadge),
+            ),
+            findsNWidgets(3),
+          );
+          expect(tester.getSize(card).height, lessThan(todayHeight));
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  }
+
+  for (final lang in ['en', 'es']) {
+    testWidgets(
+      'Month uses primary full-width details action; Today and Week remain secondary $lang',
+      (tester) async {
+        final repo = _Repo(includeAsap: true);
+        await _mount(tester, repo, width: 390, lang: lang);
+        final label = lang == 'en'
+            ? 'View Order Details'
+            : 'Ver detalles de la orden';
+        for (final view in ['Month', 'Today', 'Week', 'Month']) {
+          await upcomingTap(tester, 'calendar-view-$view');
+          final cards = find.byType(OrderPreviewCard);
+          expect(cards, findsNWidgets(5));
+          for (final element in cards.evaluate()) {
+            final button = find.descendant(
+              of: find.byWidget(element.widget),
+              matching: find.widgetWithText(PelinesButton, label),
+            );
+            expect(button, findsOneWidget);
+            expect(
+              tester.widget<PelinesButton>(button).variant,
+              view == 'Month'
+                  ? PelinesButtonVariant.primary
+                  : PelinesButtonVariant.secondary,
+            );
+            if (view == 'Month') {
+              expect(
+                find.descendant(
+                  of: button,
+                  matching: find.byType(FilledButton),
+                ),
+                findsOneWidget,
+              );
+              expect(
+                tester.getSize(button).width,
+                closeTo(
+                  tester.getSize(find.byWidget(element.widget)).width - 32,
+                  1,
+                ),
+              );
+            }
+          }
+          expect(find.text('ORD-asap'), findsOneWidget);
+          expect(find.text('This Month'), findsNothing);
+          expect(find.text('Est. Revenue'), findsNothing);
+        }
+        expect(repo.calls, 1);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
   testWidgets('Calendar shares short-height sheet shell without future dates', (
     tester,
   ) async {
@@ -215,9 +346,67 @@ void main() {
         expect(selected.style!.shape!.resolve({}), isA<CircleBorder>());
         expect(
           selected.style!.backgroundColor!.resolve({}),
-          PelinesColors.brandPrimary,
+          Colors.transparent,
         );
         expect(selected.style!.foregroundColor!.resolve({}), Colors.white);
+        expect(selected.style!.side?.resolve({}), isNull);
+        final circle = find.byKey(
+          ValueKey('calendar-selected-circle-${initial.day}'),
+        );
+        final circleBox =
+            tester.widget<Container>(circle).decoration as BoxDecoration;
+        expect(circleBox.color, PelinesColors.brandPrimary);
+        expect(circleBox.shape, BoxShape.circle);
+        expect(circleBox.border, isNull);
+        expect(tester.getSize(circle).width, tester.getSize(circle).height);
+        expect(tester.getSize(circle).width, lessThanOrEqualTo(42));
+        expect(tester.getSize(circle).width, greaterThanOrEqualTo(30));
+        expect(
+          tester.getRect(circle).bottom,
+          lessThan(tester.getRect(dot).top),
+        );
+
+        final digit = find.descendant(of: circle, matching: find.byType(Text));
+        expect(
+          tester.getCenter(digit).dx,
+          closeTo(tester.getCenter(circle).dx, .1),
+        );
+        expect(
+          tester.getCenter(digit).dy,
+          closeTo(tester.getCenter(circle).dy, .1),
+        );
+        expect(
+          tester
+              .getSize(find.byKey(ValueKey('calendar-day-${initial.day}')))
+              .height,
+          greaterThanOrEqualTo(48),
+        );
+        final otherDay = initial.day == 1 ? 2 : 1;
+        grid().onDateChanged(DateTime(initial.year, initial.month, otherDay));
+        await tester.pumpAndSettle();
+        final todayButton = tester.widget<TextButton>(
+          find.byKey(ValueKey('calendar-day-${initial.day}')),
+        );
+        expect(
+          todayButton.style!.side!.resolve({})!.color,
+          PelinesColors.brandPrimary,
+        );
+        expect(
+          find.byKey(ValueKey('calendar-selected-circle-${initial.day}')),
+          findsNothing,
+        );
+        expect(
+          tester
+              .widget<TextButton>(
+                find.byKey(ValueKey('calendar-day-$otherDay')),
+              )
+              .style!
+              .side
+              ?.resolve({}),
+          isNull,
+        );
+        grid().onDateChanged(initial);
+        await tester.pumpAndSettle();
         await _search(tester, 'absent');
         await _select(tester, 'calendar-type', 'online');
         await _select(tester, 'calendar-status', 'ready');
@@ -433,6 +622,32 @@ void main() {
             findsNothing,
           );
         }
+        final weekdays = lang == 'en'
+            ? ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+            : ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+        for (var i = 0; i < 7; i++) {
+          final label = find.byKey(ValueKey('calendar-weekday-$i'));
+          expect(tester.widget<Text>(label).data, weekdays[i]);
+          if (i > 0) {
+            expect(
+              tester.getCenter(label).dx,
+              greaterThan(
+                tester
+                    .getCenter(
+                      find.byKey(ValueKey('calendar-weekday-${i - 1}')),
+                    )
+                    .dx,
+              ),
+            );
+          }
+        }
+        final visibleGrid = tester.widget<CalendarMonthGrid>(
+          find.byType(CalendarMonthGrid),
+        );
+        final circle = find.byKey(
+          ValueKey('calendar-selected-circle-${visibleGrid.selectedDay.day}'),
+        );
+        if (width >= 768) expect(tester.getSize(circle).width, closeTo(40, 1));
         CalendarMonthGrid grid() =>
             tester.widget<CalendarMonthGrid>(find.byType(CalendarMonthGrid));
         for (final entry in [
@@ -758,4 +973,65 @@ void main() {
       });
     }
   }
+}
+
+class _CompactMonthRepo extends _Repo {
+  _CompactMonthRepo() : super(includeAsap: true);
+  @override
+  Future<List<OrderSummary>> getOrders({
+    required String locationId,
+    OrderStatus? status,
+  }) async => [
+    for (final order in await super.getOrders(
+      locationId: locationId,
+      status: status,
+    ))
+      OrderSummary(
+        id: order.id,
+        orderNumber: order.orderNumber,
+        locationId: order.locationId,
+        orderType: order.orderType,
+        status: order.status,
+        rawStatus: order.rawStatus,
+        paymentStatus: order.paymentStatus,
+        fulfillmentType: order.fulfillmentType,
+        contactName: order.contactName,
+        createdAt: order.createdAt,
+        scheduledFor: order.scheduledFor,
+        eventName: order.eventName,
+        itemCount: 3,
+        totalCents: order.totalCents,
+      ),
+  ];
+  @override
+  Future<OrderDetail> getOrderById(String id) async => OrderDetail.fromJson({
+    ...orderJson(id: id, locationId: 'A'),
+    'source': 'ios',
+    'items': [
+      {
+        'id': 'first',
+        'productName': 'Taco tray with a long product name',
+        'unitPriceCents': 1000,
+        'quantity': 2,
+        'lineTotalCents': 2200,
+        'notes': 'No onions',
+        'modifiers': [
+          {
+            'id': 'extra',
+            'groupName': 'Extras',
+            'optionName': 'Guacamole',
+            'priceDeltaCents': 200,
+          },
+        ],
+      },
+      {
+        'id': 'second',
+        'productName': 'Refreshments',
+        'unitPriceCents': 500,
+        'quantity': 1,
+        'lineTotalCents': 500,
+        'modifiers': [],
+      },
+    ],
+  });
 }

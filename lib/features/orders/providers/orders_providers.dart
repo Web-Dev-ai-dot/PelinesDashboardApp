@@ -861,6 +861,8 @@ class CalendarOrdersController extends AsyncNotifier<HistoricalOrdersState> {
         state = AsyncData(HistoricalOrdersState(orders: orders));
       }
     } on Object catch (error, stackTrace) {
+      // A failed refresh must not restore the previous location's snapshot.
+      if (ref.read(currentLocationProvider).value?.id != location.id) return;
       state = previous == null
           ? AsyncError<HistoricalOrdersState>(error, stackTrace)
           : AsyncData(previous.failed(_message(error)));

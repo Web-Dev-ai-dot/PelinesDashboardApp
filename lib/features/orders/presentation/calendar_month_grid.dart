@@ -81,9 +81,14 @@ class CalendarMonthGrid extends StatelessWidget {
               Expanded(
                 child: ExcludeSemantics(
                   child: Center(
-                    child: Text(
-                      loc.narrowWeekdays[i],
-                      style: const TextStyle(fontSize: 12),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        DateFormat.E(locale)
+                            .format(DateTime.utc(2023, 1, 1 + i)),
+                        key: ValueKey('calendar-weekday-$i'),
+                        style: const TextStyle(fontSize: 12),
+                      ),
                     ),
                   ),
                 ),
@@ -128,9 +133,7 @@ class CalendarMonthGrid extends StatelessWidget {
                           foregroundColor: selected
                               ? Colors.white
                               : PelinesColors.textPrimary,
-                          backgroundColor: selected
-                              ? PelinesColors.brandPrimary
-                              : null,
+                          backgroundColor: Colors.transparent,
                           shape: const CircleBorder(),
                           side: current && !selected
                               ? const BorderSide(
@@ -138,10 +141,46 @@ class CalendarMonthGrid extends StatelessWidget {
                                 )
                               : null,
                         ),
-                        child: Text(
-                          loc.formatDecimal(number),
-                          style: const TextStyle(fontSize: 12),
-                        ),
+                        child: selected
+                            ? LayoutBuilder(
+                                builder: (context, c) {
+                                  final diameter = math.min(
+                                    40.0,
+                                    math.min(c.maxWidth, c.maxHeight),
+                                  );
+                                  return Center(
+                                    child: Container(
+                                      key: ValueKey(
+                                        'calendar-selected-circle-$number',
+                                      ),
+                                      width: diameter,
+                                      height: diameter,
+                                      decoration: const BoxDecoration(
+                                        color: PelinesColors.brandPrimary,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      alignment: Alignment.center,
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(3),
+                                        child: FittedBox(
+                                          fit: BoxFit.scaleDown,
+                                          child: Text(
+                                            loc.formatDecimal(number),
+                                            style: const TextStyle(
+                                              fontSize: 16,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              )
+                            : Text(
+                                loc.formatDecimal(number),
+                                style: const TextStyle(fontSize: 12),
+                              ),
                       ),
                     ),
                     SizedBox(

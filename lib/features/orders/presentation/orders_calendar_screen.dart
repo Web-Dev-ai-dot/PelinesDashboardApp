@@ -256,7 +256,13 @@ class _OrdersCalendarScreenState extends ConsumerState<OrdersCalendarScreen> {
           )
         else
           for (final order in selected)
-            OrderPreviewCard(order: order, planning: true, showChannel: true),
+            OrderPreviewCard(
+              order: order,
+              planning: true,
+              showChannel: true,
+              primaryDetailsAction: _view == 'Month',
+              compactPlanning: _view == 'Month',
+            ),
       ],
     );
     return RefreshIndicator(

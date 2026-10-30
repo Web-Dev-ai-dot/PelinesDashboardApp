@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:pelines_admin_app/app/theme/pelines_tokens.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -21,6 +23,40 @@ import 'package:pelines_admin_app/features/orders/presentation/calendar_week_sel
 import 'upcoming_sheet_helpers.dart';
 
 void main() {
+  test(
+    'late refresh failure from previous location cannot restore its orders',
+    () async {
+      final repo = _DelayedCalendarRepository();
+      final container = ProviderContainer(
+        overrides: [
+          currentLocationProvider.overrideWith(_CurrentLocation.new),
+          ordersRepositoryProvider.overrideWithValue(repo),
+        ],
+      );
+      addTearDown(container.dispose);
+      final subscription = container.listen(calendarOrdersProvider, (_, _) {});
+      addTearDown(subscription.close);
+      await container.read(calendarOrdersProvider.future);
+      final refresh = container.read(calendarOrdersProvider.notifier).refresh();
+      await Future<void>.delayed(Duration.zero);
+      (container.read(currentLocationProvider.notifier) as _CurrentLocation)
+          .change(_location('B'));
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        (await container.read(calendarOrdersProvider.future))
+            .orders
+            .single
+            .locationId,
+        'B',
+      );
+      repo.pending.completeError(StateError('Old location request failed'));
+      await refresh;
+      final state = container.read(calendarOrdersProvider).requireValue;
+      expect(state.orders.single.locationId, 'B');
+      expect(state.refreshError, isNull);
+    },
+  );
+
   for (final width in [390.0, 768.0]) {
     testWidgets('Calendar controls fit at $width with enlarged text', (
       tester,
@@ -288,7 +324,7 @@ void main() {
     },
   );
 
-  for (final view in ['Today', 'Week']) {
+  for (final view in ['Today', 'Week', 'Month']) {
     testWidgets('calendar card opens detail UUID and Back restores $view', (
       tester,
     ) async {
@@ -471,4 +507,17 @@ class _Repository implements OrdersRepository {
     required String orderId,
     required OrderStatus status,
   }) => throw UnimplementedError();
+}
+
+class _DelayedCalendarRepository extends _Repository {
+  int readsA = 0;
+  final pending = Completer<List<OrderSummary>>();
+  @override
+  Future<List<OrderSummary>> getOrders({
+    required String locationId,
+    OrderStatus? status,
+  }) {
+    if (locationId == 'A' && readsA++ == 1) return pending.future;
+    return super.getOrders(locationId: locationId, status: status);
+  }
 }

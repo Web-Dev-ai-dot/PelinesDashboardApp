@@ -96,18 +96,25 @@ class OrderParityItem extends StatelessWidget {
     required this.item,
     this.compact = false,
     this.inlineAmounts = false,
+    this.showAmounts = true,
     super.key,
   });
   final OrderItem item;
   final bool compact;
   final bool inlineAmounts;
+  final bool showAmounts;
   @override
   Widget build(BuildContext context) => Padding(
-    padding: EdgeInsets.only(bottom: compact ? 12 : 20),
+    padding: EdgeInsets.only(bottom: compact ? (showAmounts ? 12 : 6) : 20),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (inlineAmounts)
+        if (!showAmounts)
+          Text(
+            '${item.quantity}× ${item.productName}',
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+          )
+        else if (inlineAmounts)
           OrderInlineValueRow(
             label: Text(
               '${item.quantity}× ${item.productName}',
@@ -144,8 +151,11 @@ class OrderParityItem extends StatelessWidget {
               children: [
                 for (final modifier in item.modifiers)
                   Text(
-                    '${modifier.groupName}: ${modifier.optionName}${modifier.priceDeltaCents == 0 ? '' : ' (+${money(modifier.priceDeltaCents)})'}',
-                    style: const TextStyle(color: PelinesColors.textSecondary),
+                    '${modifier.groupName}: ${modifier.optionName}${!showAmounts || modifier.priceDeltaCents == 0 ? '' : ' (+${money(modifier.priceDeltaCents)})'}',
+                    style: TextStyle(
+                      color: PelinesColors.textSecondary,
+                      fontSize: showAmounts ? null : 13,
+                    ),
                   ),
                 if (item.notes?.trim().isNotEmpty == true)
                   Text(
