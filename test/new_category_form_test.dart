@@ -66,10 +66,9 @@ Future<void> launch(
   await catalog.mount(tester, repo, width: width, scale: scale, lang: lang);
   tester.view.physicalSize = Size(width, height);
   await tester.pumpAndSettle();
+  await catalog.openCategories(tester, lang: lang);
   final label = lang == 'en' ? 'New Category' : 'Nueva categoría';
-  final button = repo.kind == MenuKind.catering
-      ? find.byTooltip(label)
-      : find.widgetWithText(FilledButton, label);
+  final button = find.widgetWithText(FilledButton, label);
   await Scrollable.ensureVisible(tester.element(button), alignment: .5);
   await tester.pumpAndSettle();
   await tester.tap(button);
@@ -237,7 +236,12 @@ void main() {
         );
         expect(tester.takeException(), isNull);
         expect(
-          find.text(lang == 'en' ? 'New category' : 'Nueva categoría'),
+          find.descendant(
+            of: find.byType(CategoryFormScreen),
+            matching: find.text(
+              lang == 'en' ? 'New category' : 'Nueva categoría',
+            ),
+          ),
           findsOneWidget,
         );
         expect(

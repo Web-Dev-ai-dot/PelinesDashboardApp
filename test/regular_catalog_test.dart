@@ -5,7 +5,8 @@ import 'package:pelines_admin_app/features/menu/models/menu_models.dart';
 import 'package:pelines_admin_app/features/menu/presentation/category_form_screen.dart';
 import 'package:pelines_admin_app/features/menu/presentation/menu_screens.dart';
 
-import 'catering_catalog_test.dart' show menuCatalogTests, mount, Repo;
+import 'catering_catalog_test.dart'
+    show menuCatalogTests, mount, Repo, openCategories;
 
 // Both menus exercise the same catalog, actions and editor contracts, with
 // isolated kind-scoped datasets and the real Regular field differences.
@@ -16,6 +17,7 @@ void main() {
     tester,
   ) async {
     final router = await mount(tester, Repo(kind: MenuKind.store));
+    await openCategories(tester);
     await tester.tap(find.text('New Category'));
     await tester.pumpAndSettle();
     var form = tester.widget<CategoryFormScreen>(
@@ -25,10 +27,7 @@ void main() {
     expect(form.categoryId, isNull);
     router.pop();
     await tester.pumpAndSettle();
-    final edit = find.descendant(
-      of: find.byKey(const ValueKey('regular-category-header-c')),
-      matching: find.text('Edit Category'),
-    );
+    final edit = find.byKey(const ValueKey('category-edit-c'));
     await reveal(tester, edit);
     await tester.tap(edit);
     await tester.pumpAndSettle();
@@ -45,18 +44,37 @@ void main() {
     final router = await mount(tester, repo);
     await tester.tap(find.text('New Item'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(SimpleDialogOption, 'Category c'));
+    await tester.tap(find.byKey(const ValueKey('store-edit-category-')));
     await tester.pumpAndSettle();
-    Finder field(String label) => find.byWidgetPredicate(
-      (w) => w is TextField && w.decoration?.labelText == label,
-    );
+    await tester.tap(find.text('Category c').last);
+    await tester.pumpAndSettle();
+    Finder field(String label) {
+      final names = {
+        'Name': 'name',
+        'Price': 'price',
+        'Description': 'description',
+        'Subcategory name': 'subcategory-name',
+        'Disclaimer': 'disclaimer',
+      };
+      final creation = find.byKey(ValueKey('new-menu-item-${names[label]}'));
+      if (creation.evaluate().isNotEmpty) return creation;
+      return find.byWidgetPredicate(
+        (w) => w is TextField && w.decoration?.labelText == label,
+      );
+    }
+
     expect(field('Serves'), findsNothing);
+    await reveal(tester, field('Name'));
     await tester.enterText(field('Name'), 'Regular item');
+    await reveal(tester, field('Price'));
     await tester.enterText(field('Price'), '12.50');
+    await reveal(tester, field('Description'));
     await tester.enterText(field('Description'), 'Backend description');
+    await reveal(tester, field('Subcategory name'));
     await tester.enterText(field('Subcategory name'), 'Lunch');
+    await reveal(tester, field('Disclaimer'));
     await tester.enterText(field('Disclaimer'), 'Backend disclaimer');
-    final create = find.widgetWithText(FilledButton, 'Create Product');
+    final create = find.widgetWithText(FilledButton, 'Save');
     await reveal(tester, create);
     await tester.tap(create);
     await tester.pumpAndSettle();

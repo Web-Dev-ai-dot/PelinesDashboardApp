@@ -21,6 +21,7 @@ import 'category_form_screen.dart';
 
 part 'catering_catalog.dart';
 part 'catering_category_section.dart';
+part 'regular_categories_screen.dart';
 
 class MenuLandingScreen extends StatelessWidget {
   const MenuLandingScreen({super.key});
@@ -247,6 +248,7 @@ class _ProductTile extends StatelessWidget {
     required this.category,
     required this.onTap,
     this.catering = false,
+    this.catalogCard = false,
     this.actions,
     this.onEdit,
   });
@@ -254,10 +256,11 @@ class _ProductTile extends StatelessWidget {
   final String category;
   final VoidCallback onTap;
   final bool catering;
+  final bool catalogCard;
   final Widget? actions;
   final VoidCallback? onEdit;
   @override
-  Widget build(BuildContext context) => catering
+  Widget build(BuildContext context) => (catering || catalogCard)
       ? _cateringCard(context)
       : PelinesCard(
           key: ValueKey('menu-product-${product.id}'),
@@ -398,13 +401,39 @@ class _ProductTile extends StatelessWidget {
                       Theme.of(context).textTheme,
                     )?.copyWith(fontSize: 20),
                   );
-                  final price = Text(
+                  final priceText = Text(
                     money(product.priceCents),
                     style: const TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w600,
                     ),
                   );
+                  final price = catering
+                      ? priceText
+                      : ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth:
+                                constraints.maxWidth <
+                                    300 *
+                                        MediaQuery.textScalerOf(context)
+                                            .scale(1)
+                                ? constraints.maxWidth
+                                : constraints.maxWidth * .45,
+                          ),
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: AlignmentDirectional.centerStart,
+                            child: Text(
+                              money(product.priceCents),
+                              maxLines: 1,
+                              softWrap: false,
+                              style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        );
                   if (constraints.maxWidth <
                       300 * MediaQuery.textScalerOf(context).scale(1)) {
                     return Column(
@@ -422,7 +451,18 @@ class _ProductTile extends StatelessWidget {
                   );
                 },
               ),
-              if (product.servesCount != null) ...[
+              if (!catering) ...[
+                const SizedBox(height: 8),
+                Text(
+                  [
+                    category,
+                    if (product.subcategory?.isNotEmpty == true)
+                      product.subcategory!,
+                  ].join(' · '),
+                  style: PelinesTypography.smallLabel,
+                ),
+              ],
+              if (catering && product.servesCount != null) ...[
                 const SizedBox(height: 8),
                 Text(
                   '${tr(context, 'Serves')}: ${product.servesCount}',

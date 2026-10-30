@@ -158,6 +158,31 @@ final routerProvider = Provider<GoRouter>((Ref ref) {
                 ),
               ),
               GoRoute(
+                path: 'menu/store/categories',
+                builder: (_, _) => const RegularCategoriesScreen(),
+              ),
+              GoRoute(
+                path: 'menu/store/products/new',
+                pageBuilder: (_, state) => NewMenuItemPage(
+                  key: state.pageKey,
+                  categoryId: '',
+                  categoryName: '',
+                ),
+              ),
+              GoRoute(
+                path: 'menu/catering/categories',
+                builder: (_, _) => const CateringCategoriesScreen(),
+              ),
+              GoRoute(
+                path: 'menu/catering/products/new',
+                pageBuilder: (_, state) => NewMenuItemPage(
+                  key: state.pageKey,
+                  kind: MenuKind.catering,
+                  categoryId: '',
+                  categoryName: '',
+                ),
+              ),
+              GoRoute(
                 path: 'menu/:kind',
                 builder: (_, state) => MenuCategoriesScreen(
                   kind: MenuKind.fromJson(state.pathParameters['kind']),
@@ -187,12 +212,28 @@ final routerProvider = Provider<GoRouter>((Ref ref) {
               ),
               GoRoute(
                 path: 'menu/:kind/categories/:categoryId/products/new',
-                builder: (_, state) => ProductFormScreen(
-                  kind: MenuKind.fromJson(state.pathParameters['kind']),
-                  categoryId: state.pathParameters['categoryId']!,
-                  categoryName:
-                      state.uri.queryParameters['category'] ?? 'Category',
-                ),
+                pageBuilder: (_, state) {
+                  final kind = MenuKind.fromJson(state.pathParameters['kind']);
+                  final categoryId = state.pathParameters['categoryId']!;
+                  final categoryName =
+                      state.uri.queryParameters['category'] ?? 'Category';
+                  if (kind == MenuKind.store || kind == MenuKind.catering) {
+                    return NewMenuItemPage(
+                      key: state.pageKey,
+                      kind: kind,
+                      categoryId: categoryId,
+                      categoryName: categoryName,
+                    );
+                  }
+                  return MaterialPage(
+                    key: state.pageKey,
+                    child: ProductFormScreen(
+                      kind: kind,
+                      categoryId: categoryId,
+                      categoryName: categoryName,
+                    ),
+                  );
+                },
               ),
               GoRoute(
                 path: 'menu/:kind/categories/:categoryId/products/:productId/edit',

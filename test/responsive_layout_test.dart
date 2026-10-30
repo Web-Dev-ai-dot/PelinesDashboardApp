@@ -282,7 +282,7 @@ void main() {
         categoryId: 'category-id',
         categoryName: 'A long category name',
       ),
-      find.text('Create Product'),
+      find.text('Save'),
     ),
   ]) {
     testWidgets('$name is scrollable at 320 with large text', (tester) async {

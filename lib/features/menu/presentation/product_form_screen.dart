@@ -16,18 +16,22 @@ import 'menu_parity_widgets.dart';
 import 'catering_inline_addons.dart';
 import '../../../app/theme/app_theme.dart';
 
+part 'new_menu_item_form.dart';
+
 class ProductFormScreen extends ConsumerWidget {
   const ProductFormScreen({
     required this.kind,
     required this.categoryId,
     required this.categoryName,
     this.productId,
+    this.sheet = false,
     super.key,
   });
   final MenuKind kind;
   final String categoryId;
   final String categoryName;
   final String? productId;
+  final bool sheet;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final Location? location = ref.watch(currentLocationProvider).value;
@@ -42,6 +46,7 @@ class ProductFormScreen extends ConsumerWidget {
         categoryId: categoryId,
         categoryName: categoryName,
         location: location,
+        sheet: sheet,
       );
     }
     final query = (
@@ -81,12 +86,14 @@ class _Form extends ConsumerStatefulWidget {
     required this.categoryName,
     required this.location,
     this.initial,
+    this.sheet = false,
   });
   final MenuKind kind;
   final String categoryId;
   final String categoryName;
   final Location location;
   final MenuProduct? initial;
+  final bool sheet;
   @override
   ConsumerState<_Form> createState() => _FormState();
 }
@@ -102,6 +109,15 @@ class _FormState extends ConsumerState<_Form> {
   TextEditingController get sortOrder => fields[6];
   late bool available;
   bool addonDirty = false, addonBusy = false;
+  bool get creatingItem =>
+      widget.initial == null &&
+      (widget.kind == MenuKind.store || widget.kind == MenuKind.catering);
+  bool savingNewItem = false;
+  String? newSaveError;
+  final newErrorKey = GlobalKey();
+
+  void changeNewCategory(String id) => setState(() => selectedCategoryId = id);
+  void changeNewAvailable(bool value) => setState(() => available = value);
   bool get anyDirty => dirty || addonDirty;
   late String selectedCategoryId;
   @override
@@ -143,7 +159,8 @@ class _FormState extends ConsumerState<_Form> {
     final count = serves.text.trim().isEmpty
         ? null
         : int.tryParse(serves.text.trim());
-    if (name.text.trim().isEmpty ||
+    if ((widget.kind == MenuKind.catering && selectedCategoryId.isEmpty) ||
+        name.text.trim().isEmpty ||
         name.text.trim().length > 120 ||
         cents == null ||
         order == null ||
@@ -187,7 +204,7 @@ class _FormState extends ConsumerState<_Form> {
   }
 
   Future<void> _leave() async {
-    if (addonBusy) return;
+    if (addonBusy || (creatingItem && savingNewItem)) return;
     if (!anyDirty) {
       Navigator.pop(context);
       return;
@@ -225,6 +242,7 @@ class _FormState extends ConsumerState<_Form> {
       productId: widget.initial?.id,
     );
     final mutation = ref.watch(productMutationProvider(key));
+    if (creatingItem) return buildNewMenuItem(key, mutation);
     return AdminPopScope(
       canPop: !anyDirty && !addonBusy,
       onPopInvokedWithResult: (popped, result) async {
@@ -263,7 +281,9 @@ class _FormState extends ConsumerState<_Form> {
             child: MenuFormList(
               padding: const EdgeInsets.all(PelinesSpacing.lg),
               children: <Widget>[
-                Text('${widget.categoryName} · ${widget.location.name}'),
+                Text(
+                  '${widget.categoryName.isEmpty ? tr(context, widget.kind.label) : widget.categoryName} · ${widget.location.name}',
+                ),
                 const SizedBox(height: 16),
                 if (widget.kind == MenuKind.catering)
                   ..._cateringFields(mutation.isBusy)
@@ -447,34 +467,7 @@ class _FormState extends ConsumerState<_Form> {
                               addonBusy ||
                               addonDirty
                           ? null
-                          : () async {
-                              final ok = await ref
-                                  .read(productMutationProvider(key).notifier)
-                                  .save(input!);
-                              if (ok && mounted) {
-                                final saved = ref
-                                    .read(productMutationProvider(key))
-                                    .product!;
-                                final categories = ref
-                                    .read(
-                                      menuCategoriesProvider((
-                                        locationId: widget.location.id,
-                                        locationSlug: widget.location.slug,
-                                        kind: widget.kind,
-                                      )),
-                                    )
-                                    .value;
-                                final categoryName =
-                                    categories
-                                        ?.where((c) => c.id == saved.categoryId)
-                                        .firstOrNull
-                                        ?.name ??
-                                    widget.categoryName;
-                                this.context.pushReplacement(
-                                  '/app/menu/${widget.kind.name}/categories/${saved.categoryId}/products/${saved.id}?category=${Uri.encodeQueryComponent(categoryName)}',
-                                );
-                              }
-                            },
+                          : () => _saveProduct(key),
                       child: PelinesButtonLabel(
                         busy: mutation.isBusy,
                         label: mutation.isBusy
@@ -492,6 +485,65 @@ class _FormState extends ConsumerState<_Form> {
         ),
       ),
     );
+  }
+
+  Future<void> _saveProduct(ProductMutationKey key) async {
+    if (creatingItem && savingNewItem) return;
+    if (creatingItem) {
+      setState(() {
+        savingNewItem = true;
+        newSaveError = null;
+      });
+    }
+    try {
+      final ok = await ref
+          .read(productMutationProvider(key).notifier)
+          .save(input!);
+      if (ok && mounted) {
+        final saved = ref.read(productMutationProvider(key)).product!;
+        final categories = ref
+            .read(
+              menuCategoriesProvider((
+                locationId: widget.location.id,
+                locationSlug: widget.location.slug,
+                kind: widget.kind,
+              )),
+            )
+            .value;
+        final categoryName =
+            categories
+                ?.where((c) => c.id == saved.categoryId)
+                .firstOrNull
+                ?.name ??
+            widget.categoryName;
+        context.pushReplacement(
+          '/app/menu/${widget.kind.name}/categories/${saved.categoryId}/products/${saved.id}?category=${Uri.encodeQueryComponent(categoryName)}',
+        );
+      }
+    } catch (_) {
+      if (!creatingItem) rethrow;
+      if (mounted) {
+        setState(() => newSaveError = 'The product could not be saved.');
+      }
+    } finally {
+      if (creatingItem && mounted) {
+        setState(() => savingNewItem = false);
+        if (newSaveError != null ||
+            ref.read(productMutationProvider(key)).phase ==
+                ProductMutationPhase.error) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            final errorContext = newErrorKey.currentContext;
+            if (mounted && errorContext != null) {
+              Scrollable.ensureVisible(
+                errorContext,
+                alignment: 1,
+                duration: const Duration(milliseconds: 200),
+              );
+            }
+          });
+        }
+      }
+    }
   }
 
   List<Widget> _cateringFields(bool busy) => [
@@ -515,6 +567,7 @@ class _FormState extends ConsumerState<_Form> {
                 ? selectedCategoryId
                 : null,
             isExpanded: true,
+            hint: Text(tr(context, 'Select a category')),
             decoration: PelinesControlStyles.input(
               label: tr(context, 'Category'),
             ),
@@ -530,49 +583,52 @@ class _FormState extends ConsumerState<_Form> {
           ),
         ),
     const SizedBox(height: 16),
-    ref
-        .watch(
-          menuProductsProvider((
-            locationId: widget.location.id,
-            locationSlug: widget.location.slug,
-            categoryId: selectedCategoryId,
-          )),
-        )
-        .when(
-          loading: () => const LinearProgressIndicator(),
-          error: (e, _) => Text(e.toString()),
-          data: (products) {
-            final labels =
-                products
-                    .map((p) => p.subcategory?.trim() ?? '')
-                    .where((s) => s.isNotEmpty)
-                    .toSet()
-                    .toList()
-                  ..sort();
-            return DropdownButtonFormField<String>(
-              key: ValueKey(
-                'catering-subcategory-$selectedCategoryId-${subcategory.text}',
-              ),
-              initialValue: labels.contains(subcategory.text)
-                  ? subcategory.text
-                  : '',
-              isExpanded: true,
-              decoration: PelinesControlStyles.input(
-                label: tr(context, 'Subcategory (Optional)'),
-              ),
-              items: [
-                DropdownMenuItem(value: '', child: Text(tr(context, 'None'))),
-                for (final label in labels)
-                  DropdownMenuItem(value: label, child: Text(label)),
-              ],
-              onChanged: busy
-                  ? null
-                  : (label) {
-                      if (label != null) subcategory.text = label;
-                    },
-            );
-          },
-        ),
+    if (selectedCategoryId.isEmpty)
+      Text(tr(context, 'Select a category before saving.'))
+    else
+      ref
+          .watch(
+            menuProductsProvider((
+              locationId: widget.location.id,
+              locationSlug: widget.location.slug,
+              categoryId: selectedCategoryId,
+            )),
+          )
+          .when(
+            loading: () => const LinearProgressIndicator(),
+            error: (e, _) => Text(e.toString()),
+            data: (products) {
+              final labels =
+                  products
+                      .map((p) => p.subcategory?.trim() ?? '')
+                      .where((s) => s.isNotEmpty)
+                      .toSet()
+                      .toList()
+                    ..sort();
+              return DropdownButtonFormField<String>(
+                key: ValueKey(
+                  'catering-subcategory-$selectedCategoryId-${subcategory.text}',
+                ),
+                initialValue: labels.contains(subcategory.text)
+                    ? subcategory.text
+                    : '',
+                isExpanded: true,
+                decoration: PelinesControlStyles.input(
+                  label: tr(context, 'Subcategory (Optional)'),
+                ),
+                items: [
+                  DropdownMenuItem(value: '', child: Text(tr(context, 'None'))),
+                  for (final label in labels)
+                    DropdownMenuItem(value: label, child: Text(label)),
+                ],
+                onChanged: busy
+                    ? null
+                    : (label) {
+                        if (label != null) subcategory.text = label;
+                      },
+              );
+            },
+          ),
     const SizedBox(height: 8),
     Text(
       tr(

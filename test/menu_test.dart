@@ -813,9 +813,10 @@ void main() {
     expect(find.byType(PelinesLocationContext), findsOneWidget);
     expect(find.textContaining(r'$12.50'), findsOneWidget);
     expect(find.textContaining('Unavailable'), findsOneWidget);
-    await tester.ensureVisible(find.text('Test Product'));
+    final view = find.widgetWithText(OutlinedButton, 'View');
+    await tester.ensureVisible(view);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Test Product'));
+    await tester.tap(view);
     await tester.pumpAndSettle();
     expect(find.text('Product Detail'), findsOneWidget);
     await tester.scrollUntilVisible(
@@ -1262,7 +1263,7 @@ void _webParityTests() {
       );
       await tester.pumpAndSettle();
       expect(
-        find.text(language == 'es' ? 'Nueva categoría' : 'New Category'),
+        find.text(language == 'es' ? 'Categorías' : 'Categories'),
         findsOneWidget,
       );
       expect(

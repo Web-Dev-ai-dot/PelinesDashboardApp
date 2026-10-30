@@ -5,7 +5,9 @@ class _CateringCategorySection extends StatelessWidget {
   const _CateringCategorySection({
     required this.query,
     required this.categories,
+    this.showHeading = true,
   });
+  final bool showHeading;
   final CategoryQuery query;
   final List<MenuCategory> categories;
 
@@ -14,8 +16,10 @@ class _CateringCategorySection extends StatelessWidget {
     key: const ValueKey('catering-categories-section'),
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      PelinesSectionHeading(tr(context, 'Categories')),
-      const SizedBox(height: PelinesSpacing.xs),
+      if (showHeading) ...[
+        PelinesSectionHeading(tr(context, 'Categories')),
+        const SizedBox(height: PelinesSpacing.xs),
+      ],
       Text(
         tr(context, 'Reorder, rename, and toggle category visibility.'),
         style: const TextStyle(color: PelinesColors.textSecondary),
@@ -265,6 +269,105 @@ class _CateringCategoryRowState extends ConsumerState<_CateringCategoryRow> {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+/// Category administration is independent of product search, filters and loads.
+class CateringCategoriesScreen extends ConsumerWidget {
+  const CateringCategoriesScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final location = ref.watch(currentLocationProvider);
+    final current = location.value;
+    final CategoryQuery? query = current == null
+        ? null
+        : (
+            locationId: current.id,
+            locationSlug: current.slug,
+            kind: MenuKind.catering,
+          );
+    return AdminSectionScaffold(
+      appBar: AdminAppBar(
+        title: Text(tr(context, 'Categories')),
+        leading: IconButton(
+          tooltip: tr(context, 'Back'),
+          onPressed: () => context.go('/app/menu/catering'),
+          icon: const Icon(Icons.arrow_back),
+        ),
+        actions: [
+          if (query != null && !location.isLoading && !location.hasError) ...[
+            AdminHeaderRefresh(
+              onPressed: () => ref.invalidate(menuCategoriesProvider(query)),
+            ),
+          ],
+        ],
+      ),
+      body: location.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, _) => MenuError(
+          message: error.toString(),
+          onRetry: () => ref.invalidate(currentLocationProvider),
+        ),
+        data: (current) {
+          if (current == null) {
+            return MenuEmpty(
+              tr(context, 'Choose a location to view the menu.'),
+            );
+          }
+          final query = (
+            locationId: current.id,
+            locationSlug: current.slug,
+            kind: MenuKind.catering,
+          );
+          return ListView(
+            padding: const EdgeInsets.all(PelinesSpacing.md),
+            children: [
+              PelinesPageBody(
+                width: PelinesPageWidth.dashboard,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: PelinesButton(
+                        key: const ValueKey('catering-new-category'),
+                        label: tr(context, 'New Category'),
+                        onPressed: () =>
+                            context.push('/app/menu/catering/categories/new'),
+                      ),
+                    ),
+                    const SizedBox(height: PelinesSpacing.md),
+                    ref
+                        .watch(menuCategoriesProvider(query))
+                        .when(
+                          loading: () =>
+                              const Center(child: CircularProgressIndicator()),
+                          error: (error, _) => MenuError(
+                            message: error.toString(),
+                            onRetry: () =>
+                                ref.invalidate(menuCategoriesProvider(query)),
+                          ),
+                          data: (categories) {
+                            final ordered = [...categories]
+                              ..sort(
+                                (a, b) => a.sortOrder.compareTo(b.sortOrder),
+                              );
+                            return _CateringCategorySection(
+                              query: query,
+                              categories: ordered,
+                              showHeading: false,
+                            );
+                          },
+                        ),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

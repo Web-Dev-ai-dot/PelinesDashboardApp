@@ -19,9 +19,15 @@ void main() {
       addTearDown(router.dispose);
       for (final path in [
         '/app/menu/catering',
+        '/app/menu/store/categories',
+        '/app/menu/store/products/new',
+        '/app/menu/catering/categories',
+        '/app/menu/catering/products/new',
         '/app/menu/store',
         '/app/menu/store/categories/new',
         '/app/menu/catering/categories/new',
+        '/app/menu/store/categories/category-a/products/new',
+        '/app/menu/catering/categories/category-a/products/new',
         '/app/store/locations',
         '/app/promotions',
         '/app/store/pickup-settings',

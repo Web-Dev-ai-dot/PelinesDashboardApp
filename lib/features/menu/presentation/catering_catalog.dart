@@ -133,30 +133,6 @@ class _CateringCatalogState extends ConsumerState<MenuCatalogScreen> {
     }
   }
 
-  Future<void> newItem(List<MenuCategory> categories) async {
-    final selected = await showDialog<MenuCategory>(
-      context: context,
-      builder: (context) => SimpleDialog(
-        title: Text(tr(context, 'Category')),
-        children: [
-          for (final c in categories)
-            SimpleDialogOption(
-              onPressed: () => Navigator.pop(context, c),
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Text(c.name),
-              ),
-            ),
-        ],
-      ),
-    );
-    if (selected != null && mounted) {
-      await context.push(
-        '/app/menu/${widget.kind.name}/categories/${selected.id}/products/new?category=${Uri.encodeQueryComponent(selected.name)}',
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final location = ref.watch(currentLocationProvider);
@@ -259,61 +235,48 @@ class _CateringCatalogState extends ConsumerState<MenuCatalogScreen> {
                         ),
                         const SizedBox(height: 16),
                         if (widget.kind == MenuKind.catering)
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
+                          Wrap(
+                            spacing: PelinesSpacing.sm,
+                            runSpacing: PelinesSpacing.sm,
                             children: [
-                              IconButton.filledTonal(
-                                tooltip: tr(context, 'New Category'),
-                                style: IconButton.styleFrom(
-                                  backgroundColor: PelinesColors.card,
-                                  foregroundColor: PelinesColors.textPrimary,
-                                  side: const BorderSide(
-                                    color: PelinesColors.border,
-                                  ),
-                                  minimumSize: const Size(48, 48),
-                                ),
+                              PelinesButton(
+                                label: tr(context, 'Categories'),
                                 onPressed: busy
                                     ? null
                                     : () => context.push(
-                                        '/app/menu/${widget.kind.name}/categories/new',
+                                        '/app/menu/catering/categories',
                                       ),
-                                icon: const Icon(
-                                  Icons.create_new_folder_outlined,
-                                ),
                               ),
-                              const SizedBox(width: 12),
-                              IconButton.filled(
-                                tooltip: tr(context, 'New Item'),
-                                style: IconButton.styleFrom(
-                                  backgroundColor: PelinesColors.brandPrimary,
-                                  foregroundColor: Colors.white,
-                                  minimumSize: const Size(48, 48),
-                                ),
-                                onPressed: busy || data.categories.isEmpty
+                              PelinesButton(
+                                label: tr(context, 'New Item'),
+                                onPressed: busy
                                     ? null
-                                    : () => newItem(data.categories),
-                                icon: const Icon(Icons.add),
+                                    : () => context.push(
+                                        '/app/menu/catering/products/new',
+                                      ),
                               ),
                             ],
                           )
                         else
                           Wrap(
-                            spacing: 12,
-                            runSpacing: 12,
+                            spacing: PelinesSpacing.sm,
+                            runSpacing: PelinesSpacing.sm,
                             children: [
                               PelinesButton(
-                                label: tr(context, 'New Category'),
+                                label: tr(context, 'Categories'),
                                 onPressed: busy
                                     ? null
                                     : () => context.push(
-                                        '/app/menu/${widget.kind.name}/categories/new',
+                                        '/app/menu/${widget.kind.name}/categories',
                                       ),
                               ),
                               PelinesButton(
                                 label: tr(context, 'New Item'),
-                                onPressed: busy || data.categories.isEmpty
+                                onPressed: busy
                                     ? null
-                                    : () => newItem(data.categories),
+                                    : () => context.push(
+                                        '/app/menu/store/products/new',
+                                      ),
                               ),
                             ],
                           ),
@@ -341,16 +304,11 @@ class _CateringCatalogState extends ConsumerState<MenuCatalogScreen> {
                                 key: ValueKey(
                                   '$prefix-category-${c?.id ?? 'all'}',
                                 ),
-                                showCheckmark: widget.kind == MenuKind.catering
-                                    ? false
-                                    : null,
+                                showCheckmark: false,
                                 label: Text(c?.name ?? tr(context, 'All')),
                                 selected: selected == c?.id,
                                 selectedColor: PelinesColors.brandPrimary,
-                                backgroundColor:
-                                    widget.kind == MenuKind.catering
-                                    ? PelinesColors.card
-                                    : PelinesColors.mutedSurface,
+                                backgroundColor: PelinesColors.card,
                                 shape: const StadiumBorder(),
                                 side: BorderSide(
                                   color: selected == c?.id
@@ -404,58 +362,28 @@ class _CateringCatalogState extends ConsumerState<MenuCatalogScreen> {
                                     Text(
                                       category.name,
                                       style:
-                                          PelinesTypography.sectionTitle(
+                                          PelinesTypography.pageTitle(
                                             Theme.of(context).textTheme,
                                           )?.copyWith(
                                             color: PelinesColors.brandPrimary,
+                                            fontWeight: FontWeight.w600,
                                           ),
                                     )
                                   else
-                                    PelinesSectionHeading(category.name),
-                                  const SizedBox(height: 8),
-                                  MenuActions(
-                                    children: [
-                                      _CatalogProductAction(
-                                        catering:
-                                            widget.kind == MenuKind.catering,
-                                        label: tr(context, 'Edit Category'),
-                                        icon: Icons.edit_outlined,
-                                        filled: true,
-                                        onPressed: busy
-                                            ? null
-                                            : () {
-                                                if (widget.kind ==
-                                                    MenuKind.catering) {
-                                                  showDialog<bool>(
-                                                    context: context,
-                                                    barrierDismissible: false,
-                                                    builder: (_) =>
-                                                        CategoryFormScreen(
-                                                          kind: widget.kind,
-                                                          categoryId:
-                                                              category.id,
-                                                          modal: true,
-                                                        ),
-                                                  );
-                                                } else {
-                                                  context.push(
-                                                    '/app/menu/${widget.kind.name}/categories/${category.id}/edit',
-                                                  );
-                                                }
-                                              },
-                                      ),
-                                      CateringDeleteButton(
-                                        query: query,
-                                        categoryId: category.id,
-                                        entity: CateringEntity.category,
-                                        id: category.id,
-                                        name: category.name,
-                                      ),
-                                    ],
-                                  ),
+                                    Text(
+                                      category.name,
+                                      style:
+                                          PelinesTypography.pageTitle(
+                                            Theme.of(context).textTheme,
+                                          )?.copyWith(
+                                            color: PelinesColors.brandPrimary,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                    ),
                                 ],
                               ),
                             ),
+                            const SizedBox(height: PelinesSpacing.md),
                             for (final sub
                                 in visible
                                     .where((p) => p.categoryId == category.id)
@@ -489,6 +417,7 @@ class _CateringCatalogState extends ConsumerState<MenuCatalogScreen> {
                                           ),
                                         )))
                                     _ProductTile(
+                                      catalogCard: true,
                                       product: p,
                                       category: category.name,
                                       catering:
@@ -506,24 +435,8 @@ class _CateringCatalogState extends ConsumerState<MenuCatalogScreen> {
                                           '$prefix-product-actions-${p.id}',
                                         ),
                                         children: [
-                                          if (widget.kind != MenuKind.catering)
-                                            _CatalogProductAction(
-                                              catering:
-                                                  widget.kind ==
-                                                  MenuKind.catering,
-                                              label: tr(context, 'Edit'),
-                                              icon: Icons.edit_outlined,
-                                              filled: true,
-                                              onPressed: busy
-                                                  ? null
-                                                  : () => context.push(
-                                                      '${productPath(p)}/edit?category=${Uri.encodeQueryComponent(category.name)}',
-                                                    ),
-                                            ),
                                           _CatalogProductAction(
-                                            catering:
-                                                widget.kind ==
-                                                MenuKind.catering,
+                                            catering: true,
                                             compact: true,
                                             label: tr(context, 'Duplicate'),
                                             icon: Icons.copy_outlined,
@@ -536,9 +449,7 @@ class _CateringCatalogState extends ConsumerState<MenuCatalogScreen> {
                                                 : () => action(query, p, true),
                                           ),
                                           _CatalogProductAction(
-                                            catering:
-                                                widget.kind ==
-                                                MenuKind.catering,
+                                            catering: true,
                                             compact: true,
                                             label: tr(context, 'Delete'),
                                             icon: Icons.delete_outline,
@@ -554,13 +465,6 @@ class _CateringCatalogState extends ConsumerState<MenuCatalogScreen> {
                               ),
                             ],
                           ],
-                        if (widget.kind == MenuKind.catering) ...[
-                          const SizedBox(height: PelinesSpacing.xxl),
-                          _CateringCategorySection(
-                            query: query,
-                            categories: data.categories,
-                          ),
-                        ],
                       ],
                     ),
                   ),
@@ -612,11 +516,10 @@ class _CatalogProductAction extends StatelessWidget {
     required this.label,
     required this.icon,
     required this.onPressed,
-    this.filled = false,
     this.compact = false,
     this.destructive = false,
   });
-  final bool catering, filled, destructive, compact;
+  final bool catering, destructive, compact;
   final String label;
   final IconData icon;
   final VoidCallback? onPressed;
@@ -654,7 +557,7 @@ class _CatalogProductAction extends StatelessWidget {
       );
     }
     return TextButton.icon(
-      style: style(filled: filled, destructive: destructive),
+      style: style(destructive: destructive),
       onPressed: onPressed,
       icon: Icon(icon, size: 18),
       label: Text(label),

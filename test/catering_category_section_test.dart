@@ -7,34 +7,46 @@ import 'package:pelines_admin_app/core/api/api_exception.dart';
 import 'package:pelines_admin_app/features/locations/providers/locations_providers.dart';
 import 'package:pelines_admin_app/features/menu/data/menu_repository.dart';
 import 'package:pelines_admin_app/features/menu/models/menu_models.dart';
+import 'package:pelines_admin_app/features/menu/presentation/menu_screens.dart';
 import 'package:pelines_admin_app/features/menu/providers/catering_actions.dart';
 
 import 'analytics_providers_test.dart' show FakeLocation;
 import 'catering_catalog_test.dart' as catalog;
 
-MenuCategory makeCategory(String id, String name, int order, bool active) =>
-    MenuCategory(
-      id: id,
-      locationId: 'a',
-      name: name,
-      slug: id,
-      sortOrder: order,
-      isActive: active,
-      kind: MenuKind.catering,
-      rawKind: 'catering',
-      createdAt: DateTime(2026),
-      updatedAt: DateTime(2026),
-      subcategorySchedules: {
-        'Buffet': {
-          'enabled': true,
-          'days': [0],
-          'start': '11:00',
-          'end': '15:00',
-        },
-      },
-    );
+MenuCategory makeCategory(
+  String id,
+  String name,
+  int order,
+  bool active, {
+  MenuKind kind = MenuKind.catering,
+}) => MenuCategory(
+  id: id,
+  locationId: 'a',
+  name: name,
+  slug: id,
+  sortOrder: order,
+  isActive: active,
+  kind: kind,
+  rawKind: 'catering',
+  createdAt: DateTime(2026),
+  updatedAt: DateTime(2026),
+  subcategorySchedules: {
+    'Buffet': {
+      'enabled': true,
+      'days': [0],
+      'start': '11:00',
+      'end': '15:00',
+    },
+  },
+);
 
 class CategoriesRepo extends catalog.Repo {
+  CategoriesRepo({super.kind}) {
+    rows = [
+      for (final row in rows)
+        makeCategory(row.id, row.name, row.sortOrder, row.isActive, kind: kind),
+    ];
+  }
   List<MenuCategory> rows = [
     makeCategory(
       'd',
@@ -75,6 +87,7 @@ class CategoriesRepo extends catalog.Repo {
       input.name,
       input.sortOrder,
       input.isActive,
+      kind: kind,
     );
     rows = [
       for (final row in rows)
@@ -105,16 +118,38 @@ Future<void> show(WidgetTester tester, Finder target) async {
   await tester.pumpAndSettle();
 }
 
+Future<void> mountCategories(
+  WidgetTester tester,
+  CategoriesRepo repo, {
+  double width = 390,
+  double scale = 1,
+  String lang = 'en',
+  CategoriesDelete? deletion,
+}) async {
+  await catalog.mount(
+    tester,
+    repo,
+    width: width,
+    scale: scale,
+    lang: lang,
+    deletion: deletion,
+  );
+  await catalog.openCategories(tester, lang: lang);
+}
+
 void main() {
   testWidgets(
-    'section is last, uses all real categories sorted by display order and survives filters',
+    'categories page is independent of product filters and uses sorted real data',
     (tester) async {
       final repo = CategoriesRepo();
       await catalog.mount(tester, repo);
-      expect(
-        tester.getTopLeft(section).dy,
-        greaterThan(tester.getBottomLeft(find.text('Meal b')).dy),
-      );
+      expect(section, findsNothing);
+      await show(tester, find.byKey(const ValueKey('catering-category-c')));
+      await tester.tap(find.byKey(const ValueKey('catering-category-c')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).first, 'no such product');
+      await tester.pumpAndSettle();
+      await catalog.openCategories(tester);
       expect(
         tester.getTopLeft(row('c')).dy,
         lessThan(tester.getTopLeft(row('d')).dy),
@@ -125,21 +160,6 @@ void main() {
       );
       expect(tester.widget<Checkbox>(active('c')).value, isTrue);
       expect(tester.widget<Checkbox>(active('d')).value, isFalse);
-      await show(tester, find.byKey(const ValueKey('catering-category-c')));
-      await tester.tap(find.byKey(const ValueKey('catering-category-c')));
-      await tester.pumpAndSettle();
-      expect(row('d'), findsOneWidget);
-      await show(tester, find.byKey(const ValueKey('catering-search')));
-      await tester.enterText(
-        find.descendant(
-          of: find.byKey(const ValueKey('catering-search')),
-          matching: find.byType(TextField),
-        ),
-        'no such product',
-      );
-      await tester.pumpAndSettle();
-      expect(row('c'), findsOneWidget);
-      expect(row('d'), findsOneWidget);
     },
   );
 
@@ -147,7 +167,7 @@ void main() {
     'toggle persists, refreshes catalog and prevents concurrent writes without optimistic state',
     (tester) async {
       final repo = CategoriesRepo()..hold = Completer<void>();
-      await catalog.mount(tester, repo);
+      await mountCategories(tester, repo);
       await show(tester, active('c'));
       await tester.tap(active('c'));
       await tester.pump();
@@ -197,7 +217,7 @@ void main() {
     'rejected toggle retains previous persisted state and permits retry',
     (tester) async {
       final repo = CategoriesRepo()..reject = true;
-      await catalog.mount(tester, repo);
+      await mountCategories(tester, repo);
       await show(tester, active('d'));
       await tester.tap(active('d'));
       await tester.pumpAndSettle();
@@ -215,7 +235,7 @@ void main() {
     tester,
   ) async {
     final repo = CategoriesRepo();
-    await catalog.mount(tester, repo);
+    await mountCategories(tester, repo);
     await show(tester, edit('d'));
     await tester.tap(edit('d'));
     await tester.pumpAndSettle();
@@ -245,7 +265,7 @@ void main() {
     ) async {
       final repo = CategoriesRepo();
       final api = CategoriesDelete(repo)..reject = reject;
-      await catalog.mount(tester, repo, deletion: api);
+      await mountCategories(tester, repo, deletion: api);
       final del = find.descendant(
         of: row('c'),
         matching: find.byTooltip('Delete'),
@@ -273,7 +293,7 @@ void main() {
     tester,
   ) async {
     final repo = CategoriesRepo();
-    await catalog.mount(tester, repo);
+    await mountCategories(tester, repo);
     final container = ProviderScope.containerOf(tester.element(section));
     (container.read(currentLocationProvider.notifier) as FakeLocation)
         .setLocation('b');
@@ -290,7 +310,7 @@ void main() {
           tester,
         ) async {
           final repo = CategoriesRepo();
-          await catalog.mount(
+          await mountCategories(
             tester,
             repo,
             width: width,
@@ -301,7 +321,7 @@ void main() {
           expect(tester.takeException(), isNull);
           expect(
             find.descendant(
-              of: section,
+              of: find.byType(CateringCategoriesScreen),
               matching: find.text(lang == 'en' ? 'Categories' : 'Categorías'),
             ),
             findsOneWidget,

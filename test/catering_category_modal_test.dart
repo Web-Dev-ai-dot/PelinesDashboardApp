@@ -66,12 +66,8 @@ Future<void> open(
   String lang = 'en',
 }) async {
   await catalog.mount(tester, repo, width: width, scale: scale, lang: lang);
-  final edit = find
-      .descendant(
-        of: find.byKey(const ValueKey('catering-category-header-c')),
-        matching: find.byType(TextButton),
-      )
-      .first;
+  await catalog.openCategories(tester, lang: lang);
+  final edit = find.byKey(const ValueKey('category-edit-c'));
   await Scrollable.ensureVisible(tester.element(edit), alignment: 0.5);
   await tester.pumpAndSettle();
   await tester.tap(edit);

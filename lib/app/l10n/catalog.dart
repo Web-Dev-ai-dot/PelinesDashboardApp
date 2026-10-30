@@ -1,5 +1,16 @@
 // English source messages and their Spanish UI translations. Backend values are never catalog keys.
 const spanishCatalog = <String, String>{
+  "Select a category before saving.": "Selecciona una categoría antes de guardar.",
+  "Select a category": "Selecciona una categoría",
+  "Categories could not be loaded.": "No se pudieron cargar las categorías.",
+  "Save the item before managing add-ons from its details.": "Guarda el producto antes de administrar sus complementos desde los detalles.",
+  "Create selectable add-ons, modifiers, or upgrades for this menu item.": "Crea complementos, modificadores o mejoras seleccionables para este producto.",
+  "Upload image": "Subir imagen",
+  "No image yet": "Todavía no hay imagen",
+  "e.g. Must present a valid ID to receive alcohol": "p. ej., Presenta una identificación válida para recibir alcohol",
+  "Short description for customers": "Descripción breve para los clientes",
+  "e.g. Chicken Quesadilla": "p. ej., Quesadilla de pollo",
+  "New menu item": "Nuevo producto",
   "e.g. Salads": "p. ej., Ensaladas",
   "New category": "Nueva categoría",
   "Categories": "Categorías",

@@ -237,6 +237,23 @@ Future<GoRouter> mount(
         path: '/app/menu/${kind.name}',
         builder: (_, _) => MenuCategoriesScreen(kind: kind),
       ),
+      ...[
+        GoRoute(
+          path: '/app/menu/${kind.name}/categories',
+          builder: (_, _) => kind == MenuKind.catering
+              ? const CateringCategoriesScreen()
+              : const RegularCategoriesScreen(),
+        ),
+        GoRoute(
+          path: '/app/menu/${kind.name}/products/new',
+          pageBuilder: (_, state) => NewMenuItemPage(
+            key: state.pageKey,
+            kind: kind,
+            categoryId: '',
+            categoryName: '',
+          ),
+        ),
+      ],
       GoRoute(
         path: '/app/menu/${kind.name}/categories/new',
         pageBuilder: (_, state) =>
@@ -251,11 +268,22 @@ Future<GoRouter> mount(
       ),
       GoRoute(
         path: '/app/menu/${kind.name}/categories/:category/products/new',
-        builder: (_, s) => ProductFormScreen(
-          kind: kind,
-          categoryId: s.pathParameters['category']!,
-          categoryName: 'Category',
-        ),
+        pageBuilder: (_, s) =>
+            (kind == MenuKind.store || kind == MenuKind.catering)
+            ? NewMenuItemPage(
+                key: s.pageKey,
+                kind: kind,
+                categoryId: s.pathParameters['category']!,
+                categoryName: 'Category',
+              )
+            : MaterialPage(
+                key: s.pageKey,
+                child: ProductFormScreen(
+                  kind: kind,
+                  categoryId: s.pathParameters['category']!,
+                  categoryName: 'Category',
+                ),
+              ),
       ),
       GoRoute(
         path: '/app/menu/${kind.name}/categories/:category/products/:id/edit',
@@ -307,16 +335,25 @@ Future<GoRouter> mount(
   return router;
 }
 
+Future<void> openCategories(WidgetTester tester, {String lang = 'en'}) async {
+  final button = find.widgetWithText(
+    FilledButton,
+    lang == 'en' ? 'Categories' : 'Categorías',
+  );
+  await Scrollable.ensureVisible(tester.element(button), alignment: .5);
+  await tester.pumpAndSettle();
+  await tester.tap(button);
+  await tester.pumpAndSettle();
+}
+
 void main() => menuCatalogTests(MenuKind.catering);
 
 void menuCatalogTests(MenuKind kind) {
   final prefix = kind == MenuKind.catering ? 'catering' : 'regular';
   testWidgets('category edit action retains navigation', (tester) async {
     await mount(tester, Repo(kind: kind));
-    final edit = find.descendant(
-      of: find.byKey(ValueKey('$prefix-category-header-c')),
-      matching: find.widgetWithText(TextButton, 'Edit Category'),
-    );
+    await openCategories(tester);
+    final edit = find.byKey(const ValueKey('category-edit-c'));
     await tester.ensureVisible(edit);
     await tester.tap(edit);
     await tester.pumpAndSettle();
@@ -335,9 +372,9 @@ void menuCatalogTests(MenuKind kind) {
     final router = await mount(tester, repo, deletion: deletion);
     Finder action(String label) => find.descendant(
       of: find.byKey(const ValueKey('menu-product-2')),
-      matching: kind == MenuKind.catering
-          ? find.byWidgetPredicate((w) => w is IconButton && w.tooltip == label)
-          : find.widgetWithText(TextButton, label),
+      matching: find.byWidgetPredicate(
+        (w) => w is IconButton && w.tooltip == label,
+      ),
     );
     Future<void> reveal(String label) async {
       await tester.ensureVisible(action(label));
@@ -353,7 +390,7 @@ void menuCatalogTests(MenuKind kind) {
       expect(action(label).hitTestable(), findsOneWidget);
     }
 
-    if (kind == MenuKind.catering) {
+    {
       final view = find.descendant(
         of: find.byKey(const ValueKey('menu-product-2')),
         matching: find.widgetWithText(OutlinedButton, 'View'),
@@ -658,11 +695,10 @@ void menuCatalogTests(MenuKind kind) {
               tester.getRect(find.byType(PelinesLocationContext)).bottom,
             ),
           );
-          final create = kind == MenuKind.catering
-              ? find.byTooltip(
-                  lang == 'en' ? 'New Category' : 'Nueva categoría',
-                )
-              : find.text(lang == 'en' ? 'New Category' : 'Nueva categoría');
+          final create = find.widgetWithText(
+            FilledButton,
+            lang == 'en' ? 'Categories' : 'Categorías',
+          );
           expect(
             tester.getRect(create).top,
             greaterThan(tester.getRect(description).bottom),
@@ -710,7 +746,7 @@ void menuCatalogTests(MenuKind kind) {
           expect(find.byKey(const Key('menu-image-fallback')), findsWidgets);
           final card = find.byKey(const ValueKey('menu-product-2'));
           final header = find.byKey(ValueKey('$prefix-category-header-c'));
-          if (kind == MenuKind.catering) {
+          {
             final edit = find.descendant(
               of: card,
               matching: find.byWidgetPredicate(
@@ -753,90 +789,22 @@ void menuCatalogTests(MenuKind kind) {
             );
           }
 
-          {
-            for (final edit in [true, false]) {
-              final action = edit
-                  ? find.descendant(
-                      of: header,
-                      matching: find.widgetWithText(
-                        TextButton,
-                        lang == 'en' ? 'Edit Category' : 'Editar categoría',
-                      ),
-                    )
-                  : find.descendant(
-                      of: header,
-                      matching: find.byKey(const ValueKey('catering-delete-c')),
-                    );
-              final button = tester.widget<TextButton>(action);
-              expect(tester.getSize(action).height, greaterThanOrEqualTo(48));
-              expect(
-                tester.getRect(header).contains(tester.getCenter(action)),
-                isTrue,
-              );
-              expect(
-                find.descendant(
-                  of: action,
-                  matching: find.byIcon(
-                    edit ? Icons.edit_outlined : Icons.delete_outline,
-                  ),
-                ),
-                findsOneWidget,
-              );
-              expect(
-                button.style!.backgroundColor!.resolve({}),
-                edit ? PelinesColors.mutedSurface : Colors.white,
-              );
-              expect(
-                button.style!.foregroundColor!.resolve({}),
-                edit ? PelinesColors.textPrimary : PelinesColors.destructive,
-              );
-              expect(button.style!.side!.resolve({})!.width, greaterThan(0));
-              expect(button.style!.shape!.resolve({}), isA<StadiumBorder>());
-            }
-          }
           for (final label
               in lang == 'en'
                   ? ['Edit', 'Duplicate', 'Delete']
                   : ['Editar', 'Duplicar', 'Eliminar']) {
             final action = find.descendant(
               of: card,
-              matching: kind == MenuKind.catering
-                  ? find.byWidgetPredicate(
-                      (w) => w is IconButton && w.tooltip == label,
-                    )
-                  : find.widgetWithText(TextButton, label),
+              matching: find.byWidgetPredicate(
+                (w) => w is IconButton && w.tooltip == label,
+              ),
             );
             expect(action, findsOneWidget);
-            if (kind == MenuKind.catering) {
-              expect(tester.widget<IconButton>(action).onPressed, isNotNull);
-              expect(
-                find.descendant(of: action, matching: find.byType(Icon)),
-                findsOneWidget,
-              );
-            } else {
-              final button = tester.widget<TextButton>(action);
-              expect(button.style!.side!.resolve({})!.width, greaterThan(0));
-              expect(
-                find.descendant(of: action, matching: find.byType(Icon)),
-                findsOneWidget,
-              );
-              if (label == 'Edit' || label == 'Editar') {
-                expect(
-                  button.style!.backgroundColor!.resolve({}),
-                  PelinesColors.mutedSurface,
-                );
-              }
-              if (label == 'Delete' || label == 'Eliminar') {
-                expect(
-                  button.style!.foregroundColor!.resolve({}),
-                  PelinesColors.destructive,
-                );
-                expect(
-                  button.style!.side!.resolve({})!.color,
-                  PelinesColors.destructive,
-                );
-              }
-            }
+            expect(tester.widget<IconButton>(action).onPressed, isNotNull);
+            expect(
+              find.descendant(of: action, matching: find.byType(Icon)),
+              findsOneWidget,
+            );
             expect(tester.getSize(action).height, greaterThanOrEqualTo(48));
             expect(
               tester.getRect(card).contains(tester.getCenter(action)),
@@ -854,14 +822,14 @@ void menuCatalogTests(MenuKind kind) {
                 lang == 'en' ? 'Edit Category' : 'Editar categoría',
               ),
             ),
-            findsOneWidget,
+            findsNothing,
           );
           expect(
             find.descendant(
               of: header,
               matching: find.byKey(const ValueKey('catering-delete-c')),
             ),
-            findsOneWidget,
+            findsNothing,
           );
           final reads = repo.reads;
           await tester.enterText(find.byType(TextField).first, '  MEAL 2  ');
@@ -918,21 +886,20 @@ void menuCatalogTests(MenuKind kind) {
     'create chooses category by ID and edit exposes real photo controls',
     (tester) async {
       final router = await mount(tester, Repo(kind: kind));
-      await tester.tap(
-        kind == MenuKind.catering
-            ? find.byWidgetPredicate(
-                (w) => w is IconButton && w.tooltip == 'New Item',
-              )
-            : find.text('New Item'),
-      );
+      await tester.tap(find.widgetWithText(FilledButton, 'New Item'));
       await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(SimpleDialogOption, 'Category d'));
+      expect(find.byType(SimpleDialog), findsNothing);
+      final selector = find.byKey(ValueKey('${kind.name}-edit-category-'));
+      await tester.ensureVisible(selector);
+      await tester.tap(selector);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Category d').last);
       await tester.pumpAndSettle();
       expect(
         tester
             .widget<ProductFormScreen>(find.byType(ProductFormScreen))
             .categoryId,
-        'd',
+        '',
       );
       expect(
         find.text('Save the item to add its photo and modifiers.'),
@@ -959,8 +926,9 @@ void menuCatalogTests(MenuKind kind) {
   ) async {
     final api = DeleteApi()..hold = Completer<void>();
     await mount(tester, Repo(kind: kind), deletion: api);
+    await openCategories(tester);
     final button = find.descendant(
-      of: find.byKey(ValueKey('$prefix-category-header-c')),
+      of: find.byKey(ValueKey('catering-category-row-a-c')),
       matching: find.byKey(const ValueKey('catering-delete-c')),
     );
     await tester.ensureVisible(button);
@@ -971,7 +939,7 @@ void menuCatalogTests(MenuKind kind) {
     await tester.pump();
     await tester.pump();
     expect(api.calls, 1);
-    expect(tester.widget<TextButton>(button).onPressed, isNull);
+    expect(tester.widget<IconButton>(button).onPressed, isNull);
     api.hold!.complete();
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
