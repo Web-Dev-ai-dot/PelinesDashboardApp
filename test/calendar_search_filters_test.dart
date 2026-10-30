@@ -178,10 +178,15 @@ Future<void> _select(WidgetTester tester, String key, String value) async {
 }
 
 void main() {
-  for (final width in [320.0, 390.0, 1000.0]) {
+  for (final viewport in [
+    for (final width in [320.0, 390.0, 1000.0])
+      for (final view in ['Week', 'Month']) (width, view),
+  ]) {
+    final width = viewport.$1;
+    final view = viewport.$2;
     for (final lang in ['en', 'es']) {
       testWidgets(
-        'Month compact cards preserve all items without prices $width $lang 2x',
+        '$view compact cards preserve all items without prices $width $lang 2x',
         (tester) async {
           await _mount(
             tester,
@@ -194,7 +199,7 @@ void main() {
             (w) => w is OrderPreviewCard && w.order.id == 'ref-one',
           );
           final todayHeight = tester.getSize(selectedCard).height;
-          await upcomingTap(tester, 'calendar-view-Month');
+          await upcomingTap(tester, 'calendar-view-$view');
           final card = find.byWidgetPredicate(
             (w) => w is OrderPreviewCard && w.order.id == 'ref-one',
           );
@@ -257,7 +262,7 @@ void main() {
 
   for (final lang in ['en', 'es']) {
     testWidgets(
-      'Month uses primary full-width details action; Today and Week remain secondary $lang',
+      'Week and Month use primary full-width details action; Today remains secondary $lang',
       (tester) async {
         final repo = _Repo(includeAsap: true);
         await _mount(tester, repo, width: 390, lang: lang);
@@ -276,11 +281,11 @@ void main() {
             expect(button, findsOneWidget);
             expect(
               tester.widget<PelinesButton>(button).variant,
-              view == 'Month'
+              view != 'Today'
                   ? PelinesButtonVariant.primary
                   : PelinesButtonVariant.secondary,
             );
-            if (view == 'Month') {
+            if (view != 'Today') {
               expect(
                 find.descendant(
                   of: button,
@@ -523,6 +528,62 @@ void main() {
       ) async {
         await _mount(tester, _Repo(), width: width, scale: 2, lang: lang);
         await upcomingTap(tester, 'calendar-view-Week');
+        expect(find.byKey(const Key('calendar-week-range')), findsNothing);
+        final surface = find.byKey(const Key('calendar-week-surface'));
+        final decoration =
+            tester.widget<Container>(surface).decoration as BoxDecoration;
+        expect(decoration.color, PelinesColors.card);
+        expect(
+          decoration.borderRadius,
+          BorderRadius.circular(PelinesRadius.prominentCard),
+        );
+        final selectedDay = tester
+            .widget<CalendarWeekSelector>(find.byType(CalendarWeekSelector))
+            .selectedDay;
+        expect(
+          find.text(DateFormat.yMMMMEEEEd(lang).format(selectedDay)),
+          findsOneWidget,
+        );
+        final week = calendarWeek(selectedDay);
+        expect(
+          find.text(
+            '${DateFormat.yMMMd(lang).format(week.first)} – ${DateFormat.yMMMd(lang).format(week.last)}',
+          ),
+          findsNothing,
+        );
+        final daysViewport = find.byKey(const Key('calendar-week-days'));
+        final previous = find.byKey(const Key('calendar-previous-week'));
+        final next = find.byKey(const Key('calendar-next-week'));
+        expect(
+          tester.getRect(surface).contains(tester.getCenter(previous)),
+          true,
+        );
+        expect(tester.getRect(surface).contains(tester.getCenter(next)), true);
+        expect(
+          tester.getRect(previous).right,
+          lessThanOrEqualTo(tester.getRect(daysViewport).left),
+        );
+        expect(
+          tester.getRect(next).left,
+          greaterThanOrEqualTo(tester.getRect(daysViewport).right),
+        );
+        expect(
+          tester.getCenter(previous).dy,
+          closeTo(tester.getCenter(daysViewport).dy, .1),
+        );
+        expect(
+          tester.getCenter(next).dy,
+          closeTo(tester.getCenter(daysViewport).dy, .1),
+        );
+        expect(tester.getSize(previous).width, greaterThanOrEqualTo(48));
+        expect(tester.getSize(next).width, greaterThanOrEqualTo(48));
+        final dayWidths = [
+          for (var day = 1; day <= 7; day++)
+            tester
+                .getSize(find.byKey(ValueKey('calendar-week-day-$day')))
+                .width,
+        ];
+        expect(dayWidths.every((w) => (w - dayWidths.first).abs() < .1), true);
         expect(
           find.text(lang == 'en' ? '4 orders' : '4 órdenes'),
           findsOneWidget,
@@ -582,6 +643,19 @@ void main() {
         final segmentRect = tester.getRect(
           find.byKey(const Key('calendar-view-segments')),
         );
+        final segmentsDecoration =
+            tester
+                    .widget<Container>(
+                      find.byKey(const Key('calendar-view-segments')),
+                    )
+                    .decoration
+                as BoxDecoration;
+        expect(segmentsDecoration.color, const Color(0xFFEEEEEE));
+        expect(
+          segmentsDecoration.borderRadius,
+          BorderRadius.circular(PelinesRadius.pill),
+        );
+
         expect(
           segmentRect.width,
           closeTo(
@@ -609,6 +683,23 @@ void main() {
             PelinesColors.brandPrimary,
           );
           expect(active.style!.foregroundColor!.resolve({}), Colors.white);
+          for (final inactive in [
+            'Today',
+            'Week',
+            'Month',
+          ].where((entry) => entry != view)) {
+            expect(
+              tester
+                  .widget<TextButton>(
+                    find.byKey(Key('calendar-view-$inactive')),
+                  )
+                  .style!
+                  .backgroundColor!
+                  .resolve({}),
+              Colors.transparent,
+            );
+          }
+
           expect(find.byKey(const Key('calendar-today-kpi')), findsNothing);
           expect(find.byKey(const Key('calendar-revenue-kpi')), findsNothing);
           expect(

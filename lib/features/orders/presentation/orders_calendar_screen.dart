@@ -260,8 +260,8 @@ class _OrdersCalendarScreenState extends ConsumerState<OrdersCalendarScreen> {
               order: order,
               planning: true,
               showChannel: true,
-              primaryDetailsAction: _view == 'Month',
-              compactPlanning: _view == 'Month',
+              primaryDetailsAction: _view != 'Today',
+              compactPlanning: _view != 'Today',
             ),
       ],
     );
@@ -302,7 +302,7 @@ class _OrdersCalendarScreenState extends ConsumerState<OrdersCalendarScreen> {
                 Container(
                   key: const Key('calendar-view-segments'),
                   decoration: BoxDecoration(
-                    color: PelinesColors.mutedSurface,
+                    color: const Color(0xFFEEEEEE),
                     borderRadius: BorderRadius.circular(PelinesRadius.pill),
                   ),
                   padding: const EdgeInsets.all(4),
