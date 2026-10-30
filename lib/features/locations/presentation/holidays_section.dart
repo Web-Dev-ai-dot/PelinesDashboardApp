@@ -16,7 +16,12 @@ import 'holiday_editor.dart';
 
 /// Saved records are read-only; Add/Edit persist through a separate editor.
 class HolidaysSection extends ConsumerStatefulWidget {
-  const HolidaysSection({super.key, required this.location});
+  const HolidaysSection({
+    super.key,
+    required this.location,
+    this.locationsLayout = false,
+  });
+  final bool locationsLayout;
   final Location location;
   @override
   ConsumerState<HolidaysSection> createState() => _HolidaysSectionState();
@@ -178,10 +183,9 @@ class _HolidaysSectionState extends ConsumerState<HolidaysSection>
         !_confirming &&
         !_blocked &&
         unsupported == null;
-    return AdminPopScope<void>(
-      canPop: !_busy,
-      onRequestLeave: () async => !_busy,
-      onPopInvokedWithResult: (_, _) {},
+    return _HolidayNavigationGuard(
+      locationsLayout: widget.locationsLayout,
+      busy: _busy,
       child: PelinesSettingsCard(
         key: const Key('holidays-section'),
         children: [
@@ -191,16 +195,29 @@ class _HolidaysSectionState extends ConsumerState<HolidaysSection>
             spacing: 12,
             runSpacing: 12,
             children: [
-              PelinesSectionHeading(tr(context, 'Holidays')),
-              OutlinedButton.icon(
-                key: const Key('add-holiday'),
-                style: PelinesControlStyles.button(
-                  PelinesButtonVariant.secondary,
+              PelinesSectionHeading(
+                tr(
+                  context,
+                  widget.locationsLayout ? 'Holiday Schedules' : 'Holidays',
                 ),
-                onPressed: editable ? () => _edit(saved) : null,
-                icon: const Icon(Icons.add),
-                label: Text(tr(context, 'Add holiday')),
               ),
+              if (!widget.locationsLayout)
+                OutlinedButton.icon(
+                  key: const Key('add-holiday'),
+                  style: PelinesControlStyles.button(
+                    PelinesButtonVariant.secondary,
+                  ),
+                  onPressed: editable ? () => _edit(saved) : null,
+                  icon: const Icon(Icons.add),
+                  label: Text(
+                    tr(
+                      context,
+                      widget.locationsLayout
+                          ? 'Add holiday schedule'
+                          : 'Add holiday',
+                    ),
+                  ),
+                ),
             ],
           ),
           const SizedBox(height: 12),
@@ -231,6 +248,23 @@ class _HolidaysSectionState extends ConsumerState<HolidaysSection>
                 enabled: editable,
                 onEdit: () => _edit(saved, h),
                 onDelete: () => _delete(saved, h),
+              ),
+            ),
+          if (widget.locationsLayout)
+            OutlinedButton.icon(
+              key: const Key('add-holiday'),
+              style: PelinesControlStyles.button(
+                PelinesButtonVariant.secondary,
+              ),
+              onPressed: editable ? () => _edit(saved) : null,
+              icon: const Icon(Icons.add),
+              label: Text(
+                tr(
+                  context,
+                  widget.locationsLayout
+                      ? 'Add holiday schedule'
+                      : 'Add holiday',
+                ),
               ),
             ),
           if (unsupported != null || _error != null)
@@ -355,4 +389,25 @@ class _HolidayCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Locations' weekly draft owns the route guard. Keep the holiday busy PopScope
+/// without replacing that guard; standalone Holidays keeps its existing guard.
+class _HolidayNavigationGuard extends StatelessWidget {
+  const _HolidayNavigationGuard({
+    required this.locationsLayout,
+    required this.busy,
+    required this.child,
+  });
+  final bool locationsLayout, busy;
+  final Widget child;
+  @override
+  Widget build(BuildContext context) => locationsLayout
+      ? PopScope<void>(canPop: !busy, child: child)
+      : AdminPopScope<void>(
+          canPop: !busy,
+          onRequestLeave: () async => !busy,
+          onPopInvokedWithResult: (_, _) {},
+          child: child,
+        );
 }

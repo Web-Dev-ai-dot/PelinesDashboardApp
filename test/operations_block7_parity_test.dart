@@ -153,7 +153,11 @@ void main() {
         expect(find.text('123 Backend Address'), findsOneWidget);
       }
       expect(
-        find.text('Business Hours'),
+        find.text(
+          section == StoreOperationsSection.locations
+              ? 'Standard Hours'
+              : 'Business Hours',
+        ),
         section == StoreOperationsSection.delivery
             ? findsNothing
             : findsWidgets,

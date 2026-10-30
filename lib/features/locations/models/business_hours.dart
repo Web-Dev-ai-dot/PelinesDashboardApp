@@ -95,7 +95,8 @@ class BusinessHoursSchedule {
     for (int index = 0; index < 7; index++) {
       final BusinessDayHours a = days[index];
       final BusinessDayHours b = other.days[index];
-      if (a.open != b.open || a.close != b.close || a.closed != b.closed) {
+      if (a.closed != b.closed ||
+          (!a.closed && (a.open != b.open || a.close != b.close))) {
         return false;
       }
     }

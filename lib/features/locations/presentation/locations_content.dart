@@ -16,7 +16,7 @@ class _LocationsContent extends StatelessWidget {
         Text(
           tr(
             context,
-            'Location details, business hours and temporary closures.',
+            'Manage restaurant location details, addresses, and contact information.',
           ),
         ),
         const SizedBox(height: 24),
@@ -45,7 +45,7 @@ class _LocationsContent extends StatelessWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              PelinesSectionHeading(tr(context, 'Location')),
+                              PelinesSectionHeading(location.name),
                               Text(
                                 location.slug,
                                 style: PelinesTypography.smallLabel,
@@ -71,11 +71,22 @@ class _LocationsContent extends StatelessWidget {
                             : PelinesColors.mutedSurface,
                       ),
                     ),
-                    if (location.phone?.trim().isNotEmpty == true)
+                    for (final item in [
+                      ('Location Name', location.name),
+                      ('Address', location.address ?? '—'),
+                      ('Contact Phone', location.phone ?? '—'),
+                    ])
                       _LocationInfo(
-                        label: tr(context, 'Phone'),
-                        value: location.phone!,
+                        label: tr(context, item.$1),
+                        value: item.$2,
                       ),
+                    const SizedBox(height: 12),
+                    Text(
+                      tr(context, 'Location details are read-only.'),
+                      style: const TextStyle(
+                        color: PelinesColors.textSecondary,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -85,6 +96,13 @@ class _LocationsContent extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         PelinesSectionHeading(tr(context, 'Business Hours & Closures')),
+        const SizedBox(height: 8),
+        Text(
+          tr(
+            context,
+            'Manage standard business hours, temporary closures, and holiday schedules. These hours control regular ordering in Pacific Time.',
+          ),
+        ),
         const SizedBox(height: 16),
         OperationsGrid(
           children: [
@@ -99,6 +117,7 @@ class _LocationsContent extends StatelessWidget {
             child: HolidaysSection(
               key: ValueKey('holidays-${location.id}'),
               location: location,
+              locationsLayout: true,
             ),
           ),
         ),
@@ -118,52 +137,19 @@ class _LocationInfo extends StatelessWidget {
       children: [
         Text(label, style: PelinesTypography.smallLabel),
         const SizedBox(height: 6),
-        Text(value),
-      ],
-    ),
-  );
-}
-
-class _LocationDayRow extends StatelessWidget {
-  const _LocationDayRow({
-    required this.day,
-    required this.hours,
-    required this.summary,
-  });
-  final int day;
-  final BusinessDayHours hours;
-  final String summary;
-  @override
-  Widget build(BuildContext context) => Container(
-    key: ValueKey('location-hours-${businessDayKeys[day]}'),
-    padding: const EdgeInsets.symmetric(vertical: 12),
-    decoration: const BoxDecoration(
-      border: Border(bottom: BorderSide(color: PelinesColors.border)),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Wrap(
-          spacing: 12,
-          runSpacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            Text(
-              tr(context, businessDayLabels[day]),
-              style: PelinesTypography.smallLabel,
+        Semantics(
+          label: label,
+          child: TextFormField(
+            key: ValueKey('location-info-$label-$value'),
+            initialValue: value,
+            readOnly: true,
+            maxLines: null,
+            decoration: PelinesControlStyles.input().copyWith(
+              fillColor: PelinesColors.mutedSurface,
+              filled: true,
             ),
-            PelinesStateBadge(
-              label: tr(context, hours.closed ? 'Closed' : 'Open'),
-              foreground: hours.closed
-                  ? PelinesColors.textSecondary
-                  : PelinesColors.successForeground,
-              background: hours.closed
-                  ? PelinesColors.mutedSurface
-                  : PelinesColors.successBackground,
-            ),
-          ],
+          ),
         ),
-        if (!hours.closed) ...[const SizedBox(height: 8), Text(summary)],
       ],
     ),
   );

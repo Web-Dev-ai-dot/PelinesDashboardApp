@@ -586,6 +586,13 @@ class _BusinessHoursCard extends StatelessWidget {
         ),
       );
     }
+    if (locationsStyle) {
+      return BusinessHoursScreen(
+        key: ValueKey('location-weekly-${location.id}'),
+        location: location,
+        locationsLayout: true,
+      );
+    }
     return OperationsCard(
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -610,27 +617,20 @@ class _BusinessHoursCard extends StatelessWidget {
               Text(tr(context, 'Business hours are not configured.'))
             else
               for (int index = 0; index < 7; index++)
-                if (locationsStyle)
-                  _LocationDayRow(
-                    day: index,
-                    hours: schedule.days[index],
-                    summary: _summary(context, schedule.days[index]),
-                  )
-                else
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
-                      children: <Widget>[
-                        SizedBox(
-                          width: 92,
-                          child: Text(businessDayLabels[index].substring(0, 3)),
-                        ),
-                        Expanded(
-                          child: Text(_summary(context, schedule.days[index])),
-                        ),
-                      ],
-                    ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    children: <Widget>[
+                      SizedBox(
+                        width: 92,
+                        child: Text(businessDayLabels[index].substring(0, 3)),
+                      ),
+                      Expanded(
+                        child: Text(_summary(context, schedule.days[index])),
+                      ),
+                    ],
                   ),
+                ),
             const SizedBox(height: 12),
             OutlinedButton(
               style: PelinesControlStyles.button(

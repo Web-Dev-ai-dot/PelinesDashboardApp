@@ -1,5 +1,16 @@
 // English source messages and their Spanish UI translations. Backend values are never catalog keys.
 const spanishCatalog = <String, String>{
+  "Enter an hour from 1 to 12 and minutes from 0 to 59.": "Introduce una hora de 1 a 12 y minutos de 0 a 59.",
+  "Manage restaurant location details, addresses, and contact information.": "Administra los datos, direcciones e información de contacto de las sucursales.",
+  "Location Name": "Nombre de la sucursal",
+  "Contact Phone": "Teléfono de contacto",
+  "Location details are read-only.": "Los datos de la sucursal son de solo lectura.",
+  "Manage standard business hours, temporary closures, and holiday schedules. These hours control regular ordering in Pacific Time.": "Administra los horarios habituales, cierres temporales y festivos. Estos horarios controlan los pedidos regulares en hora del Pacífico.",
+  "Standard Hours": "Horario habitual",
+  "Holiday Schedules": "Horarios de días festivos",
+  "Add holiday schedule": "Agregar horario festivo",
+  "Pelines Time Control": "Control de hora de Pelines",
+
   "Select a category before saving.": "Selecciona una categoría antes de guardar.",
   "Select a category": "Selecciona una categoría",
   "Categories could not be loaded.": "No se pudieron cargar las categorías.",

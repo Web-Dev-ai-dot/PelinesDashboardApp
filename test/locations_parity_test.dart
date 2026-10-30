@@ -185,16 +185,13 @@ void main() {
           ]) {
             expect(find.byKey(Key(key)), findsNothing);
           }
-          final hours = find.byKey(const Key('edit-business-hours'));
+          final hours = find.byKey(const Key('location-edit-time-0'));
           await reveal(tester, hours);
           for (final day in ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']) {
             expect(find.byKey(ValueKey('location-hours-$day')), findsOneWidget);
           }
           expect(find.text(lang == 'en' ? 'Monday' : 'Lunes'), findsOneWidget);
-          expect(
-            find.text(lang == 'en' ? 'Closed' : 'Cerrado'),
-            findsOneWidget,
-          );
+          expect(find.text(lang == 'en' ? 'Closed' : 'Cerrado'), findsWidgets);
           expect(tester.getSize(hours).height, greaterThanOrEqualTo(48));
           final closure = find.byKey(const Key('closure-closure-a'));
           await reveal(tester, closure);
@@ -214,16 +211,14 @@ void main() {
     tester,
   ) async {
     await mount(tester, Repo());
-    final hours = find.byKey(const Key('edit-business-hours'));
+    final hours = find.byKey(const Key('location-edit-time-0'));
     await reveal(tester, hours);
-    await tester.tap(hours);
-    await tester.pumpAndSettle();
     expect(find.byType(BusinessHoursScreen), findsOneWidget);
-    final day = find.byKey(const Key('business-day-0'));
+    final day = find.byKey(const Key('location-closed-0'));
     await reveal(tester, day);
     await tester.tap(day);
     await tester.pumpAndSettle();
-    await tester.pageBack();
+    await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
     expect(find.text('Discard changes?'), findsOneWidget);
     await tester.tap(find.text('Discard'));
