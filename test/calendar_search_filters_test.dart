@@ -180,7 +180,7 @@ Future<void> _select(WidgetTester tester, String key, String value) async {
 void main() {
   for (final viewport in [
     for (final width in [320.0, 390.0, 1000.0])
-      for (final view in ['Week', 'Month']) (width, view),
+      for (final view in ['Today', 'Week', 'Month']) (width, view),
   ]) {
     final width = viewport.$1;
     final view = viewport.$2;
@@ -253,7 +253,7 @@ void main() {
             ),
             findsNWidgets(3),
           );
-          expect(tester.getSize(card).height, lessThan(todayHeight));
+          expect(tester.getSize(card).height, closeTo(todayHeight, .1));
           expect(tester.takeException(), isNull);
         },
       );
@@ -262,7 +262,7 @@ void main() {
 
   for (final lang in ['en', 'es']) {
     testWidgets(
-      'Week and Month use primary full-width details action; Today remains secondary $lang',
+      'Today Week and Month share primary full-width details actions $lang',
       (tester) async {
         final repo = _Repo(includeAsap: true);
         await _mount(tester, repo, width: 390, lang: lang);
@@ -281,11 +281,9 @@ void main() {
             expect(button, findsOneWidget);
             expect(
               tester.widget<PelinesButton>(button).variant,
-              view != 'Today'
-                  ? PelinesButtonVariant.primary
-                  : PelinesButtonVariant.secondary,
+              PelinesButtonVariant.primary,
             );
-            if (view != 'Today') {
+            {
               expect(
                 find.descendant(
                   of: button,

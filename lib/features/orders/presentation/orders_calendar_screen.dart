@@ -260,8 +260,8 @@ class _OrdersCalendarScreenState extends ConsumerState<OrdersCalendarScreen> {
               order: order,
               planning: true,
               showChannel: true,
-              primaryDetailsAction: _view != 'Today',
-              compactPlanning: _view != 'Today',
+              primaryDetailsAction: true,
+              compactPlanning: true,
             ),
       ],
     );
