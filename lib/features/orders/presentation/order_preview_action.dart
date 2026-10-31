@@ -15,11 +15,13 @@ class OrderPreviewAction extends ConsumerStatefulWidget {
     this.webStyle = false,
     this.refreshOnSummaryChange = true,
     this.showNextStatus = false,
+    this.useTargetStatusColor = false,
     super.key,
   });
   final OrderSummary order;
   final bool webStyle;
   final bool showNextStatus;
+  final bool useTargetStatusColor;
   // Detail already owns the canonical GET; list summaries still need hydration.
   final bool refreshOnSummaryChange;
   @override
@@ -112,6 +114,7 @@ class _OrderPreviewActionState extends ConsumerState<OrderPreviewAction> {
     }
     return _OrderActions(
       showNextStatus: widget.showNextStatus,
+      useTargetStatusColor: widget.useTargetStatusColor,
       webStyle: widget.webStyle,
       action: action,
       mutation: mutation,
@@ -184,6 +187,7 @@ class _OrderActions extends StatelessWidget {
     this.confirming = false,
     this.webStyle = false,
     this.showNextStatus = false,
+    this.useTargetStatusColor = false,
   });
 
   final OrderStatusAction action;
@@ -194,6 +198,7 @@ class _OrderActions extends StatelessWidget {
   final bool confirming;
   final bool webStyle;
   final bool showNextStatus;
+  final bool useTargetStatusColor;
 
   @override
   Widget build(BuildContext context) {
@@ -222,11 +227,11 @@ class _OrderActions extends StatelessWidget {
                     OrderStatusAction.acceptOrder =>
                       PelinesButtonVariant.accept,
                     OrderStatusAction.startPreparing =>
-                      showNextStatus
+                      (showNextStatus || useTargetStatusColor)
                           ? PelinesButtonVariant.preparing
                           : PelinesButtonVariant.accept,
                     OrderStatusAction.markReady =>
-                      showNextStatus
+                      (showNextStatus || useTargetStatusColor)
                           ? PelinesButtonVariant.ready
                           : PelinesButtonVariant.preparing,
                     OrderStatusAction.completeOrder =>

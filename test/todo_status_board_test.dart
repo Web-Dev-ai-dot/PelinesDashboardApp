@@ -359,6 +359,42 @@ void main() {
       );
     }
   }
+  testWidgets(
+    'relocated detail Print uses existing queue without duplicate sends',
+    (tester) async {
+      final repo = _Repository(today: true);
+      final printer = _PrintService(PrintJobStatus.submitted);
+      await _mount(
+        tester,
+        repo,
+        printer: printer,
+        child: const OrderDetailScreen(orderId: 'confirmed'),
+      );
+      final print = find.byKey(const Key('todo-print-confirmed'));
+      await tester.ensureVisible(print);
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('detail-header-card')),
+          matching: print,
+        ),
+        findsNothing,
+      );
+      expect(print, findsOneWidget);
+      await tester.tap(print);
+      await tester.pumpAndSettle();
+      expect(printer.calls, 1);
+      expect(printer.received!.id, 'confirmed');
+      expect(
+        find.text('Submitted (not physical confirmation)'),
+        findsOneWidget,
+      );
+      expect(tester.widget<OutlinedButton>(print).onPressed, isNull);
+      expect(repo.patches, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('Print unavailable reports error without claiming success', (
     tester,
   ) async {

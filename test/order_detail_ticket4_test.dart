@@ -222,7 +222,25 @@ void main() {
         final header = find.byKey(const Key('detail-header-card'));
         expect(
           tester.getRect(printButton).left,
-          closeTo(tester.getRect(header).left + 16, 1),
+          closeTo(tester.getRect(header).left, 1),
+        );
+        expect(
+          tester.getRect(printButton).width,
+          closeTo(tester.getRect(header).width, 1),
+        );
+        expect(
+          tester.getRect(printButton).top,
+          greaterThan(tester.getRect(header).bottom),
+        );
+        expect(
+          tester.getRect(printButton).bottom,
+          lessThanOrEqualTo(
+            tester.getRect(find.byKey(const Key('detail-progress'))).top,
+          ),
+        );
+        expect(
+          find.descendant(of: header, matching: printButton),
+          findsNothing,
         );
         expect(
           find.descendant(
@@ -296,11 +314,26 @@ void main() {
         );
         final theme = OutlinedButtonTheme.of(tester.element(printButton))
             .style!;
-        expect(theme.backgroundColor!.resolve({}), PelinesColors.mutedSurface);
+        expect(theme.backgroundColor!.resolve({}), PelinesColors.card);
+        expect(
+          theme.backgroundColor!.resolve({WidgetState.disabled}),
+          PelinesColors.card,
+        );
+        expect(
+          theme.side!.resolve({}),
+          const BorderSide(color: PelinesColors.border),
+        );
+        expect(
+          theme.side!.resolve({WidgetState.disabled}),
+          const BorderSide(color: PelinesColors.border),
+        );
         expect(theme.foregroundColor!.resolve({}), PelinesColors.textPrimary);
         expect(theme.shape!.resolve({}), isA<StadiumBorder>());
         if (size.$2 == 1) {
-          expect(tester.getSize(printButton).width, lessThan(size.$1 - 32));
+          expect(
+            tester.getSize(printButton).width,
+            closeTo(tester.getRect(header).width, 1),
+          );
         }
         expect(find.descendant(of: section, matching: payment), findsOneWidget);
         expect(
@@ -617,6 +650,135 @@ void main() {
       );
     }
   }
+  for (final language in ['en', 'es']) {
+    for (final size in [(390.0, 1.0), (1440.0, 1.0), (320.0, 2.0)]) {
+      testWidgets('polished header and progress layout $language/$size', (
+        tester,
+      ) async {
+        final repo = _Repo(
+          _data()..['orderNumber'] = 'TUA-2026-ORDER-12345678901234567890',
+        );
+        await _mount(
+          tester,
+          repo,
+          width: size.$1,
+          scale: size.$2,
+          language: language,
+        );
+        final header = find.byKey(const Key('detail-header-card'));
+        final number = find.byKey(const Key('detail-order-number'));
+        expect(tester.widget<Text>(number).style!.fontSize, 40);
+        expect(
+          tester.getRect(number).left,
+          greaterThanOrEqualTo(tester.getRect(header).left),
+        );
+        expect(
+          tester.getRect(number).right,
+          lessThanOrEqualTo(tester.getRect(header).right),
+        );
+        final progress = find.byKey(const Key('detail-progress'));
+        await tester.ensureVisible(progress);
+        await tester.pumpAndSettle();
+        final title = find.descendant(
+          of: progress,
+          matching: find.text(
+            language == 'es'
+                ? spanishCatalog['Update Progress']!
+                : 'Update Progress',
+          ),
+        );
+        final badge = find.byKey(const Key('detail-progress-status'));
+        expect(
+          find.descendant(
+            of: badge,
+            matching: find.text(
+              language == 'es' ? spanishCatalog['Confirmed']! : 'Confirmed',
+            ),
+          ),
+          findsOneWidget,
+        );
+        if (size.$2 == 1) {
+          expect(
+            tester.getRect(title).center.dy,
+            closeTo(tester.getRect(badge).center.dy, 1),
+          );
+          expect(
+            tester.getRect(title).right,
+            lessThan(tester.getRect(badge).left),
+          );
+        }
+        final action = find.byKey(const Key('order-primary-action'));
+        expect(action, findsOneWidget);
+        expect(
+          tester.getRect(action).top,
+          greaterThan(tester.getRect(badge).bottom),
+        );
+        expect(
+          find.byKey(Key('todo-print-${repo.json['id']}')),
+          findsOneWidget,
+        );
+        expect(repo.writes, 0);
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
+
+  for (final scenario in [
+    ('pending', 'pickup', PelinesButtonVariant.accept, 'Accept order'),
+    ('confirmed', 'pickup', PelinesButtonVariant.preparing, 'Start preparing'),
+    ('preparing', 'pickup', PelinesButtonVariant.ready, 'Mark ready'),
+    ('ready', 'pickup', PelinesButtonVariant.complete, 'Mark picked up'),
+    ('ready', 'delivery', PelinesButtonVariant.complete, 'Mark delivered'),
+  ]) {
+    testWidgets(
+      'progress uses To Do destination color and keeps action ${scenario.$1}/${scenario.$2}',
+      (tester) async {
+        final repo = _Repo(
+          _data(status: scenario.$1, fulfillment: scenario.$2),
+        );
+        await _mount(tester, repo);
+        final action = find.byKey(const Key('order-primary-action'));
+        final button = tester.widget<FilledButton>(action);
+        final sharedStyle = PelinesControlStyles.button(scenario.$3);
+        expect(
+          button.style!.backgroundColor!.resolve({}),
+          sharedStyle.backgroundColor!.resolve({}),
+        );
+        expect(
+          button.style!.foregroundColor!.resolve({}),
+          sharedStyle.foregroundColor!.resolve({}),
+        );
+        expect(
+          find.descendant(of: action, matching: find.text(scenario.$4)),
+          findsOneWidget,
+        );
+        expect(button.onPressed, isNotNull);
+        expect(repo.writes, 0);
+      },
+    );
+  }
+  for (final scenario in [
+    ('delivered', 'pickup', 'paid'),
+    ('cancelled', 'delivery', 'paid'),
+    ('ready', 'unknown', 'paid'),
+    ('confirmed', 'pickup', 'unpaid'),
+  ]) {
+    testWidgets('no forbidden progress action for $scenario', (tester) async {
+      final repo = _Repo(
+        _data(
+          status: scenario.$1,
+          fulfillment: scenario.$2,
+          payment: scenario.$3,
+        ),
+      );
+      await _mount(tester, repo);
+      expect(find.byKey(const Key('order-primary-action')), findsNothing);
+      expect(find.byKey(const Key('detail-progress-status')), findsOneWidget);
+      expect(repo.writes, 0);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets(
     'header, Pacific dates, canonical items/totals and intact notes',
     (tester) async {

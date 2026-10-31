@@ -254,7 +254,7 @@ class _DetailBody extends ConsumerWidget {
                         key: const Key('detail-order-number'),
                         style: PelinesTypography.pageTitle(
                           Theme.of(context).textTheme,
-                        )?.copyWith(fontSize: 32),
+                        )?.copyWith(fontSize: 40),
                       ),
                       const SizedBox(height: 8),
                       _DetailHeaderLine(
@@ -265,39 +265,6 @@ class _DetailBody extends ConsumerWidget {
                       _DetailHeaderLine(
                         icon: Icons.location_on_outlined,
                         text: _locationDescription(order),
-                      ),
-                      const SizedBox(height: 12),
-                      Align(
-                        alignment: AlignmentDirectional.centerStart,
-                        child: IntrinsicWidth(
-                          child: OutlinedButtonTheme(
-                            data: OutlinedButtonThemeData(
-                              style: OutlinedButton.styleFrom(
-                                backgroundColor: PelinesColors.mutedSurface,
-                                foregroundColor: PelinesColors.textPrimary,
-                                disabledBackgroundColor:
-                                    PelinesColors.mutedSurface,
-                                disabledForegroundColor:
-                                    PelinesColors.textSecondary,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 24,
-                                  vertical: 18,
-                                ),
-                                textStyle: const TextStyle(
-                                  fontFamily: PelinesTypography.bodyFamily,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                                shape: const StadiumBorder(),
-                                side: BorderSide.none,
-                              ),
-                            ),
-                            child: TodoPrintAction(
-                              key: ValueKey('detail-print-${order.id}'),
-                              order: _summary(order),
-                            ),
-                          ),
-                        ),
                       ),
                       const SizedBox(height: 12),
                       Wrap(
@@ -318,6 +285,32 @@ class _DetailBody extends ConsumerWidget {
                         ],
                       ),
                     ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                OutlinedButtonTheme(
+                  data: OutlinedButtonThemeData(
+                    style: OutlinedButton.styleFrom(
+                      backgroundColor: PelinesColors.card,
+                      foregroundColor: PelinesColors.textPrimary,
+                      disabledBackgroundColor: PelinesColors.card,
+                      disabledForegroundColor: PelinesColors.textSecondary,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 18,
+                      ),
+                      textStyle: const TextStyle(
+                        fontFamily: PelinesTypography.bodyFamily,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      shape: const StadiumBorder(),
+                      side: const BorderSide(color: PelinesColors.border),
+                    ),
+                  ),
+                  child: TodoPrintAction(
+                    key: ValueKey('detail-print-${order.id}'),
+                    order: _summary(order),
                   ),
                 ),
                 if (!order.paymentStatus.isOperationallyPaid &&
@@ -348,22 +341,21 @@ class _DetailBody extends ConsumerWidget {
                 _Section(
                   sectionKey: const Key('detail-progress'),
                   title: tr(context, 'Update Progress'),
-                  children: [
-                    Align(
-                      alignment: AlignmentDirectional.centerStart,
-                      child: PelinesOrderBadges.status(
-                        status: order.status,
-                        label: tr(
-                          context,
-                          statusLabel(
-                            order.status,
-                            order.fulfillmentType,
-                            order.rawStatus,
-                          ),
+                  trailing: KeyedSubtree(
+                    key: const Key('detail-progress-status'),
+                    child: PelinesOrderBadges.status(
+                      status: order.status,
+                      label: tr(
+                        context,
+                        statusLabel(
+                          order.status,
+                          order.fulfillmentType,
+                          order.rawStatus,
                         ),
                       ),
                     ),
-                    const SizedBox(height: 16),
+                  ),
+                  children: [
                     if (mutation.isBusy) ...[
                       const LinearProgressIndicator(),
                       Text(tr(context, 'Verifying order update…')),
@@ -372,6 +364,7 @@ class _DetailBody extends ConsumerWidget {
                       order: _summary(initialOrder),
                       webStyle: true,
                       refreshOnSummaryChange: false,
+                      useTargetStatusColor: true,
                     ),
                     if (canCancel && !locationContextChanged) ...[
                       const SizedBox(height: 12),
@@ -955,7 +948,9 @@ class _Section extends StatelessWidget {
     required this.children,
     this.accent = false,
     this.sectionKey,
+    this.trailing,
   });
+  final Widget? trailing;
   final String title;
   final List<Widget> children;
   final bool accent;
@@ -978,11 +973,46 @@ class _Section extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              title,
-              style: PelinesTypography.sectionTitle(Theme.of(context).textTheme)
-                  ?.copyWith(fontSize: 22),
-            ),
+            if (trailing == null)
+              Text(
+                title,
+                style: PelinesTypography.sectionTitle(
+                  Theme.of(context).textTheme,
+                )?.copyWith(fontSize: 22),
+              )
+            else
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final titleWidget = Text(
+                    title,
+                    style: PelinesTypography.sectionTitle(
+                      Theme.of(context).textTheme,
+                    )?.copyWith(fontSize: 22),
+                  );
+                  final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+                  if (constraints.maxWidth < 280 * scale) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        titleWidget,
+                        const SizedBox(height: 8),
+                        Align(
+                          alignment: AlignmentDirectional.centerEnd,
+                          child: trailing!,
+                        ),
+                      ],
+                    );
+                  }
+                  return Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(flex: 3, child: titleWidget),
+                      const SizedBox(width: 12),
+                      Flexible(flex: 2, child: trailing!),
+                    ],
+                  );
+                },
+              ),
             const SizedBox(height: 12),
             ...children,
           ],
