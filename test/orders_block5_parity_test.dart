@@ -7,7 +7,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'package:pelines_admin_app/app/theme/app_theme.dart';
-import 'package:pelines_admin_app/app/theme/pelines_components.dart';
 import 'package:pelines_admin_app/core/time/pelines_time.dart';
 import 'package:pelines_admin_app/core/api/api_exception.dart';
 import 'package:pelines_admin_app/features/locations/models/location.dart';
@@ -175,25 +174,22 @@ void main() {
             scale: scale,
             language: language,
           );
-          final table = width - 32 >= 840 * scale;
-          expect(find.byType(DataTable), table ? findsOneWidget : findsNothing);
-          expect(
-            find.byKey(const ValueKey('history-row-one')),
-            table ? findsNothing : findsOneWidget,
-          );
+          expect(find.byType(DataTable), findsNothing);
+          expect(find.byKey(const ValueKey('history-row-one')), findsOneWidget);
           expect(find.text('María Customer'), findsNWidgets(2));
-          expect(find.text('Celebración familiar'), findsNWidgets(2));
-          expect(find.byType(PelinesStateBadge), findsWidgets);
-          if (page == 'cancelled') {
-            expect(
-              find.text(language == 'es' ? 'Reembolsado' : 'Refunded'),
-              findsOneWidget,
-            );
-          }
-          expect(find.byKey(const Key('order-primary-action')), findsNothing);
-          final view = find.byKey(
-            ValueKey(table ? 'history-view-one' : 'history-row-one'),
+          expect(find.text('Celebración familiar'), findsNothing);
+          expect(
+            find.byIcon(
+              page == 'completed' ? Icons.check_circle : Icons.cancel,
+            ),
+            findsNWidgets(2),
           );
+          expect(
+            find.text(language == 'es' ? 'Reembolsado' : 'Refunded'),
+            findsNothing,
+          );
+          expect(find.byKey(const Key('order-primary-action')), findsNothing);
+          final view = find.byKey(const ValueKey('history-row-one'));
           await tester.ensureVisible(view);
           await tester.pumpAndSettle();
           expect(tester.getSize(view).height, greaterThanOrEqualTo(48));
@@ -204,11 +200,7 @@ void main() {
           router.pop();
           await tester.pumpAndSettle();
           expect(
-            find.byKey(
-              Key(
-                table ? 'historical-adaptive-table' : 'history-shared-surface',
-              ),
-            ),
+            find.byKey(const Key('history-shared-surface')),
             findsOneWidget,
           );
         });
@@ -359,15 +351,15 @@ void main() {
     expect(find.text('ORD-two'), findsNothing);
     expect(repo.calls, 1);
   });
-  testWidgets('Cancelled shows all financial states without hidden filters', (
+  testWidgets('Cancelled keeps orders across financial states without hidden filters', (
     tester,
   ) async {
     final repo = _Repo();
     await _mount(tester, repo, 'cancelled', width: 1366);
     expect(find.byType(PopupMenuButton<PaymentStatus?>), findsNothing);
     expect(find.text('ORD-one'), findsOneWidget);
-    expect(find.text('Refunded'), findsOneWidget);
-    expect(find.text('Paid'), findsOneWidget);
+    expect(find.text('Refunded'), findsNothing);
+    expect(find.text('Paid'), findsNothing);
     expect(repo.calls, 1);
     expect(find.text('ORD-two'), findsOneWidget);
   });

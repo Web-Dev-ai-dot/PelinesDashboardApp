@@ -450,6 +450,7 @@ const spanishCatalog = <String, String>{
   "Operational date": "Fecha operativa",
   "Plan scheduled orders by Pacific date.": "Planifica las órdenes programadas por fecha del Pacífico.",
   "Picked up or delivered orders. Filtered by completion date, with operational date as fallback.": "Órdenes recogidas o entregadas. Filtro por fecha de finalización o, si falta, por fecha operativa.",
+  "Cancelled orders. Filtered by scheduled time or placed date.": "Órdenes canceladas. Filtro por horario programado o fecha de creación.",
   "Cancelled orders. Filtered by scheduled time or placed date; payment status is shown separately.": "Órdenes canceladas. Filtro por horario programado o fecha de creación; el estado del pago se muestra por separado.",
   "New Order": "Nueva orden",
   "of": "de",

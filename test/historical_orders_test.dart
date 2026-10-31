@@ -8,7 +8,6 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/intl.dart';
 import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'package:pelines_admin_app/app/theme/app_theme.dart';
-import 'package:pelines_admin_app/app/theme/pelines_components.dart';
 import 'package:pelines_admin_app/app/theme/pelines_tokens.dart';
 import 'package:pelines_admin_app/core/time/pelines_time.dart';
 import 'package:pelines_admin_app/features/orders/presentation/historical_date_range.dart';
@@ -218,8 +217,8 @@ void main() {
       greaterThanOrEqualTo(tester.getRect(description).bottom),
     );
 
-    expect(find.text('Picked up'), findsOneWidget);
-    expect(find.text('Refunded'), findsOneWidget);
+    expect(find.text('Sep 4, 2026 · Regular'), findsOneWidget);
+    expect(find.text('Refunded'), findsNothing);
     await tester.tap(find.text('completed-card'));
     await tester.pumpAndSettle();
     expect(find.text('detail completed-uuid'), findsOneWidget);
@@ -255,7 +254,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(PelinesLocationContext), findsOneWidget);
     expect(find.text('Cancelled'), findsOneWidget);
-    expect(find.text('Paid'), findsOneWidget);
+    expect(find.text('Paid'), findsNothing);
+    expect(repository.custom!.single.paymentStatus, PaymentStatus.paid);
     expect(find.textContaining('Cancelled at'), findsNothing);
     expect(find.byKey(const Key('order-primary-action')), findsNothing);
     expect(find.byKey(const Key('cancel-order-action')), findsNothing);
@@ -303,6 +303,8 @@ OrderSummary _order(
   FulfillmentType fulfillment = FulfillmentType.pickup,
   PaymentStatus payment = PaymentStatus.paid,
   OrderType type = OrderType.online,
+  String contactName = 'Customer',
+  int totalCents = 1100,
 }) => OrderSummary(
   id: id ?? '$number-id',
   orderNumber: number,
@@ -312,12 +314,12 @@ OrderSummary _order(
   rawStatus: status.name,
   paymentStatus: payment,
   fulfillmentType: fulfillment,
-  contactName: 'Customer',
+  contactName: contactName,
   createdAt: DateTime.parse(createdAt),
   scheduledFor: scheduledFor == null ? null : DateTime.parse(scheduledFor),
   deliveredAt: deliveredAt == null ? null : DateTime.parse(deliveredAt),
   itemCount: 2,
-  totalCents: 1100,
+  totalCents: totalCents,
 );
 
 Location _location(String id) => Location(
@@ -815,7 +817,7 @@ void block5Tests() {
         (1400.0, 1.0),
       ]) {
         testWidgets(
-          '${kind.name} compact/table layout ${size.$1}/${size.$2}/$language',
+          '${kind.name} shared compact layout ${size.$1}/${size.$2}/$language',
           (tester) async {
             final repo = _HistoryRepository(custom: _loadedRows(5, kind));
             await _mountHistory(
@@ -871,60 +873,119 @@ void block5Tests() {
               tester,
               find.byKey(const Key('history-showing-count')),
             );
-            final table = size.$1 - 32 >= 840 * size.$2;
-            expect(
-              find.byType(DataTable),
-              table ? findsOneWidget : findsNothing,
-            );
+            expect(find.byType(DataTable), findsNothing);
             expect(
               find.byKey(const Key('history-shared-surface')),
-              table ? findsNothing : findsOneWidget,
+              findsOneWidget,
             );
-            expect(
-              find.byIcon(
+            final statusIcon = kind == HistoricalOrdersKind.completed
+                ? Icons.check_circle
+                : Icons.cancel;
+            expect(find.byIcon(statusIcon), findsNWidgets(5));
+            for (final icon in tester.widgetList<Icon>(
+              find.byIcon(statusIcon),
+            )) {
+              expect(
+                icon.color,
                 kind == HistoricalOrdersKind.completed
-                    ? Icons.check_circle_outline
-                    : Icons.cancel_outlined,
-              ),
-              findsNWidgets(5),
-            );
-            final badges = tester.widgetList<PelinesStateBadge>(
-              find.byType(PelinesStateBadge),
-            );
-            final status = badges.where(
-              (b) =>
-                  b.icon ==
-                  (kind == HistoricalOrdersKind.completed
-                      ? Icons.check_circle_outline
-                      : Icons.cancel_outlined),
-            );
-            expect(
-              status.every(
-                (b) =>
-                    b.foreground ==
-                    (kind == HistoricalOrdersKind.completed
-                        ? PelinesColors.successForeground
-                        : PelinesColors.destructive),
-              ),
-              isTrue,
-            );
-            if (kind == HistoricalOrdersKind.cancelled) {
-              expect(
-                find.byKey(const ValueKey('history-refund-warning-A-row4-id')),
-                findsOneWidget,
-              );
-              expect(
-                find.text(language == 'es' ? 'Reembolsado' : 'Refunded'),
-                findsNWidgets(2),
+                    ? PelinesColors.successForeground
+                    : PelinesColors.destructive,
               );
             }
-            await _historyTap(
-              tester,
-              table ? 'history-view-A-row4-id' : 'history-row-A-row4-id',
+            expect(find.byIcon(Icons.chevron_right), findsNWidgets(5));
+            expect(
+              find.text(language == 'es' ? 'Reembolsado' : 'Refunded'),
+              findsNothing,
             );
+            await _historyTap(tester, 'history-row-A-row4-id');
             expect(find.text('detail A-row4-id'), findsOneWidget);
             expect(repo.calls.length, 1);
             expect(tester.takeException(), isNull);
+          },
+        );
+      }
+    }
+  }
+
+  for (final kind in HistoricalOrdersKind.values) {
+    for (final language in ['en', 'es']) {
+      for (final size in [(320.0, 2.0), (390.0, 1.0), (1400.0, 1.0)]) {
+        testWidgets(
+          'compact history real values and long content $kind/$language/$size',
+          (tester) async {
+            final repo = _HistoryRepository(
+              custom: [
+                _order(
+                  'TUA-LONG-ORDER-123456789',
+                  status: kind == HistoricalOrdersKind.completed
+                      ? OrderStatus.delivered
+                      : OrderStatus.cancelled,
+                  contactName:
+                      'Alexandra María Customer with a very long family name',
+                  totalCents: 12345678901,
+                  type: OrderType.catering,
+                  createdAt: '2026-11-01T06:30:00Z',
+                  deliveredAt: '2026-11-02T08:30:00Z',
+                ),
+              ],
+            );
+            await _mountHistory(
+              tester,
+              repo,
+              kind,
+              width: size.$1,
+              scale: size.$2,
+              language: language,
+            );
+            final row = find.byKey(
+              const ValueKey('history-row-TUA-LONG-ORDER-123456789-id'),
+            );
+            await _historyReveal(tester, row);
+            expect(find.text(repo.custom!.single.contactName), findsOneWidget);
+            final date = kind == HistoricalOrdersKind.completed
+                ? DateTime(2026, 11, 2)
+                : DateTime(2026, 10, 31);
+            expect(
+              find.text(
+                '${DateFormat.yMMMd(language).format(date)} · Catering',
+              ),
+              findsOneWidget,
+            );
+            final amountFinder = find.byKey(
+              const ValueKey('history-amount-TUA-LONG-ORDER-123456789-id'),
+            );
+            final amount = tester.widget<Text>(amountFinder);
+            expect(amount.data, money(12345678901));
+            expect(amount.maxLines, 1);
+            expect(amount.overflow, isNot(TextOverflow.ellipsis));
+            expect(
+              find.ancestor(of: amountFinder, matching: find.byType(FittedBox)),
+              findsOneWidget,
+            );
+            expect(
+              find.descendant(
+                of: row,
+                matching: find.byIcon(Icons.chevron_right),
+              ),
+              findsOneWidget,
+            );
+            if (size.$2 == 1) {
+              final numberRect = tester.getRect(
+                find.byKey(
+                  const ValueKey('history-number-TUA-LONG-ORDER-123456789-id'),
+                ),
+              );
+              final amountRect = tester.getRect(amountFinder);
+              expect(amountRect.left, greaterThan(numberRect.right));
+            }
+            expect(tester.takeException(), isNull);
+            await tester.tap(row);
+            await tester.pumpAndSettle();
+            expect(
+              find.text('detail TUA-LONG-ORDER-123456789-id'),
+              findsOneWidget,
+            );
+            expect(repo.calls, hasLength(1));
           },
         );
       }
@@ -966,7 +1027,7 @@ void block5Tests() {
   );
 
   testWidgets(
-    'cancelled preserves all financial states and warns only for paid',
+    'cancelled compact rows preserve financial states in data without implying refunds',
     (tester) async {
       final repo = _HistoryRepository(
         custom: [
@@ -980,15 +1041,15 @@ void block5Tests() {
       );
       await _mountHistory(tester, repo, HistoricalOrdersKind.cancelled);
       for (final payment in PaymentStatus.values) {
-        expect(find.text(paymentStatusLabel(payment)), findsOneWidget);
+        expect(find.text(paymentStatusLabel(payment)), findsNothing);
+        expect(
+          repo.custom!.where((o) => o.paymentStatus == payment),
+          hasLength(1),
+        );
       }
       expect(
-        find.byKey(const ValueKey('history-refund-warning-paid-id')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('history-refund-warning-refunded-id')),
-        findsNothing,
+        find.byIcon(Icons.cancel),
+        findsNWidgets(PaymentStatus.values.length),
       );
       expect(find.byKey(const Key('order-primary-action')), findsNothing);
       expect(find.byKey(const Key('cancel-order-action')), findsNothing);

@@ -156,7 +156,7 @@ class _HistoricalOrdersScreenState
                     context,
                     widget.kind == HistoricalOrdersKind.completed
                         ? 'Picked up or delivered orders. Filtered by completion date, with operational date as fallback.'
-                        : 'Cancelled orders. Filtered by scheduled time or placed date; payment status is shown separately.',
+                        : 'Cancelled orders. Filtered by scheduled time or placed date.',
                   ),
                   style: const TextStyle(color: PelinesColors.textSecondary),
                 ),
