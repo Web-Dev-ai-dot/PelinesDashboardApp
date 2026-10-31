@@ -1,4 +1,4 @@
-# Manual signed IPA build only. No upload, automatic triggers, ASC API, or publishing block.
+# Manual build and Apple upload. No automatic triggers, ASC API, or publishing block.
 # See docs/ios-testflight-setup.md before the first manual run.
 workflows:
   ios-staging-build:
@@ -70,6 +70,25 @@ workflows:
           fi
           test -f "${ipa_files[0]}"
           test -s "${ipa_files[0]}"
+      - name: Validate and upload IPA to App Store Connect
+        script: |
+          set +x
+          set -euo pipefail
+          cd "$CM_BUILD_DIR"
+          : "${APPLE_ID:?APPLE_ID is required in apple_upload}"
+          : "${APPLE_APP_SPECIFIC_PASSWORD:?APPLE_APP_SPECIFIC_PASSWORD is required in apple_upload}"
+          shopt -s nullglob
+          ipa_files=(build/ios/ipa/*.ipa)
+          if (( ${#ipa_files[@]} != 1 )); then
+            echo "Expected exactly one IPA in build/ios/ipa; found ${#ipa_files[@]}." >&2
+            exit 1
+          fi
+          test -f "${ipa_files[0]}"
+          test -s "${ipa_files[0]}"
+          xcrun altool --validate-app -f "${ipa_files[0]}" -t ios \
+            -u "$APPLE_ID" -p "$APPLE_APP_SPECIFIC_PASSWORD"
+          xcrun altool --upload-app -f "${ipa_files[0]}" -t ios \
+            -u "$APPLE_ID" -p "$APPLE_APP_SPECIFIC_PASSWORD"
     artifacts:
       - build/ios/ipa/*.ipa
-    # The owner downloads the signed IPA and manages distribution manually.
+    # Upload runs after validation on manual Start build; no TestFlight distribution step.
