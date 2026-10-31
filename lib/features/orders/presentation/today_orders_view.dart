@@ -59,6 +59,11 @@ class TodayOrdersViewState extends ConsumerState<TodayOrdersView> {
             )..sort(compareOperationalOrders);
             return TodayOrdersState(
               orders: orders,
+              fullLocationSnapshot:
+                  state.snapshotLocationId == widget.location.id
+                  ? state.fullLocationSnapshot
+                  : null,
+              snapshotLocationId: widget.location.id,
               isRefreshing: state.isRefreshing,
               refreshError: state.refreshError,
             );

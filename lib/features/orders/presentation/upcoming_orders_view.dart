@@ -180,26 +180,27 @@ class _UpcomingOrdersViewState extends State<UpcomingOrdersView> {
                 ),
               ],
               data: (state) {
-                final visible =
-                    state.orders
-                        .where(
-                          (order) =>
-                              (_type == null || order.orderType == _type) &&
-                              _filters.matches(order) &&
-                              (query.isEmpty ||
-                                  [
-                                    order.orderNumber,
-                                    order.id,
-                                    order.contactName,
-                                    order.eventName ?? '',
-                                    tr(
-                                      context,
-                                      orderTypeLabel(order.orderType),
-                                    ),
-                                  ].join(' ').toLowerCase().contains(query)),
-                        )
-                        .toList()
-                      ..sort(compareOperationalOrders);
+                bool matches(OrderSummary order) =>
+                    (_type == null || order.orderType == _type) &&
+                    _filters.matches(order) &&
+                    (query.isEmpty ||
+                        [
+                          order.orderNumber,
+                          order.id,
+                          order.contactName,
+                          order.eventName ?? '',
+                          tr(context, orderTypeLabel(order.orderType)),
+                        ].join(' ').toLowerCase().contains(query));
+                final visible = state.orders.where(matches).toList()
+                  ..sort(compareOperationalOrders);
+                final locationId = state.snapshotLocationId;
+                final pickedUp = locationId != null
+                    ? filterPickedUpOrders(
+                        state.fullLocationSnapshot ?? const [],
+                        locationId: locationId,
+                        dateFilter: OrdersDateFilter.upcoming,
+                      ).where(matches).toList()
+                    : <OrderSummary>[];
                 return <Widget>[
                   if (state.isRefreshing)
                     const SliverToBoxAdapter(
@@ -224,8 +225,8 @@ class _UpcomingOrdersViewState extends State<UpcomingOrdersView> {
                     child: SizedBox(
                       height: math.max(480, constraints.maxHeight * .8),
                       child: TodoStatusBoard(
-                        paged: false,
                         orders: visible,
+                        pickedUpOrders: pickedUp,
                         showChannel: true,
                       ),
                     ),

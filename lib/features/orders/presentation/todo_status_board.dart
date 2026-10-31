@@ -96,7 +96,7 @@ class _TodoPagePhysics extends ScrollPhysics {
   bool get allowImplicitScrolling => false;
 }
 
-/// Four active states and, for To Do, a terminal pickup projection.
+/// Four active states and a terminal pickup projection from the existing snapshot.
 class TodoStatusBoard extends StatefulWidget {
   const TodoStatusBoard({
     required this.orders,
@@ -121,7 +121,8 @@ class _TodoStatusBoardState extends State<TodoStatusBoard> {
   double _stride = 332;
   double _tabExtent = 1;
   int _boardStart = 0, _tabStart = 0;
-  bool _single = false, _layoutPending = false;
+  bool _single = false, _paired = false, _layoutPending = false;
+  bool get _snapColumns => _single || _paired;
   bool _boardGesture = false;
   int _layoutVersion = 0, _navigationVersion = 0;
   List<List<int>> _groups = [];
@@ -135,7 +136,7 @@ class _TodoStatusBoardState extends State<TodoStatusBoard> {
   }
 
   void _trackScroll() {
-    if (_single || _layoutPending) return;
+    if (_snapColumns || _layoutPending) return;
     final index = (_scroll.offset / _stride).round().clamp(0, _lastIndex);
     if (index != _selected) {
       setState(() => _selected = index);
@@ -181,7 +182,9 @@ class _TodoStatusBoardState extends State<TodoStatusBoard> {
   }
 
   bool _boardNotification(ScrollNotification notification) {
-    if (notification.depth != 0 || !_single || _layoutPending) return false;
+    if (notification.depth != 0 || !_snapColumns || _layoutPending) {
+      return false;
+    }
     if (notification is ScrollStartNotification) {
       _boardGesture = notification.dragDetails != null;
       if (_boardGesture) {
@@ -210,17 +213,24 @@ class _TodoStatusBoardState extends State<TodoStatusBoard> {
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
       final single = widget.paged && constraints.maxWidth < 608;
+      final paired =
+          widget.paged &&
+          !single &&
+          constraints.maxWidth < PelinesLayout.dashboardMaxWidth;
       final viewport = constraints.maxWidth - 32;
       final width = !widget.paged
           ? viewport.clamp(280.0, 340.0)
           : single
           ? viewport
+          : paired
+          ? (viewport - 16) / 2
           : ((constraints.maxWidth - 48) / 2).clamp(280.0, 340.0);
       final stride = single ? width : width + 16;
-      if (_single != single || _stride != stride) {
+      if (_single != single || _paired != paired || _stride != stride) {
         // Ignore completion callbacks for animations targeting the old width.
         ++_navigationVersion;
         _single = single;
+        _paired = paired;
         _stride = stride;
         _layoutPending = true;
         final version = ++_layoutVersion;
@@ -277,13 +287,26 @@ class _TodoStatusBoardState extends State<TodoStatusBoard> {
       final groups = <List<int>>[];
       final threeWidth = (viewport - 16) / 3;
       final fiveWidth = (viewport - 32) / 5;
-      final slots =
-          !single && measured.every((width) => width + 16 <= fiveWidth)
+      final slots = single
+          ? 3
+          : paired
+          ? 5
+          : !single && measured.every((width) => width + 16 <= fiveWidth)
           ? 5
           : measured.every((width) => width + 16 <= threeWidth)
           ? 3
           : 2;
       final equalWidth = (viewport - 8 * (slots - 1)) / slots;
+      var pillHeight = PelinesLayout.touchTarget;
+      for (final label in labels) {
+        final painter = TextPainter(
+          text: TextSpan(text: label, style: textStyle),
+          textDirection: Directionality.of(context),
+          textScaler: MediaQuery.textScalerOf(context),
+        )..layout(maxWidth: (equalWidth - 20).clamp(1.0, double.infinity));
+        if (painter.height + 16 > pillHeight) pillHeight = painter.height + 16;
+        painter.dispose();
+      }
       final widths = List<double>.filled(statuses.length, 0);
       for (var start = 0; start < statuses.length; start += slots) {
         final end = (start + slots).clamp(0, statuses.length);
@@ -353,6 +376,7 @@ class _TodoStatusBoardState extends State<TodoStatusBoard> {
                                 ),
                                 child: SizedBox(
                                   width: widget.paged ? widths[index] : null,
+                                  height: widget.paged ? pillHeight : null,
                                   child: Semantics(
                                     selected: _selected == index,
                                     child: OutlinedButton(
@@ -415,7 +439,7 @@ class _TodoStatusBoardState extends State<TodoStatusBoard> {
           ),
           Expanded(
             child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: single ? 16 : 0),
+              padding: EdgeInsets.symmetric(horizontal: _snapColumns ? 16 : 0),
               child: NotificationListener<ScrollNotification>(
                 onNotification: _boardNotification,
                 child: Scrollbar(
@@ -425,7 +449,7 @@ class _TodoStatusBoardState extends State<TodoStatusBoard> {
                   child: SingleChildScrollView(
                     key: const Key('todo-board-scroll'),
                     controller: _scroll,
-                    physics: single
+                    physics: _snapColumns
                         ? _TodoPagePhysics(
                             extent: stride,
                             startPage: () => _boardStart,
@@ -435,60 +459,66 @@ class _TodoStatusBoardState extends State<TodoStatusBoard> {
                         : null,
                     scrollDirection: Axis.horizontal,
                     padding: EdgeInsets.fromLTRB(
-                      single ? 0 : 16,
+                      _snapColumns ? 0 : 16,
                       0,
-                      single ? 0 : 16,
+                      _snapColumns ? 0 : 16,
                       16,
                     ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         for (final status in statuses)
-                          Container(
-                            key: Key('todo-column-${status.name}'),
-                            width: width,
-                            margin: EdgeInsets.only(right: single ? 0 : 16),
-                            decoration: BoxDecoration(
-                              color: PelinesColors.mutedSurface,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: PelinesColors.border),
-                            ),
-                            child: ListView(
-                              primary: false,
-                              key: PageStorageKey('todo-list-${status.name}'),
-                              padding: const EdgeInsets.all(12),
-                              children: [
-                                Semantics(
-                                  header: true,
-                                  child: PelinesStateBadge(
-                                    key: ValueKey(
-                                      'todo-column-heading-${status.name}',
-                                    ),
-                                    foreground: _boardColors(status).$1,
-                                    background: _boardColors(status).$2,
-                                    dot: true,
-                                    label:
-                                        '${tr(context, status == OrderStatus.pending ? 'Waiting Approval' : todoStatusLabel(status)).toUpperCase()} · ${grouped[status]!.length}',
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
-                                if (grouped[status]!.isEmpty)
-                                  Padding(
-                                    padding: const EdgeInsets.all(12),
-                                    child: Text(
-                                      tr(context, 'No active orders'),
+                          Padding(
+                            padding: EdgeInsets.only(right: paired ? 16 : 0),
+                            child: Container(
+                              key: Key('todo-column-${status.name}'),
+                              width: width,
+                              margin: EdgeInsets.only(
+                                right: single || paired ? 0 : 16,
+                              ),
+                              decoration: BoxDecoration(
+                                color: PelinesColors.mutedSurface,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: PelinesColors.border),
+                              ),
+                              child: ListView(
+                                primary: false,
+                                key: PageStorageKey('todo-list-${status.name}'),
+                                padding: const EdgeInsets.all(12),
+                                children: [
+                                  Semantics(
+                                    header: true,
+                                    child: PelinesStateBadge(
+                                      key: ValueKey(
+                                        'todo-column-heading-${status.name}',
+                                      ),
+                                      foreground: _boardColors(status).$1,
+                                      background: _boardColors(status).$2,
+                                      dot: true,
+                                      label:
+                                          '${tr(context, status == OrderStatus.pending ? 'Waiting Approval' : todoStatusLabel(status)).toUpperCase()} · ${grouped[status]!.length}',
                                     ),
                                   ),
-                                for (final order in grouped[status]!)
-                                  OrderPreviewCard(
-                                    key: ValueKey(order.id),
-                                    order: order,
-                                    statusBoard: true,
-                                    showChannel: widget.showChannel,
-                                  ),
-                              ],
+                                  const SizedBox(height: 16),
+                                  if (grouped[status]!.isEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.all(12),
+                                      child: Text(
+                                        tr(context, 'No active orders'),
+                                      ),
+                                    ),
+                                  for (final order in grouped[status]!)
+                                    OrderPreviewCard(
+                                      key: ValueKey(order.id),
+                                      order: order,
+                                      statusBoard: true,
+                                      showChannel: widget.showChannel,
+                                    ),
+                                ],
+                              ),
                             ),
                           ),
+                        if (paired) SizedBox(width: width),
                       ],
                     ),
                   ),
@@ -500,14 +530,13 @@ class _TodoStatusBoardState extends State<TodoStatusBoard> {
       );
       // Enlarged headers may leave less room than the status labels need.
       // Keep the full labels and column scroll reachable without a Flex overflow.
-      return widget.paged &&
-              constraints.maxHeight < PelinesLayout.touchTarget * 5
+      final minimumHeight = (pillHeight + 16 + PelinesLayout.touchTarget * 3)
+          .clamp(PelinesLayout.touchTarget * 5, double.infinity)
+          .toDouble();
+      return widget.paged && constraints.maxHeight < minimumHeight
           ? SingleChildScrollView(
               primary: false,
-              child: SizedBox(
-                height: PelinesLayout.touchTarget * 5,
-                child: board,
-              ),
+              child: SizedBox(height: minimumHeight, child: board),
             )
           : board;
     },

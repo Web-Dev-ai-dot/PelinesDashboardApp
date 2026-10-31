@@ -150,6 +150,54 @@ Future<void> _mount(
 
 void main() {
   testWidgets(
+    'Upcoming Picked Up uses real snapshot, type/search/status filters and Refresh',
+    (tester) async {
+      final repo = _Repository();
+      repo.rows['picked'] = {
+        ...repo.rows['ready']!,
+        'id': 'picked',
+        'status': 'delivered',
+        'orderNumber': 'PICKED-REAL',
+        'contactName': 'Collected customer',
+      };
+      repo.rows['delivery'] = {
+        ...repo.rows['picked']!,
+        'id': 'delivery',
+        'fulfillmentType': 'delivery',
+      };
+      await _mount(tester, repo, width: 800);
+      expect(find.text('Picked Up · 1'), findsOneWidget);
+      final pickedTab = find.byKey(const Key('todo-tab-delivered'));
+      await tester.ensureVisible(pickedTab);
+      await tester.tap(pickedTab);
+      await tester.pumpAndSettle();
+      expect(find.text('PICKED-REAL').hitTestable(), findsOneWidget);
+      final calls = repo.listCalls;
+      await tester.enterText(find.byType(TextField), 'Collected customer');
+      await tester.pumpAndSettle();
+      expect(find.text('Picked Up · 1'), findsOneWidget);
+      expect(find.text('Ready · 0'), findsOneWidget);
+      await upcomingType(tester, 'catering');
+      expect(find.text('Picked Up · 0'), findsOneWidget);
+      await upcomingType(tester, 'all');
+      expect(find.text('Picked Up · 1'), findsOneWidget);
+      await upcomingTap(tester, 'upcoming-filters');
+      await upcomingTap(tester, 'upcoming-status-delivered');
+      await upcomingTap(tester, 'upcoming-sheet-apply');
+      expect(find.text('Picked Up · 1'), findsOneWidget);
+      repo.rows.remove('picked');
+      await tester
+          .widget<RefreshIndicator>(find.byType(RefreshIndicator))
+          .onRefresh();
+      await tester.pumpAndSettle();
+      expect(find.text('Picked Up · 0'), findsOneWidget);
+      expect(repo.listCalls, calls + 1);
+      expect(repo.patches, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'Search type date status compose; refresh and unchanged Apply preserve controls',
     (tester) async {
       final repo = _Repository();

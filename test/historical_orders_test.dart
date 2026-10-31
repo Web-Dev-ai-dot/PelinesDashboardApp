@@ -11,6 +11,7 @@ import 'package:pelines_admin_app/app/theme/app_theme.dart';
 import 'package:pelines_admin_app/app/theme/pelines_tokens.dart';
 import 'package:pelines_admin_app/core/time/pelines_time.dart';
 import 'package:pelines_admin_app/features/orders/presentation/historical_date_range.dart';
+import 'package:pelines_admin_app/features/orders/presentation/upcoming_date_range.dart';
 import 'package:pelines_admin_app/features/locations/presentation/pelines_location_context.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -496,7 +497,8 @@ Future<void> _historyTap(WidgetTester tester, String key) async {
   await tester.pumpAndSettle();
   if (find.byType(CustomScrollView).evaluate().isNotEmpty &&
       find.byKey(const Key('history-range-sheet')).evaluate().isEmpty &&
-      find.byType(DatePickerDialog).evaluate().isEmpty) {
+      find.byType(DatePickerDialog).evaluate().isEmpty &&
+      find.byKey(const Key('history-range-calendar')).evaluate().isEmpty) {
     await _historyReveal(
       tester,
       find.byKey(const Key('history-showing-count')),
@@ -504,23 +506,51 @@ Future<void> _historyTap(WidgetTester tester, String key) async {
   }
 }
 
-Future<void> _historyPick(
+Future<void> _historyCalendarDay(WidgetTester tester, DateTime date) async {
+  var calendar = tester.widget<UpcomingRangeCalendar>(
+    find.byType(UpcomingRangeCalendar),
+  );
+  var month = DateTime(calendar.initialDate.year, calendar.initialDate.month);
+  if (month.year != date.year) {
+    await _historyTap(tester, 'upcoming-range-month');
+    tester.widget<YearPicker>(find.byType(YearPicker)).onChanged(date);
+    await tester.pumpAndSettle();
+    month = DateTime(date.year, month.month);
+  }
+  final difference = (date.year - month.year) * 12 + date.month - month.month;
+  for (var i = 0; i < difference.abs(); i++) {
+    await _historyTap(
+      tester,
+      difference > 0 ? 'upcoming-range-next' : 'upcoming-range-previous',
+    );
+  }
+  await _historyTap(
+    tester,
+    'upcoming-range-day-${date.year}-${date.month}-${date.day}',
+  );
+}
+
+Future<void> _historyPickRange(
   WidgetTester tester,
-  String bound,
-  DateTime date,
+  DateTime? from,
+  DateTime? to,
 ) async {
-  if (find.byKey(Key('history-$bound')).evaluate().isEmpty) {
+  if (find.byKey(const Key('history-custom-range')).evaluate().isEmpty) {
     await _historyTap(tester, 'history-preset-Custom range');
   }
-  await _historyTap(tester, 'history-$bound');
-  await tester.tap(find.byIcon(Icons.edit_outlined));
-  await tester.pumpAndSettle();
-  await tester.enterText(
-    find.byType(TextField).last,
-    DateFormat.yMd('en').format(date),
-  );
-  await tester.tap(find.text('OK'));
-  await tester.pumpAndSettle();
+  await _historyTap(tester, 'history-custom-range');
+  for (final entry in [
+    ('history-calendar-no-start', from == null),
+    ('history-calendar-no-end', to == null),
+  ]) {
+    if (tester.widget<SwitchListTile>(find.byKey(Key(entry.$1))).value !=
+        entry.$2) {
+      await _historyTap(tester, entry.$1);
+    }
+  }
+  if (from != null) await _historyCalendarDay(tester, from);
+  if (to != null) await _historyCalendarDay(tester, to);
+  await _historyTap(tester, 'history-calendar-confirm');
 }
 
 void block5Tests() {
@@ -626,8 +656,9 @@ void block5Tests() {
           await tester.tap(find.text('Open range'));
           await tester.pumpAndSettle();
           await _historyTap(tester, 'history-preset-Custom range');
-          expect(find.byKey(const Key('history-from')), findsOneWidget);
-          expect(find.byKey(const Key('history-to')), findsOneWidget);
+          expect(find.byKey(const Key('history-custom-range')), findsOneWidget);
+          expect(find.byKey(const Key('history-from')), findsNothing);
+          expect(find.byKey(const Key('history-to')), findsNothing);
           await _historyTap(tester, 'history-range-reset');
           await _historyTap(tester, 'history-range-apply');
           expect(applied, (null, null));
@@ -728,11 +759,11 @@ void block5Tests() {
     await _mountHistory(tester, repo, HistoricalOrdersKind.completed);
     await _historyTap(tester, 'history-load-more');
     await _historyTap(tester, 'history-date-range');
-    await _historyPick(tester, 'from', DateTime(2026, 11, 5));
-    await _historyPick(tester, 'to', DateTime(2026, 11, 2));
-    await _historyTap(tester, 'history-range-apply');
-    expect(find.text('From must be on or before To.'), findsOneWidget);
-    await _historyPick(tester, 'to', DateTime(2026, 11, 7));
+    await _historyPickRange(
+      tester,
+      DateTime(2026, 11, 5),
+      DateTime(2026, 11, 7),
+    );
     await _historyTap(tester, 'history-range-apply');
     expect(find.text('Showing 3 of 3 loaded orders'), findsOneWidget);
     await _historyReveal(tester, find.byKey(const Key('history-loaded-count')));
@@ -749,6 +780,203 @@ void block5Tests() {
     expect(repo.calls.length, 1);
     expect(tester.takeException(), isNull);
   });
+
+  for (final kind in HistoricalOrdersKind.values) {
+    for (final language in ['en', 'es']) {
+      for (final size in [(320.0, 2.0), (390.0, 1.0), (1000.0, 2.0)]) {
+        testWidgets(
+          'single history range selects, cancels, applies and resets $kind/$language/$size',
+          (tester) async {
+            final repo = _HistoryRepository(custom: _loadedRows(7, kind));
+            await _mountHistory(
+              tester,
+              repo,
+              kind,
+              width: size.$1,
+              scale: size.$2,
+              language: language,
+            );
+            await _historyTap(tester, 'history-date-range');
+            await _historyTap(tester, 'history-preset-Custom range');
+            final field = find.byKey(const Key('history-custom-range'));
+            expect(field, findsOneWidget);
+            expect(find.byKey(const Key('history-from')), findsNothing);
+            expect(find.byKey(const Key('history-to')), findsNothing);
+            final sheet = tester.getRect(
+              find.byKey(const Key('history-range-sheet')),
+            );
+            expect(tester.getRect(field).left, closeTo(sheet.left + 16, 1));
+            expect(tester.getRect(field).right, closeTo(sheet.right - 16, 1));
+            final style = tester.widget<OutlinedButton>(field).style!;
+            expect(style.backgroundColor!.resolve({}), PelinesColors.card);
+            expect(style.side!.resolve({})!.color, PelinesColors.border);
+            expect(style.shape!.resolve({}), isA<StadiumBorder>());
+            await _historyTap(tester, 'history-custom-range');
+            final calendar = tester.widget<UpcomingRangeCalendar>(
+              find.byType(UpcomingRangeCalendar),
+            );
+            expect(calendar.firstDate, DateTime(1));
+            expect(calendar.lastDate, DateTime(9999, 12, 31));
+            await _historyCalendarDay(tester, DateTime(2026, 11, 2));
+            expect(
+              tester
+                  .widget<FilledButton>(
+                    find.byKey(const Key('history-calendar-confirm')),
+                  )
+                  .onPressed,
+              isNull,
+            );
+            await _historyCalendarDay(tester, DateTime(2026, 11, 5));
+            expect(
+              find.byKey(const ValueKey('upcoming-range-band-3')),
+              findsOneWidget,
+            );
+            expect(
+              find.byKey(const ValueKey('upcoming-range-band-4')),
+              findsOneWidget,
+            );
+            await _historyTap(tester, 'history-calendar-cancel');
+            expect(
+              find.descendant(
+                of: field,
+                matching: find.text(
+                  language == 'es'
+                      ? 'Seleccionar rango de fechas'
+                      : 'Select date range',
+                ),
+              ),
+              findsOneWidget,
+            );
+            await _historyPickRange(
+              tester,
+              DateTime(2026, 11, 2),
+              DateTime(2026, 11, 5),
+            );
+            final format = DateFormat.yMMMd(language);
+            expect(
+              find.descendant(
+                of: field,
+                matching: find.text(
+                  '${format.format(DateTime(2026, 11, 2))} – ${format.format(DateTime(2026, 11, 5))}',
+                ),
+              ),
+              findsOneWidget,
+            );
+            await _historyTap(tester, 'history-range-cancel');
+            await _historyReveal(
+              tester,
+              find.byKey(const Key('history-loaded-count')),
+            );
+            expect(
+              find.text(
+                language == 'es' ? 'Pedidos cargados: 7' : 'Loaded orders: 7',
+              ),
+              findsOneWidget,
+            );
+            await _historyTap(tester, 'history-date-range');
+            await _historyPickRange(
+              tester,
+              DateTime(2026, 11, 2),
+              DateTime(2026, 11, 5),
+            );
+            await _historyTap(tester, 'history-range-apply');
+            await _historyReveal(
+              tester,
+              find.byKey(const Key('history-loaded-count')),
+            );
+            expect(
+              find.text(
+                language == 'es' ? 'Pedidos cargados: 4' : 'Loaded orders: 4',
+              ),
+              findsOneWidget,
+            );
+            await _historyTap(tester, 'history-date-range');
+            await _historyTap(tester, 'history-range-reset');
+            await _historyTap(tester, 'history-range-cancel');
+            await _historyReveal(
+              tester,
+              find.byKey(const Key('history-loaded-count')),
+            );
+            expect(
+              find.text(
+                language == 'es' ? 'Pedidos cargados: 4' : 'Loaded orders: 4',
+              ),
+              findsOneWidget,
+            );
+            await _historyTap(tester, 'history-date-range');
+            await _historyTap(tester, 'history-range-reset');
+            await _historyTap(tester, 'history-range-apply');
+            await _historyTap(tester, 'history-load-more');
+            expect(
+              find.byKey(const ValueKey('history-row-A-row0-id')),
+              findsOneWidget,
+            );
+            expect(
+              find.byKey(const ValueKey('history-row-A-row6-id')),
+              findsOneWidget,
+            );
+            expect(repo.calls, hasLength(1));
+            expect(tester.takeException(), isNull);
+          },
+        );
+      }
+    }
+  }
+  for (final bounds in [
+    (null, DateTime(2026, 11, 3), 3),
+    (DateTime(2026, 11, 3), null, 5),
+  ]) {
+    testWidgets('single history field retains optional bounds $bounds', (
+      tester,
+    ) async {
+      final repo = _HistoryRepository(
+        custom: _loadedRows(7, HistoricalOrdersKind.completed),
+      );
+      await _mountHistory(tester, repo, HistoricalOrdersKind.completed);
+      await _historyTap(tester, 'history-date-range');
+      await _historyPickRange(tester, bounds.$1, bounds.$2);
+      await _historyTap(tester, 'history-range-apply');
+      await _historyReveal(
+        tester,
+        find.byKey(const Key('history-loaded-count')),
+      );
+      expect(find.text('Loaded orders: ${bounds.$3}'), findsOneWidget);
+      expect(repo.calls, hasLength(1));
+      expect(tester.takeException(), isNull);
+    });
+  }
+  testWidgets(
+    'history Apply rejects an invalid initial range without applying',
+    (tester) async {
+      (DateTime?, DateTime?)? applied;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: TextButton(
+                onPressed: () async {
+                  applied = await showHistoricalDateRange(
+                    context,
+                    DateTime.utc(2026, 11, 5),
+                    DateTime.utc(2026, 11, 2),
+                  );
+                },
+                child: const Text('Open range'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('Open range'));
+      await tester.pumpAndSettle();
+      await _historyTap(tester, 'history-range-apply');
+      expect(applied, isNull);
+      expect(find.text('From must be on or before To.'), findsOneWidget);
+      expect(find.byKey(const Key('history-range-sheet')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   test('range uses inclusive Pacific days across both DST changes and real timestamps', () {
     for (final bounds in [
@@ -1095,7 +1323,7 @@ void block5Tests() {
     expect(find.text('Showing 5 of 7 loaded orders'), findsOneWidget);
     expect(find.byKey(const ValueKey('history-row-B-row6-id')), findsNothing);
     await _historyTap(tester, 'history-date-range');
-    await _historyPick(tester, 'from', DateTime(2030, 1, 1));
+    await _historyPickRange(tester, DateTime(2030, 1, 1), null);
     await _historyTap(tester, 'history-range-apply');
     expect(find.text('No loaded orders match these filters.'), findsOneWidget);
     expect(find.text('Showing 0 of 0 loaded orders'), findsOneWidget);

@@ -6,6 +6,7 @@ import '../../../app/theme/pelines_tokens.dart';
 import '../../../core/time/pelines_time.dart';
 import '../models/order_models.dart';
 import '../models/orders_date_filter.dart';
+import 'upcoming_date_range.dart';
 
 /// Local projection over loaded history. Bounds are Pacific calendar coordinates.
 List<OrderSummary> filterHistoricalDateRange(
@@ -62,23 +63,15 @@ class _HistoryRangeSheetState extends State<_HistoryRangeSheet> {
     }
   }
 
-  Future<void> _pick(bool from) async {
-    final today = pacificDate(PelinesTime.now());
-    final picked = await showDatePicker(
+  Future<void> _pickRange() async {
+    final picked = await showDialog<(DateTime?, DateTime?)>(
       context: context,
-      currentDate: today,
-      initialDate: (from ? _from : _to) ?? today,
-      firstDate: DateTime(1),
-      lastDate: DateTime(9999, 12, 31),
+      builder: (_) => _HistoryRangeCalendar(from: _from, to: _to),
     );
     if (picked == null || !mounted) return;
     setState(() {
-      final day = DateTime.utc(picked.year, picked.month, picked.day);
-      if (from) {
-        _from = day;
-      } else {
-        _to = day;
-      }
+      _from = picked.$1;
+      _to = picked.$2;
       _invalid = false;
     });
   }
@@ -149,23 +142,34 @@ class _HistoryRangeSheetState extends State<_HistoryRangeSheet> {
               ),
               if (_preset == null) Text(tr(context, 'All loaded')),
               if (_preset == 'Custom range')
-                for (final from in [true, false])
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: OutlinedButton.icon(
-                      key: Key(from ? 'history-from' : 'history-to'),
-                      onPressed: () => _pick(from),
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size(48, 48),
-                        shape: const StadiumBorder(),
-                      ),
-                      icon: const Icon(Icons.calendar_today_outlined),
-                      label: Text(
-                        '${tr(context, from ? 'From' : 'To')}: '
-                        '${(from ? _from : _to) == null ? tr(context, 'All loaded') : format.format((from ? _from : _to)!)}',
-                      ),
+                OutlinedButton(
+                  key: const Key('history-custom-range'),
+                  onPressed: _pickRange,
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(48, 48),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
                     ),
+                    backgroundColor: PelinesColors.card,
+                    foregroundColor: PelinesColors.textPrimary,
+                    side: const BorderSide(color: PelinesColors.border),
+                    shape: const StadiumBorder(),
                   ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.calendar_today_outlined, size: 20),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          _from == null && _to == null
+                              ? tr(context, 'Select date range')
+                              : '${_from == null ? tr(context, 'No start date') : format.format(_from!)} – ${_to == null ? tr(context, 'No end date') : format.format(_to!)}',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               if (_invalid)
                 Text(
                   tr(context, 'From must be on or before To.'),
@@ -218,6 +222,155 @@ class _HistoryRangeSheetState extends State<_HistoryRangeSheet> {
                       Navigator.pop(context, (_from, _to));
                     },
                     child: Text(tr(context, 'Apply')),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Local draft and bounds for history; the calendar drawing/gestures are shared.
+class _HistoryRangeCalendar extends StatefulWidget {
+  const _HistoryRangeCalendar({this.from, this.to});
+  final DateTime? from, to;
+  @override
+  State<_HistoryRangeCalendar> createState() => _HistoryRangeCalendarState();
+}
+
+class _HistoryRangeCalendarState extends State<_HistoryRangeCalendar> {
+  final _today = pacificDate(PelinesTime.now());
+  late DateTime? _from = widget.from ?? _today;
+  late DateTime? _to = widget.to;
+  late bool _noStart = widget.from == null && widget.to != null;
+  late bool _noEnd = widget.from != null && widget.to == null;
+  bool _awaitingEnd = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_noStart) _from = null;
+  }
+
+  void _select(DateTime value) => setState(() {
+    final day = DateTime.utc(value.year, value.month, value.day);
+    if (_noStart) {
+      _to = day;
+    } else if (_noEnd ||
+        !_awaitingEnd ||
+        _from == null ||
+        day.isBefore(_from!)) {
+      _from = day;
+      _to = null;
+      _awaitingEnd = !_noEnd;
+    } else {
+      _to = day;
+      _awaitingEnd = false;
+    }
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final format = DateFormat.yMMMd(
+      Localizations.localeOf(context).toLanguageTag(),
+    );
+    final start = _noStart ? null : _from;
+    final end = _noEnd ? null : _to;
+    final valid =
+        (_noStart || start != null) &&
+        (_noEnd || end != null) &&
+        (start == null || end == null || !start.isAfter(end));
+    return Dialog(
+      key: const Key('history-range-calendar'),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
+      backgroundColor: PelinesColors.card,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(PelinesRadius.dialog),
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 400),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Semantics(
+                header: true,
+                child: Text(
+                  tr(context, 'Date range'),
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Semantics(
+                liveRegion: true,
+                child: Text(
+                  '${start == null ? tr(context, 'No start date') : format.format(start)} – ${end == null ? tr(context, _noEnd ? 'No end date' : 'Select end date') : format.format(end)}',
+                ),
+              ),
+              SwitchListTile(
+                key: const Key('history-calendar-no-start'),
+                contentPadding: EdgeInsets.zero,
+                title: Text(tr(context, 'No start date')),
+                value: _noStart,
+                onChanged: (value) => setState(() {
+                  _noStart = value;
+                  _from = value ? null : (_to ?? _today);
+                  _awaitingEnd = false;
+                }),
+              ),
+              SwitchListTile(
+                key: const Key('history-calendar-no-end'),
+                contentPadding: EdgeInsets.zero,
+                title: Text(tr(context, 'No end date')),
+                value: _noEnd,
+                onChanged: (value) => setState(() {
+                  _noEnd = value;
+                  _to = null;
+                  _awaitingEnd = false;
+                }),
+              ),
+              if (!(_noStart && _noEnd))
+                UpcomingRangeCalendar(
+                  initialDate: start ?? end ?? _today,
+                  currentDate: _today,
+                  firstDate: DateTime(1),
+                  lastDate: DateTime(9999, 12, 31),
+                  from: start ?? end ?? _today,
+                  to: end,
+                  onDateChanged: _select,
+                ),
+              if (start != null && end != null && start.isAfter(end))
+                Text(
+                  tr(context, 'From must be on or before To.'),
+                  style: const TextStyle(color: PelinesColors.destructive),
+                ),
+              Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  TextButton(
+                    key: const Key('history-calendar-cancel'),
+                    style: TextButton.styleFrom(
+                      minimumSize: const Size(48, 48),
+                    ),
+                    onPressed: () => Navigator.pop(context),
+                    child: Text(tr(context, 'Cancel')),
+                  ),
+                  FilledButton(
+                    key: const Key('history-calendar-confirm'),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(48, 48),
+                    ),
+                    onPressed: valid
+                        ? () => Navigator.pop(context, (start, end))
+                        : null,
+                    child: Text(tr(context, 'Confirm')),
                   ),
                 ],
               ),

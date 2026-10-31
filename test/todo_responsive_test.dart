@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pelines_admin_app/features/orders/presentation/upcoming_orders_view.dart';
+import 'package:pelines_admin_app/features/orders/providers/orders_providers.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -18,10 +21,12 @@ ScrollController _controller(WidgetTester tester, Finder finder) =>
 Future<void> _mount(
   WidgetTester tester, {
   double width = 390,
+  double height = 800,
   double scale = 1,
   String language = 'en',
+  bool upcoming = false,
 }) async {
-  await tester.binding.setSurfaceSize(Size(width, 800));
+  await tester.binding.setSurfaceSize(Size(width, height));
   await tester.pumpWidget(
     MaterialApp(
       theme: AppTheme.light,
@@ -36,10 +41,16 @@ Future<void> _mount(
       home: Scaffold(
         body: MediaQuery(
           data: MediaQueryData(
-            size: Size(width, 800),
+            size: Size(width, height),
             textScaler: TextScaler.linear(scale),
           ),
-          child: const TodoStatusBoard(orders: []),
+          child: upcoming
+              ? UpcomingOrdersView(
+                  orders: const AsyncData(TodayOrdersState(orders: [])),
+                  onRefresh: () async {},
+                  onRetry: () {},
+                )
+              : const TodoStatusBoard(orders: []),
         ),
       ),
     ),
@@ -294,6 +305,167 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  for (final upcoming in [false, true]) {
+    for (final size in [
+      (608.0, 1.0),
+      (692.0, 1.0),
+      (800.0, 1.0),
+      (1000.0, 1.0),
+      (1180.0, 1.0),
+      (1280.0, 1.0),
+      (692.0, 2.0),
+      (1000.0, 2.0),
+    ]) {
+      final width = size.$1;
+      for (final language in ['en', 'es']) {
+        testWidgets(
+          'two aligned tablet columns, last left, five pills $upcoming/$size/$language',
+          (tester) async {
+            addTearDown(() => tester.binding.setSurfaceSize(null));
+            await _mount(
+              tester,
+              width: width,
+              scale: size.$2,
+              language: language,
+              upcoming: upcoming,
+            );
+            final viewport = tester.getRect(_board);
+            final tabViewport = tester.getRect(_tabs);
+            final initial = tester.getRect(
+              find.byKey(const Key('todo-column-pending')),
+            );
+            expect(_controller(tester, _tabs).position.maxScrollExtent, 0);
+            for (var i = 0; i < 5; i++) {
+              final tab = find.byKey(Key('todo-tab-${_names[i]}'));
+              final tabRect = tester.getRect(tab);
+              expect(tabRect.left, greaterThanOrEqualTo(tabViewport.left - .1));
+              expect(tabRect.right, lessThanOrEqualTo(tabViewport.right + .1));
+              await tester.ensureVisible(tab);
+              await tester.tap(tab);
+              await tester.pumpAndSettle();
+              final left = tester.getRect(
+                find.byKey(Key('todo-column-${_names[i]}')),
+              );
+              expect(left.left, closeTo(viewport.left, .1));
+              expect(left.width, closeTo(initial.width, .1));
+              expect(2 * left.width + 16, closeTo(viewport.width, .1));
+              for (var j = 0; j < 5; j++) {
+                final rect = tester.getRect(
+                  find.byKey(Key('todo-column-${_names[j]}')),
+                );
+                if (j == i || j == i + 1) {
+                  expect(rect.left, greaterThanOrEqualTo(viewport.left - .1));
+                  expect(rect.right, lessThanOrEqualTo(viewport.right + .1));
+                } else {
+                  expect(
+                    rect.right <= viewport.left + .1 ||
+                        rect.left >= viewport.right - .1,
+                    isTrue,
+                  );
+                }
+              }
+              final button = tester.widget<OutlinedButton>(tab);
+              expect(
+                button.style!.side!.resolve({})!.color,
+                PelinesColors.textPrimary,
+              );
+            }
+            expect(tester.takeException(), isNull);
+          },
+        );
+      }
+    }
+    for (final size in [(320.0, 2.0), (393.0, 1.0)]) {
+      testWidgets(
+        'two stable pill groups and whole phone columns $upcoming/$size',
+        (tester) async {
+          addTearDown(() => tester.binding.setSurfaceSize(null));
+          await _mount(
+            tester,
+            width: size.$1,
+            scale: size.$2,
+            language: 'es',
+            upcoming: upcoming,
+          );
+          final viewport = tester.getRect(_tabs);
+          final pillWidth = tester
+              .getRect(find.byKey(const Key('todo-tab-pending')))
+              .width;
+          for (final name in _names.take(3)) {
+            final rect = tester.getRect(find.byKey(Key('todo-tab-$name')));
+            expect(rect.left, greaterThanOrEqualTo(viewport.left - .1));
+            expect(rect.right, lessThanOrEqualTo(viewport.right + .1));
+          }
+          expect(
+            _controller(tester, _tabs).position.maxScrollExtent,
+            closeTo(viewport.width, .1),
+          );
+          await tester.fling(_tabs, const Offset(-90, 0), 1000);
+          await tester.pumpAndSettle();
+          _wholePills(tester);
+          expect(
+            _controller(tester, _tabs).offset,
+            closeTo(viewport.width, .1),
+          );
+          for (final name in _names.skip(3)) {
+            expect(
+              tester.getRect(find.byKey(Key('todo-tab-$name'))).width,
+              closeTo(pillWidth, .1),
+            );
+          }
+          await tester.tap(find.byKey(const Key('todo-tab-delivered')));
+          await tester.pumpAndSettle();
+          _aligned(tester, 4);
+          await tester.timedDrag(
+            _board,
+            const Offset(20, 0),
+            const Duration(seconds: 1),
+          );
+          await tester.pumpAndSettle();
+          _aligned(tester, 4);
+          await tester.fling(_board, const Offset(120, 0), 1000);
+          await tester.pumpAndSettle();
+          _aligned(tester, 3);
+          await tester.fling(_board, const Offset(120, 0), 1000);
+          await tester.pumpAndSettle();
+          _aligned(tester, 2);
+          expect(_controller(tester, _tabs).offset, closeTo(0, .1));
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  }
+
+  for (final upcoming in [false, true]) {
+    for (final language in ['en', 'es']) {
+      for (final width in [320.0, 390.0]) {
+        testWidgets(
+          'short viewport keeps wrapped pills and board scrollable $upcoming/$language/$width',
+          (tester) async {
+            addTearDown(() => tester.binding.setSurfaceSize(null));
+            await _mount(
+              tester,
+              width: width,
+              height: 220,
+              scale: 2,
+              language: language,
+              upcoming: upcoming,
+            );
+            expect(tester.takeException(), isNull);
+            final target = tester.widget<OutlinedButton>(
+              find.byKey(const Key('todo-tab-delivered')),
+            );
+            target.onPressed!();
+            await tester.pumpAndSettle();
+            _aligned(tester, 4);
+            _wholePills(tester);
+            expect(tester.takeException(), isNull);
+          },
+        );
+      }
+    }
+  }
 
   testWidgets(
     'rapid tab changes and resizing during animation stay synchronized',

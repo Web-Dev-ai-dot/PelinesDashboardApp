@@ -9,6 +9,7 @@ import '../../locations/models/location.dart';
 import '../../locations/providers/locations_providers.dart';
 import '../data/orders_repository.dart';
 import '../models/order_models.dart';
+import '../models/orders_date_filter.dart';
 import '../models/order_status_action.dart';
 
 // Staging-only V1 rollout; production cannot invoke Cancel through the controller.
@@ -754,17 +755,31 @@ class HistoricalOrdersState {
     required this.orders,
     this.isRefreshing = false,
     this.refreshError,
+    this.fullLocationSnapshot,
+    this.snapshotLocationId,
   });
 
   final List<OrderSummary> orders;
+  // Calendar retains the original response for Upcoming's pickup projection.
+  // Historical status-specific queries leave these fields null.
+  final List<OrderSummary>? fullLocationSnapshot;
+  final String? snapshotLocationId;
   final bool isRefreshing;
   final String? refreshError;
 
-  HistoricalOrdersState refreshing() =>
-      HistoricalOrdersState(orders: orders, isRefreshing: true);
+  HistoricalOrdersState refreshing() => HistoricalOrdersState(
+    orders: orders,
+    isRefreshing: true,
+    fullLocationSnapshot: fullLocationSnapshot,
+    snapshotLocationId: snapshotLocationId,
+  );
 
-  HistoricalOrdersState failed(String message) =>
-      HistoricalOrdersState(orders: orders, refreshError: message);
+  HistoricalOrdersState failed(String message) => HistoricalOrdersState(
+    orders: orders,
+    refreshError: message,
+    fullLocationSnapshot: fullLocationSnapshot,
+    snapshotLocationId: snapshotLocationId,
+  );
 }
 
 abstract class HistoricalOrdersController
@@ -845,7 +860,7 @@ class CalendarOrdersController extends AsyncNotifier<HistoricalOrdersState> {
     if (location == null) {
       return const HistoricalOrdersState(orders: <OrderSummary>[]);
     }
-    return HistoricalOrdersState(orders: await _load(location.id));
+    return _load(location.id);
   }
 
   Future<void> refresh() async {
@@ -856,9 +871,9 @@ class CalendarOrdersController extends AsyncNotifier<HistoricalOrdersState> {
     final HistoricalOrdersState? previous = state.value;
     if (previous != null) state = AsyncData(previous.refreshing());
     try {
-      final List<OrderSummary> orders = await _load(location.id);
+      final snapshot = await _load(location.id);
       if (ref.read(currentLocationProvider).value?.id == location.id) {
-        state = AsyncData(HistoricalOrdersState(orders: orders));
+        state = AsyncData(snapshot);
       }
     } on Object catch (error, stackTrace) {
       // A failed refresh must not restore the previous location's snapshot.
@@ -871,12 +886,19 @@ class CalendarOrdersController extends AsyncNotifier<HistoricalOrdersState> {
     }
   }
 
-  Future<List<OrderSummary>> _load(String locationId) async {
+  Future<HistoricalOrdersState> _load(String locationId) async {
     try {
       final List<OrderSummary> orders = await ref
           .read(ordersRepositoryProvider)
           .getOrders(locationId: locationId);
-      return calendarRelevantOrders(orders);
+      final snapshot = List<OrderSummary>.unmodifiable(
+        orders.where((order) => order.locationId == locationId),
+      );
+      return HistoricalOrdersState(
+        orders: calendarRelevantOrders(snapshot),
+        fullLocationSnapshot: snapshot,
+        snapshotLocationId: locationId,
+      );
     } on ApiException catch (error) {
       if (error.statusCode == 401) {
         await ref.read(authControllerProvider.notifier).signOut();
@@ -977,13 +999,26 @@ List<OrderSummary> filterTodayPickedUpOrders(
   required String locationId,
   DateTime? now,
 }) {
+  return filterPickedUpOrders(
+    snapshot,
+    locationId: locationId,
+    dateFilter: OrdersDateFilter.today,
+    now: now,
+  );
+}
+
+List<OrderSummary> filterPickedUpOrders(
+  List<OrderSummary> snapshot, {
+  required String locationId,
+  required OrdersDateFilter dateFilter,
+  DateTime? now,
+}) {
   final unique = <String, OrderSummary>{};
-  for (final order in snapshot) {
+  for (final order in filterOrdersByDate(snapshot, dateFilter, now: now)) {
     if (order.locationId == locationId &&
         order.status == OrderStatus.delivered &&
         order.fulfillmentType == FulfillmentType.pickup &&
-        order.paymentStatus.isOperationallyPaid &&
-        PelinesTime.isToday(order.operationalAt, now: now)) {
+        order.paymentStatus.isOperationallyPaid) {
       unique[order.id] = order;
     }
   }

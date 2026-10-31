@@ -7,6 +7,7 @@ import 'package:pelines_admin_app/features/locations/models/location.dart';
 import 'package:pelines_admin_app/features/locations/providers/locations_providers.dart';
 import 'package:pelines_admin_app/features/orders/data/orders_repository.dart';
 import 'package:pelines_admin_app/features/orders/models/order_models.dart';
+import 'package:pelines_admin_app/features/orders/models/orders_date_filter.dart';
 import 'package:pelines_admin_app/features/orders/providers/orders_providers.dart';
 
 void main() {
@@ -74,6 +75,126 @@ void main() {
       expect(repository.statuses, everyElement(isNull));
     },
   );
+  test('Upcoming retains one location response for Picked Up, Refresh and location changes', () async {
+    final future = DateTime.now()
+        .add(const Duration(days: 2))
+        .toUtc()
+        .toIso8601String();
+    final repo = _RecordingRepository();
+    repo.rows['first'] = [
+      _order('active', OrderStatus.confirmed, future, locationId: 'first'),
+      _order('picked', OrderStatus.delivered, future, locationId: 'first'),
+      _order(
+        'delivery',
+        OrderStatus.delivered,
+        future,
+        locationId: 'first',
+        fulfillment: FulfillmentType.delivery,
+      ),
+      _order('foreign', OrderStatus.delivered, future, locationId: 'second'),
+    ];
+    repo.rows['second'] = [
+      _order('other', OrderStatus.delivered, future, locationId: 'second'),
+    ];
+    final container = ProviderContainer(
+      overrides: [
+        currentLocationProvider.overrideWith(_FakeCurrentLocation.new),
+        ordersRepositoryProvider.overrideWithValue(repo),
+      ],
+    );
+    addTearDown(container.dispose);
+    final sub = container.listen(calendarOrdersProvider, (_, _) {});
+    addTearDown(sub.close);
+    final first = await container.read(calendarOrdersProvider.future);
+    expect(first.orders.map((o) => o.id), ['active-id']);
+    expect(first.snapshotLocationId, 'first');
+    expect(
+      filterPickedUpOrders(
+        first.fullLocationSnapshot!,
+        locationId: 'first',
+        dateFilter: OrdersDateFilter.upcoming,
+      ).map((o) => o.id),
+      ['picked-id'],
+    );
+    expect(repo.locationIds, ['first']);
+    expect(
+      first.refreshing().fullLocationSnapshot,
+      same(first.fullLocationSnapshot),
+    );
+    expect(
+      first.failed('offline').fullLocationSnapshot,
+      same(first.fullLocationSnapshot),
+    );
+    repo.rows['first'] = [];
+    await container.read(calendarOrdersProvider.notifier).refresh();
+    expect(
+      container.read(calendarOrdersProvider).requireValue.fullLocationSnapshot,
+      isEmpty,
+    );
+    (container.read(currentLocationProvider.notifier) as _FakeCurrentLocation)
+        .change(_location('second'));
+    final second = await container.read(calendarOrdersProvider.future);
+    expect(second.snapshotLocationId, 'second');
+    expect(
+      filterPickedUpOrders(
+        second.fullLocationSnapshot!,
+        locationId: 'second',
+        dateFilter: OrdersDateFilter.upcoming,
+      ).map((o) => o.id),
+      ['other-id'],
+    );
+    expect(repo.locationIds, ['first', 'first', 'second']);
+    expect(repo.statuses, everyElement(isNull));
+  });
+  test('Upcoming Picked Up shares paid pickup classification and uses future Pacific operational dates', () {
+    final now = DateTime.parse('2026-11-01T06:30:00Z'); // Oct 31 Pacific.
+    final picked = _order(
+      'picked',
+      OrderStatus.delivered,
+      '2026-11-01T07:30:00Z',
+    );
+    final rows = [
+      picked,
+      picked,
+      _order('today', OrderStatus.delivered, '2026-11-01T06:45:00Z'),
+      _order(
+        'delivery',
+        OrderStatus.delivered,
+        '2026-11-01T07:30:00Z',
+        fulfillment: FulfillmentType.delivery,
+      ),
+      _order(
+        'unpaid',
+        OrderStatus.delivered,
+        '2026-11-01T07:30:00Z',
+        payment: PaymentStatus.unpaid,
+      ),
+      _order(
+        'refunded',
+        OrderStatus.delivered,
+        '2026-11-01T07:30:00Z',
+        payment: PaymentStatus.refunded,
+      ),
+      _order(
+        'foreign',
+        OrderStatus.delivered,
+        '2026-11-01T07:30:00Z',
+        locationId: 'other',
+      ),
+      _order('ready', OrderStatus.ready, '2026-11-01T07:30:00Z'),
+    ];
+    expect(
+      filterPickedUpOrders(
+        rows,
+        locationId: 'location-id',
+        dateFilter: OrdersDateFilter.upcoming,
+        now: now,
+      ).map((o) => o.id),
+      ['picked-id'],
+    );
+    expect(calendarRelevantOrders(rows).map((o) => o.id), ['ready-id']);
+  });
+
   test('Picked Up uses the existing full snapshot, excludes delivery and deduplicates', () {
     final now = DateTime.parse('2026-09-04T19:00:00Z');
     final picked = _order(
