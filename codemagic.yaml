@@ -1,4 +1,4 @@
-# Manual build and Apple upload. No automatic triggers, ASC API, or publishing block.
+# Manual signed IPA build only. No upload, automatic triggers, ASC API, or publishing block.
 # See docs/ios-testflight-setup.md before the first manual run.
 workflows:
   ios-staging-build:
@@ -46,18 +46,18 @@ workflows:
             --custom-export-options='{"teamID":"B4YBH74VKG","destination":"export"}'
           test "$(/usr/libexec/PlistBuddy -c 'Print teamID' "$HOME/export_options.plist")" = "B4YBH74VKG"
           flutter build ios --release --config-only \
-            --build-name=1.0.0 --build-number=6 \
+            --build-name=1.0.0 --build-number=7 \
             --dart-define-from-file="$STAGING_DEFINE_FILE"
           xcodebuild -resolvePackageDependencies \
             -workspace ios/Runner.xcworkspace -scheme Runner \
             -configuration Release
           flutter build ipa --release \
-            --build-name=1.0.0 --build-number=6 \
+            --build-name=1.0.0 --build-number=7 \
             --export-options-plist="$HOME/export_options.plist" \
             --dart-define-from-file="$STAGING_DEFINE_FILE"
           plutil -lint build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app/Info.plist
           test "$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app/Info.plist)" = "1.0.0"
-          test "$(/usr/libexec/PlistBuddy -c 'Print CFBundleVersion' build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app/Info.plist)" = "6"
+          test "$(/usr/libexec/PlistBuddy -c 'Print CFBundleVersion' build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app/Info.plist)" = "7"
           test "$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app/Info.plist)" = "com.tkr.pelinesadmin"
           test "$(/usr/libexec/PlistBuddy -c 'Print CFBundleDisplayName' build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app/Info.plist)" = "Pelines Admin"
           codesign --verify --deep --strict build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app
@@ -70,25 +70,6 @@ workflows:
           fi
           test -f "${ipa_files[0]}"
           test -s "${ipa_files[0]}"
-      - name: Validate and upload IPA to App Store Connect
-        script: |
-          set +x
-          set -euo pipefail
-          cd "$CM_BUILD_DIR"
-          : "${APPLE_ID:?APPLE_ID is required in apple_upload}"
-          : "${APPLE_APP_SPECIFIC_PASSWORD:?APPLE_APP_SPECIFIC_PASSWORD is required in apple_upload}"
-          shopt -s nullglob
-          ipa_files=(build/ios/ipa/*.ipa)
-          if (( ${#ipa_files[@]} != 1 )); then
-            echo "Expected exactly one IPA in build/ios/ipa; found ${#ipa_files[@]}." >&2
-            exit 1
-          fi
-          test -f "${ipa_files[0]}"
-          test -s "${ipa_files[0]}"
-          xcrun altool --validate-app -f "${ipa_files[0]}" -t ios \
-            -u "$APPLE_ID" -p "$APPLE_APP_SPECIFIC_PASSWORD"
-          xcrun altool --upload-app -f "${ipa_files[0]}" -t ios \
-            -u "$APPLE_ID" -p "$APPLE_APP_SPECIFIC_PASSWORD"
     artifacts:
       - build/ios/ipa/*.ipa
-    # Upload runs after validation on manual Start build; no TestFlight distribution step.
+    # The owner downloads the signed IPA and manages distribution manually.
