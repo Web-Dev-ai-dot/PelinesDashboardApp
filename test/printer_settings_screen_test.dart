@@ -36,6 +36,64 @@ class _Location extends CurrentLocationController {
 
 void main() {
   sqfliteFfiInit();
+  testWidgets('release builds hide the fake printer and simulation controls', (
+    tester,
+  ) async {
+    debugShowPrinterSimulation = false;
+    addTearDown(() => debugShowPrinterSimulation = true);
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.runAsync(() async {
+      final runtime = PrintingRuntime(
+        await openPrintingDatabase(
+          factory: databaseFactoryFfiNoIsolate,
+          path: inMemoryDatabasePath,
+        ),
+        connector: _Connector(),
+      );
+      await runtime.start();
+      final container = ProviderContainer(
+        overrides: [
+          printingRuntimeProvider.overrideWith((ref) async => runtime),
+          currentLocationProvider.overrideWith(_Location.new),
+        ],
+      );
+      try {
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: MaterialApp(
+              theme: AppTheme.light,
+              home: const PrinterSettingsScreen(),
+            ),
+          ),
+        );
+        for (var i = 0; i < 8; i++) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+          await tester.pump();
+        }
+        expect(tester.takeException(), isNull);
+        expect(find.text('Fake Printer'), findsNothing);
+        expect(find.text('Simulation controls'), findsNothing);
+        expect(find.text('Simulate connection failure'), findsNothing);
+        expect(find.textContaining('simulated'), findsNothing);
+        expect(find.textContaining('Simulation only'), findsNothing);
+        expect(
+          find.byType(DropdownButtonFormField<PrinterTransport>),
+          findsNothing,
+        );
+        expect(find.text('IP address / hostname'), findsOneWidget);
+        final enable = tester.widget<SwitchListTile>(
+          find.byType(SwitchListTile).first,
+        );
+        expect(enable.onChanged, isNull);
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        container.dispose();
+        await runtime.dispose();
+      }
+    });
+  });
   _block8PrinterTests();
   for (final (width, height, scale) in <(double, double, double)>[
     (390, 844, 1),

@@ -16,6 +16,8 @@ import '../models/profile_edit.dart';
 import '../providers/profile_mutation_controller.dart';
 import 'change_password_dialog.dart';
 
+import 'package:pelines_admin_app/core/config/legal_links.dart';
+
 class AccountScreen extends ConsumerWidget {
   const AccountScreen({super.key});
 
@@ -233,6 +235,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                           padding: EdgeInsets.only(top: 12),
                           child: LinearProgressIndicator(),
                         ),
+                      const SizedBox(height: PelinesSpacing.md),
+                      const Align(
+                        alignment: AlignmentDirectional.centerStart,
+                        child: PrivacyPolicyLink(),
+                      ),
                     ],
                   ),
                 ],

@@ -12,6 +12,8 @@ import '../models/admin_session.dart';
 import '../providers/auth_controller.dart';
 import '../providers/auth_providers.dart';
 
+import 'package:pelines_admin_app/core/config/legal_links.dart';
+
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
@@ -204,6 +206,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                       label: tr(context, 'Sign In'),
                                     ),
                                   ),
+                                  const SizedBox(height: 8),
+                                  const Center(child: PrivacyPolicyLink()),
                                 ],
                               ),
                             ),

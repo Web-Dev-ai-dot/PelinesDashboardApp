@@ -95,6 +95,17 @@ Future<void> _pump(
 }
 
 void main() {
+  for (final lang in ['en', 'es']) {
+    testWidgets('login shows a privacy policy link ($lang)', (tester) async {
+      await _pump(tester, const LoginScreen(), _Auth(), 390, 1, lang);
+      expect(find.byKey(const Key('privacy-policy-link')), findsOneWidget);
+      expect(
+        find.text(lang == 'es' ? 'Política de privacidad' : 'Privacy Policy'),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    });
+  }
   for (final viewport in [(320.0, 2.0), (768.0, 1.0)]) {
     testWidgets('profile long email and keyboard at $viewport', (tester) async {
       const email =

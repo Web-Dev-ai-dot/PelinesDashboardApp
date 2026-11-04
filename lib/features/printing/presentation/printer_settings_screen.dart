@@ -5,6 +5,7 @@ import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -20,6 +21,11 @@ import '../models/printer_settings.dart';
 import '../models/network_printer_endpoint.dart';
 import '../providers/printer_controller.dart';
 import '../providers/printing_providers.dart';
+
+/// The Fake Printer and its simulation controls exist for development and
+/// tests only. Release (store) builds always show the network printer setup.
+@visibleForTesting
+bool debugShowPrinterSimulation = !kReleaseMode;
 
 class PrinterSettingsScreen extends ConsumerWidget {
   const PrinterSettingsScreen({super.key});
@@ -162,7 +168,12 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
           _host.text = config.host;
           _port.text = '${config.port}';
         }
-        final network = (_type ?? config.transport) == PrinterTransport.network;
+        final showSimulation = debugShowPrinterSimulation;
+        final network =
+            !showSimulation ||
+            (_type ?? config.transport) == PrinterTransport.network;
+        final canEnable =
+            showSimulation || config.transport == PrinterTransport.network;
         final engine = runtime.value;
         if (engine == null) {
           return const Center(child: CircularProgressIndicator());
@@ -217,10 +228,11 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
                       ),
                     ),
                     value: config.enabled && !_dirty,
-                    onChanged: _busy || _dirty
+                    onChanged: _busy || _dirty || !canEnable
                         ? null
                         : (v) => _save(config.copyWith(enabled: v)),
                   ),
+                  if (showSimulation)
                   DropdownButtonFormField<PrinterTransport>(
                     isExpanded: true,
                     isDense: true,
@@ -568,7 +580,9 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
               Text(
                 tr(
                   context,
-                  'Submitted means sent, not physically confirmed. Fake Printer jobs are simulated.',
+                  showSimulation
+                      ? 'Submitted means sent, not physically confirmed. Fake Printer jobs are simulated.'
+                      : 'Submitted means sent, not physically confirmed.',
                 ),
               ),
               jobs.when(
