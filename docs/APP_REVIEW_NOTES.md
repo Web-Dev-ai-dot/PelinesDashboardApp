@@ -23,8 +23,8 @@ affects a real customer or a real order.
 - Password: `<demo-admin-password>`
 
 **What you can try.** Sign in, choose the demo location on the home screen, and
-open Today, Orders, Calendar and Menu. Order status buttons (Accept, Ready,
-Delivered) and menu edits work against the demo data only.
+open Today, Orders, Calendar and Menu. Order action buttons (Accept order, Mark picked up,
+Mark delivered) and menu edits work against the demo data only.
 
 **Notes.**
 - New-order alerts work while the app is open; the app does not use push

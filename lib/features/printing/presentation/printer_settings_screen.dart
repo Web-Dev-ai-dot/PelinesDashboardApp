@@ -228,71 +228,72 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
                       ),
                     ),
                     value: config.enabled && !_dirty,
-                    onChanged: _busy || _dirty || !canEnable
+                    onChanged:
+                        _busy || _dirty || (!canEnable && !config.enabled)
                         ? null
                         : (v) => _save(config.copyWith(enabled: v)),
                   ),
                   if (showSimulation)
-                  DropdownButtonFormField<PrinterTransport>(
-                    isExpanded: true,
-                    isDense: true,
-                    alignment: AlignmentDirectional.centerStart,
-                    itemHeight: null,
-                    initialValue: _type ?? config.transport,
-                    decoration: _printerSelectorDecoration(
-                      tr(context, 'Printer Type'),
-                    ),
-                    selectedItemBuilder: (_) => [
-                      _PrinterSelectedLabel(tr(context, 'Fake Printer')),
-                      _PrinterSelectedLabel(
-                        tr(context, 'Network Epson / ESC-POS'),
+                    DropdownButtonFormField<PrinterTransport>(
+                      isExpanded: true,
+                      isDense: true,
+                      alignment: AlignmentDirectional.centerStart,
+                      itemHeight: null,
+                      initialValue: _type ?? config.transport,
+                      decoration: _printerSelectorDecoration(
+                        tr(context, 'Printer Type'),
                       ),
-                    ],
-                    items: [
-                      DropdownMenuItem(
-                        value: PrinterTransport.fake,
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(vertical: 8),
-                          child: Text(tr(context, 'Fake Printer')),
+                      selectedItemBuilder: (_) => [
+                        _PrinterSelectedLabel(tr(context, 'Fake Printer')),
+                        _PrinterSelectedLabel(
+                          tr(context, 'Network Epson / ESC-POS'),
                         ),
-                      ),
-                      DropdownMenuItem(
-                        value: PrinterTransport.network,
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(vertical: 8),
-                          child: Text(tr(context, 'Network Epson / ESC-POS')),
+                      ],
+                      items: [
+                        DropdownMenuItem(
+                          value: PrinterTransport.fake,
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(vertical: 8),
+                            child: Text(tr(context, 'Fake Printer')),
+                          ),
                         ),
-                      ),
-                    ],
-                    onChanged: _busy
-                        ? null
-                        : (type) async {
-                            if (type == null) return;
-                            setState(() {
-                              _type = type;
-                              _dirty = true;
-                              _connectionMessage = null;
-                            });
-                            if (type == PrinterTransport.fake) {
-                              await _act(() async {
-                                await ref
-                                    .read(
-                                      printerControllerProvider(
-                                        widget.locationId,
-                                      ).notifier,
-                                    )
-                                    .save(
-                                      config.copyWith(
-                                        printerId: 'fake',
-                                        transport: type,
-                                        enabled: false,
-                                      ),
-                                    );
-                                if (mounted) setState(() => _dirty = false);
+                        DropdownMenuItem(
+                          value: PrinterTransport.network,
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(vertical: 8),
+                            child: Text(tr(context, 'Network Epson / ESC-POS')),
+                          ),
+                        ),
+                      ],
+                      onChanged: _busy
+                          ? null
+                          : (type) async {
+                              if (type == null) return;
+                              setState(() {
+                                _type = type;
+                                _dirty = true;
+                                _connectionMessage = null;
                               });
-                            }
-                          },
-                  ),
+                              if (type == PrinterTransport.fake) {
+                                await _act(() async {
+                                  await ref
+                                      .read(
+                                        printerControllerProvider(
+                                          widget.locationId,
+                                        ).notifier,
+                                      )
+                                      .save(
+                                        config.copyWith(
+                                          printerId: 'fake',
+                                          transport: type,
+                                          enabled: false,
+                                        ),
+                                      );
+                                  if (mounted) setState(() => _dirty = false);
+                                });
+                              }
+                            },
+                    ),
                 ],
               ),
               const SizedBox(height: 20),
