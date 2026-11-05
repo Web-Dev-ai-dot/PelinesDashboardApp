@@ -15,16 +15,16 @@ staff accounts are created by the restaurant. For that reason the app has no
 registration or account-deletion screen. Customers order through the separate
 "Pelines" customer app and website, which do offer account deletion.
 
-**How to sign in.** Use the demo administrator account below. It has full
-administrator access but is limited to a demo/test location, so nothing you do
-affects a real customer or a real order.
+**How to sign in.** Use the demo administrator account below. This is the live
+restaurant system, so please browse freely but avoid pausing online ordering,
+changing store hours or cancelling orders.
 
 - Email: `<demo-admin-email>`
 - Password: `<demo-admin-password>`
 
 **What you can try.** Sign in, choose the demo location on the home screen, and
-open Today, Orders, Calendar and Menu. Order action buttons (Accept order, Mark picked up,
-Mark delivered) and menu edits work against the demo data only.
+open Today, Orders, Calendar and Menu. Orders can be
+accepted and marked picked up or delivered from the order screens.
 
 **Notes.**
 - New-order alerts work while the app is open; the app does not use push
@@ -36,9 +36,8 @@ Mark delivered) and menu edits work against the demo data only.
 
 ## Before pasting this
 
-1. Create a demo administrator account on the backend the submitted build points
-   to, and a demo location it can use (so the reviewer cannot change a real
-   store's hours or pause real online ordering).
+1. The demo admin account exists on production (appreview@pelinesmexicanrestaurant.com).
+   The password is kept outside this repository.
 2. Test that exact login on the exact build you are submitting.
 3. Enter the same privacy policy URL in the store listing form:
    `https://pelinesmexicanrestaurant.com/privacy`.
