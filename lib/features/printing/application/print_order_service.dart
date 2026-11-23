@@ -1,9 +1,12 @@
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
+
 import '../../orders/models/order_models.dart';
 import '../data/print_job_store.dart';
 import '../data/printer_settings_store.dart';
 import '../models/print_job.dart';
+import 'auto_print_policy.dart';
 import '../models/printer.dart';
 import '../models/printer_settings.dart';
 import '../models/ticket_document.dart';
@@ -24,23 +27,49 @@ class PrintOrderService {
     required this.settings,
     required this.queue,
     this.builder = const TicketBuilder(),
+    this.account,
+    this.now = DateTime.now,
   });
   final PrintJobStore store;
   final PrinterSettingsStore settings;
   final PrintQueue queue;
   final TicketBuilder builder;
+  final String? Function()? account;
+  final DateTime Function() now;
 
-  Future<PrintJob> queueInitialPrint(OrderDetail order) async {
+  Future<PrintJob> queueInitialPrint(OrderDetail order) =>
+      _queueInitial(order, automatic: false);
+
+  Future<PrintJob> queueAutomaticPrint(OrderDetail order) =>
+      _queueInitial(order, automatic: true);
+
+  Future<PrintJob> _queueInitial(
+    OrderDetail order, {
+    required bool automatic,
+  }) async {
+    final owner = account?.call();
     final config = await settings.read(order.locationId);
     if (!PrintEligibility.initial(order, config)) {
       throw const PrintRequestException(
         'Order is not eligible for initial printing.',
       );
     }
-    return _enqueue(builder.build(order), config, PrintPurpose.initial);
+    if (automatic && !AutoPrintPolicy.detail(order, config, owner, now())) {
+      throw const PrintRequestException(
+        'Order is not due for automatic printing.',
+      );
+    }
+    return _enqueue(
+      builder.build(order),
+      config,
+      PrintPurpose.initial,
+      owner: owner,
+      automatic: automatic,
+    );
   }
 
   Future<PrintJob> queueReprint(OrderDetail order) async {
+    final owner = account?.call();
     final config = await settings.read(order.locationId);
     if (!PrintEligibility.reprint(order, config)) {
       throw const PrintRequestException(
@@ -53,6 +82,7 @@ class PrintOrderService {
       config,
       PrintPurpose.reprint,
       originalJobId: original?.id,
+      owner: owner,
     );
   }
 
@@ -60,6 +90,7 @@ class PrintOrderService {
     String locationId, {
     String? locationName,
   }) async {
+    final owner = account?.call();
     final config = await settings.read(locationId);
     if (!config.enabled) {
       throw const PrintRequestException(
@@ -96,6 +127,7 @@ class PrintOrderService {
       ),
       config,
       PrintPurpose.test,
+      owner: owner,
     );
   }
 
@@ -104,9 +136,13 @@ class PrintOrderService {
     PrinterSettings config,
     PrintPurpose purpose, {
     String? originalJobId,
+    required String? owner,
+    bool automatic = false,
   }) async {
     await queue.initialize();
-    if (!config.isValid ||
+    if ((account != null && (owner == null || owner != account!())) ||
+        (kReleaseMode && config.transport == PrinterTransport.fake) ||
+        !config.isValid ||
         config.printerId != queue.adapter.printer.id ||
         config.transport != queue.adapter.printer.transport) {
       throw const PrintRequestException('Selected printer is not available.');
@@ -124,9 +160,11 @@ class PrintOrderService {
         printerId: config.printerId,
         ticket: ticket,
         originalJobId: originalJobId,
+        accountId: owner,
+        automatic: automatic,
       ),
     );
-    queue.kick();
+    if (!automatic) queue.kick();
     return job;
   }
 

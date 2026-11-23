@@ -4,13 +4,18 @@ import '../data/print_job_store.dart';
 import '../data/printer_adapter.dart';
 import '../models/print_job.dart';
 import '../models/print_result.dart';
+import '../models/ticket_document.dart';
 
 class PrintQueue {
   PrintQueue({
     required this.store,
     required this.adapter,
     required this.canSend,
+    this.refreshTicket,
+    this.dispatchScope,
   });
+  final Future<TicketDocument?> Function(PrintJob)? refreshTicket;
+  final Object? Function(PrintJob)? dispatchScope;
   final PrintJobStore store;
   final PrinterAdapter adapter;
   final Future<bool> Function(PrintJob) canSend;
@@ -43,12 +48,26 @@ class PrintQueue {
         _requested = false;
         for (final job in await store.list(status: PrintJobStatus.queued)) {
           if (_closed) return;
+          final scope = dispatchScope?.call(job);
+          if (dispatchScope != null && scope == null) continue;
           if (job.printerId != adapter.printer.id || !await canSend(job)) {
             continue;
           }
+          final fresh = refreshTicket == null
+              ? job.ticket
+              : await refreshTicket!(job);
           if (_closed) return;
-          final sending = job.transition(PrintJobStatus.sending, attempt: true);
+          if (fresh == null || scope != dispatchScope?.call(job)) continue;
+          final sending = job.transition(
+            PrintJobStatus.sending,
+            attempt: true,
+            freshTicket: fresh,
+          );
           if (!await store.update(sending, expected: PrintJobStatus.queued)) {
+            continue;
+          }
+          if (_closed || scope != dispatchScope?.call(job)) {
+            await store.update(job, expected: PrintJobStatus.sending);
             continue;
           }
           PrintResult result;

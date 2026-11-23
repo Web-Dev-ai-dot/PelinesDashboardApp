@@ -112,10 +112,13 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
     }
   }
 
-  Future<void> _save(PrinterSettings settings) => _act(
+  Future<void> _save(
+    PrinterSettings settings, {
+    bool activateAutomatic = false,
+  }) => _act(
     () => ref
         .read(printerControllerProvider(widget.locationId).notifier)
-        .save(settings),
+        .save(settings, activateAutomatic: activateAutomatic),
   );
 
   PrinterSettings? _networkConfig(PrinterSettings config) {
@@ -168,7 +171,7 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
           _host.text = config.host;
           _port.text = '${config.port}';
         }
-        final showSimulation = debugShowPrinterSimulation;
+        final showSimulation = !kReleaseMode && debugShowPrinterSimulation;
         final network =
             !showSimulation ||
             (_type ?? config.transport) == PrinterTransport.network;
@@ -197,7 +200,7 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
                 network
                     ? tr(
                         context,
-                        'Manual network printing. Check the physical ticket after sending.',
+                        'Submitted means data was sent. Check the physical ticket.',
                       )
                     : tr(
                         context,
@@ -471,7 +474,19 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
                   Text(
                     tr(
                       context,
-                      'Saved for a future block. These switches do not start automatic printing.',
+                      'Paid and confirmed orders print automatically when enabled. ASAP and catering print immediately. Scheduled regular orders print 30 minutes before their scheduled time, or when confirmed within that window.',
+                    ),
+                  ),
+                  Text(
+                    tr(
+                      context,
+                      'Keep the app open and signed in. Use one auto-print device per location. Immediate orders placed before activation can be printed manually.',
+                    ),
+                  ),
+                  Text(
+                    tr(
+                      context,
+                      'Check the queue after an error. Retry failures before send manually. Check the paper for uncertain delivery.',
                     ),
                   ),
                   SwitchListTile(
@@ -480,8 +495,10 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
                     value: config.autoPrintRegularAsap,
                     onChanged: _busy || _dirty
                         ? null
-                        : (v) =>
-                              _save(config.copyWith(autoPrintRegularAsap: v)),
+                        : (v) => _save(
+                            config.copyWith(autoPrintRegularAsap: v),
+                            activateAutomatic: config.enabled && v,
+                          ),
                   ),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
@@ -489,39 +506,39 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
                     value: config.autoPrintScheduled,
                     onChanged: _busy || _dirty
                         ? null
-                        : (v) => _save(config.copyWith(autoPrintScheduled: v)),
-                  ),
-                  TextFormField(
-                    key: ValueKey(config.scheduledLeadMinutes),
-                    initialValue: '${config.scheduledLeadMinutes}',
-                    enabled: !_busy && !_dirty,
-                    keyboardType: TextInputType.number,
-                    decoration:
-                        PelinesControlStyles.input(
-                          label: tr(context, 'Scheduled lead time (minutes)'),
-                        ).copyWith(
-                          helperText: tr(
-                            context,
-                            '0–1440 minutes. Press Done to save.',
+                        : (v) => _save(
+                            config.copyWith(autoPrintScheduled: v),
+                            activateAutomatic: config.enabled && v,
                           ),
-                        ),
-                    textInputAction: TextInputAction.done,
-                    onFieldSubmitted: (value) {
-                      final lead = int.tryParse(value);
-                      if (lead == null || lead < 0 || lead > 1440) {
-                        setState(
-                          () => _error = tr(
-                            context,
-                            'Enter a whole number from 0 to 1440.',
-                          ),
-                        );
-                        return;
-                      }
-                      unawaited(
-                        _save(config.copyWith(scheduledLeadMinutes: lead)),
-                      );
-                    },
                   ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(tr(context, 'Auto-print Catering')),
+                    value: config.autoPrintCatering,
+                    onChanged: _busy || _dirty
+                        ? null
+                        : (v) => _save(
+                            config.copyWith(autoPrintCatering: v),
+                            activateAutomatic: config.enabled && v,
+                          ),
+                  ),
+                  if (config.enabled &&
+                      config.autoPrintRequested &&
+                      (!engine.ownsActivation(config) ||
+                          (config.autoPrintRegularAsap &&
+                              config.asapSince == null) ||
+                          (config.autoPrintScheduled &&
+                              config.scheduledSince == null) ||
+                          (config.autoPrintCatering &&
+                              config.cateringSince == null)))
+                    OutlinedButton(
+                      onPressed: _busy || _dirty
+                          ? null
+                          : () => _save(config, activateAutomatic: true),
+                      child: Text(
+                        tr(context, 'Activate auto-print for this account'),
+                      ),
+                    ),
                 ],
               ),
               if (!network) ...[

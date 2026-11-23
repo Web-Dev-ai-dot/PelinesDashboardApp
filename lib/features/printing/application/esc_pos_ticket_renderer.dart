@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:intl/intl.dart';
 
 import '../../../core/time/pelines_time.dart';
+import '../../orders/models/order_models.dart';
 import '../models/ticket_document.dart';
 
 /// Conservative Font A layout fitting both TM-m30II 48/35 and 42/32 modes.
@@ -162,11 +163,15 @@ class EscPosTicketRenderer {
     line(
       '${ticket.orderType.name.toUpperCase()} / ${ticket.fulfillmentType.name.toUpperCase()}',
     );
+    final catering = ticket.orderType == OrderType.catering;
+    if (catering) line('CATERING', large: true, bold: true, center: true);
     optional('Customer: ', ticket.customerName);
     optional('Phone: ', ticket.phone);
     line('Placed: ${time(ticket.placedAt)}');
     line(
-      ticket.isAsap ? 'ASAP' : 'Scheduled: ${time(ticket.scheduledFor!)}',
+      ticket.isAsap
+          ? (catering ? 'Event time unavailable' : 'ASAP')
+          : '${catering ? 'Event' : 'Scheduled'}: ${time(ticket.scheduledFor!)}',
       bold: true,
     );
     if (ticket.deliveryAddress != null) {

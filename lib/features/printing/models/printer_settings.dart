@@ -9,7 +9,12 @@ class PrinterSettings {
     this.transport = PrinterTransport.fake,
     this.autoPrintRegularAsap = false,
     this.autoPrintScheduled = false,
-    this.scheduledLeadMinutes = 20,
+    this.scheduledLeadMinutes = 30,
+    this.autoPrintAccount,
+    this.autoPrintCatering = false,
+    this.asapSince,
+    this.scheduledSince,
+    this.cateringSince,
     this.displayName = 'Epson TM-m30II',
     this.host = '',
     this.port = 9100,
@@ -18,6 +23,11 @@ class PrinterSettings {
   final bool enabled, autoPrintRegularAsap, autoPrintScheduled;
   final PrinterTransport transport;
   final int scheduledLeadMinutes;
+  final bool autoPrintCatering;
+  final String? autoPrintAccount;
+  final DateTime? asapSince, scheduledSince, cateringSince;
+  bool get autoPrintRequested =>
+      autoPrintRegularAsap || autoPrintScheduled || autoPrintCatering;
   final String displayName, host;
   final int port;
 
@@ -47,6 +57,12 @@ class PrinterSettings {
     bool? autoPrintRegularAsap,
     bool? autoPrintScheduled,
     int? scheduledLeadMinutes,
+    bool? autoPrintCatering,
+    String? autoPrintAccount,
+    DateTime? asapSince,
+    DateTime? scheduledSince,
+    DateTime? cateringSince,
+    bool resetActivation = false,
     String? displayName,
     String? host,
     int? port,
@@ -58,6 +74,13 @@ class PrinterSettings {
     autoPrintRegularAsap: autoPrintRegularAsap ?? this.autoPrintRegularAsap,
     autoPrintScheduled: autoPrintScheduled ?? this.autoPrintScheduled,
     scheduledLeadMinutes: scheduledLeadMinutes ?? this.scheduledLeadMinutes,
+    autoPrintCatering: autoPrintCatering ?? this.autoPrintCatering,
+    autoPrintAccount: autoPrintAccount ?? this.autoPrintAccount,
+    asapSince: asapSince ?? (resetActivation ? null : this.asapSince),
+    scheduledSince:
+        scheduledSince ?? (resetActivation ? null : this.scheduledSince),
+    cateringSince:
+        cateringSince ?? (resetActivation ? null : this.cateringSince),
     displayName: displayName ?? this.displayName,
     host: host ?? this.host,
     port: port ?? this.port,
@@ -71,6 +94,11 @@ class PrinterSettings {
     'autoPrintRegularAsap': autoPrintRegularAsap,
     'autoPrintScheduled': autoPrintScheduled,
     'scheduledLeadMinutes': scheduledLeadMinutes,
+    'autoPrintCatering': autoPrintCatering,
+    'autoPrintAccount': autoPrintAccount,
+    'asapSince': asapSince?.toIso8601String(),
+    'scheduledSince': scheduledSince?.toIso8601String(),
+    'cateringSince': cateringSince?.toIso8601String(),
     'displayName': displayName,
     'host': host,
     'port': port,
@@ -80,9 +108,17 @@ class PrinterSettings {
     enabled: j['enabled'] as bool,
     printerId: j['printerId'] as String,
     transport: PrinterTransport.values.byName(j['transport'] as String),
-    autoPrintRegularAsap: j['autoPrintRegularAsap'] as bool,
-    autoPrintScheduled: j['autoPrintScheduled'] as bool,
+    // Pre-auto-print builds saved switches as preferences only.
+    autoPrintRegularAsap:
+        j.containsKey('autoPrintAccount') && j['autoPrintRegularAsap'] == true,
+    autoPrintScheduled:
+        j.containsKey('autoPrintAccount') && j['autoPrintScheduled'] == true,
     scheduledLeadMinutes: j['scheduledLeadMinutes'] as int,
+    autoPrintCatering: j['autoPrintCatering'] as bool? ?? false,
+    autoPrintAccount: j['autoPrintAccount'] as String?,
+    asapSince: DateTime.tryParse(j['asapSince'] as String? ?? ''),
+    scheduledSince: DateTime.tryParse(j['scheduledSince'] as String? ?? ''),
+    cateringSince: DateTime.tryParse(j['cateringSince'] as String? ?? ''),
     displayName: j['displayName'] as String? ?? 'Epson TM-m30II',
     host: j['host'] as String? ?? '',
     port: j['port'] as int? ?? 9100,

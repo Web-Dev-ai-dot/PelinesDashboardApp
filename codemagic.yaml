@@ -92,3 +92,107 @@ workflows:
     artifacts:
       - build/ios/ipa/*.ipa
     # Upload runs after validation on manual Start build; no TestFlight distribution step.
+
+  ios-production-testflight:
+    name: iOS production · TestFlight internal
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    environment:
+      flutter: 3.47.2
+      xcode: "26.6"
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.tkr.pelinesadmin
+      vars:
+        APP_ENV: production
+        API_BASE_URL: https://pelines-api.aiwithtalha.com/v1
+        SUPABASE_URL: https://yoolmwqgjftqmcxriwnx.supabase.co
+        RELEASE_VERSION: "1.0.1"
+        RELEASE_BUILD_NUMBER: "10"
+      groups:
+        - pelines_production
+        - apple_upload
+    scripts:
+      - name: Verify release inputs and toolchain
+        script: |
+          set +x
+          set -euo pipefail
+          cd "$CM_BUILD_DIR"
+          python3 tools/write_production_defines.py --check
+          : "${APPLE_ID:?APPLE_ID is required in apple_upload}"
+          : "${APPLE_APP_SPECIFIC_PASSWORD:?APPLE_APP_SPECIFIC_PASSWORD is required in apple_upload}"
+          flutter --version
+          xcodebuild -version
+      - name: Resolve Flutter dependencies
+        script: |
+          set -euo pipefail
+          cd "$CM_BUILD_DIR"
+          flutter pub get --enforce-lockfile
+      - name: Analyze and test
+        script: |
+          set -euo pipefail
+          cd "$CM_BUILD_DIR"
+          flutter analyze
+          flutter test
+      - name: Build signed production IPA with SwiftPM
+        script: |
+          set -euo pipefail
+          cd "$CM_BUILD_DIR"
+          # Do not echo secrets or archive this JSON / generated xcconfig files.
+          set +x
+          umask 077
+          export PRODUCTION_DEFINE_FILE="$CM_BUILD_DIR/build/ios-ci/production-defines.json"
+          trap 'rm -f "$PRODUCTION_DEFINE_FILE"' EXIT
+          python3 tools/write_production_defines.py
+          xcode-project use-profiles --project ios/Runner.xcodeproj \
+            --archive-method app-store \
+            --custom-export-options='{"teamID":"B4YBH74VKG","destination":"export","testFlightInternalTestingOnly":true}'
+          test "$(/usr/libexec/PlistBuddy -c 'Print teamID' "$HOME/export_options.plist")" = "B4YBH74VKG"
+          test "$(/usr/libexec/PlistBuddy -c 'Print testFlightInternalTestingOnly' "$HOME/export_options.plist")" = "true"
+          flutter build ios --release --config-only \
+            --build-name="$RELEASE_VERSION" --build-number="$RELEASE_BUILD_NUMBER" \
+            --dart-define-from-file="$PRODUCTION_DEFINE_FILE"
+          xcodebuild -resolvePackageDependencies \
+            -workspace ios/Runner.xcworkspace -scheme Runner \
+            -configuration Release
+          flutter build ipa --release \
+            --build-name="$RELEASE_VERSION" --build-number="$RELEASE_BUILD_NUMBER" \
+            --export-options-plist="$HOME/export_options.plist" \
+            --dart-define-from-file="$PRODUCTION_DEFINE_FILE"
+          plutil -lint build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app/Info.plist
+          test "$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app/Info.plist)" = "$RELEASE_VERSION"
+          test "$(/usr/libexec/PlistBuddy -c 'Print CFBundleVersion' build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app/Info.plist)" = "$RELEASE_BUILD_NUMBER"
+          test "$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app/Info.plist)" = "com.tkr.pelinesadmin"
+          test "$(/usr/libexec/PlistBuddy -c 'Print CFBundleDisplayName' build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app/Info.plist)" = "Pelines Admin"
+          codesign --verify --deep --strict build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app
+          # Flutter can finish successfully even if IPA export failed.
+          shopt -s nullglob
+          ipa_files=(build/ios/ipa/*.ipa)
+          if (( ${#ipa_files[@]} != 1 )); then
+            echo "Expected exactly one IPA in build/ios/ipa; found ${#ipa_files[@]}." >&2
+            exit 1
+          fi
+          test -f "${ipa_files[0]}"
+          test -s "${ipa_files[0]}"
+      - name: Validate and upload IPA to App Store Connect
+        script: |
+          set +x
+          set -euo pipefail
+          cd "$CM_BUILD_DIR"
+          : "${APPLE_ID:?APPLE_ID is required in apple_upload}"
+          : "${APPLE_APP_SPECIFIC_PASSWORD:?APPLE_APP_SPECIFIC_PASSWORD is required in apple_upload}"
+          shopt -s nullglob
+          ipa_files=(build/ios/ipa/*.ipa)
+          if (( ${#ipa_files[@]} != 1 )); then
+            echo "Expected exactly one IPA in build/ios/ipa; found ${#ipa_files[@]}." >&2
+            exit 1
+          fi
+          test -f "${ipa_files[0]}"
+          test -s "${ipa_files[0]}"
+          xcrun altool --validate-app -f "${ipa_files[0]}" -t ios \
+            -u "$APPLE_ID" -p "$APPLE_APP_SPECIFIC_PASSWORD"
+          xcrun altool --upload-app -f "${ipa_files[0]}" -t ios \
+            -u "$APPLE_ID" -p "$APPLE_APP_SPECIFIC_PASSWORD"
+    artifacts:
+      - build/ios/ipa/*.ipa
+    # App Store Connect handles processing and internal group automatic distribution.

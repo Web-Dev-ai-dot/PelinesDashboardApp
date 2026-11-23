@@ -13,13 +13,20 @@ class PrinterController extends AsyncNotifier<PrinterSettings> {
   Future<PrinterSettings> build() async =>
       (await ref.watch(printingRuntimeProvider.future)).settings
           .read(locationId);
-  Future<void> save(PrinterSettings settings) async {
+  Future<void> save(
+    PrinterSettings settings, {
+    bool activateAutomatic = false,
+  }) async {
     if (settings.locationId != locationId) {
       throw ArgumentError('Location mismatch.');
     }
     final runtime = await ref.read(printingRuntimeProvider.future);
-    await runtime.saveSettings(settings);
-    state = AsyncData(settings);
+    state = AsyncData(
+      await runtime.saveSettings(
+        settings,
+        activateAutomatic: activateAutomatic,
+      ),
+    );
     runtime.queue.kick();
   }
 }

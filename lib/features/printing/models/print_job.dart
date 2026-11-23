@@ -26,9 +26,13 @@ class PrintJob {
     this.attemptCount = 0,
     this.lastError,
     this.originalJobId,
+    this.accountId,
+    this.automatic = false,
   });
   final String id, orderId, locationId, printerId;
   final String? lastError, originalJobId;
+  final String? accountId;
+  final bool automatic;
   final PrintPurpose purpose;
   final PrintJobStatus status;
   final DateTime createdAt, updatedAt;
@@ -38,6 +42,7 @@ class PrintJob {
     PrintJobStatus status, {
     String? error,
     bool attempt = false,
+    TicketDocument? freshTicket,
   }) => PrintJob(
     id: id,
     orderId: orderId,
@@ -47,7 +52,9 @@ class PrintJob {
     createdAt: createdAt,
     updatedAt: DateTime.now().toUtc(),
     printerId: printerId,
-    ticket: ticket,
+    ticket: freshTicket ?? ticket,
+    accountId: accountId,
+    automatic: automatic,
     attemptCount: attemptCount + (attempt ? 1 : 0),
     lastError: error,
     originalJobId: originalJobId,
@@ -57,6 +64,8 @@ class PrintJob {
     'orderId': orderId,
     'locationId': locationId,
     'purpose': purpose.name,
+    'accountId': accountId,
+    'automatic': automatic,
     'status': status.name,
     'createdAt': createdAt.toIso8601String(),
     'updatedAt': updatedAt.toIso8601String(),
@@ -79,5 +88,7 @@ class PrintJob {
     attemptCount: j['attemptCount'] as int,
     lastError: j['lastError'] as String?,
     originalJobId: j['originalJobId'] as String?,
+    accountId: j['accountId'] as String?,
+    automatic: j['automatic'] as bool? ?? false,
   );
 }

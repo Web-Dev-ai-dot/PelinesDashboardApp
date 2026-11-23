@@ -376,7 +376,7 @@ void main() {
     test(
       'settings persist per device/location with one enabled location',
       () async {
-        expect((await settings.read('new')).scheduledLeadMinutes, 20);
+        expect((await settings.read('new')).scheduledLeadMinutes, 30);
         await settings.save(
           config.copyWith(autoPrintScheduled: true, scheduledLeadMinutes: 35),
         );

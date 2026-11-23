@@ -6,15 +6,15 @@ abstract final class PrintEligibility {
       settings.enabled &&
       settings.locationId == order.locationId &&
       order.paymentStatus == PaymentStatus.paid &&
-      {
-        OrderStatus.confirmed,
-        OrderStatus.preparing,
-        OrderStatus.ready,
-      }.contains(order.status) &&
+      activeStatus(order.status) &&
       order.orderType != OrderType.unknown &&
       order.fulfillmentType != FulfillmentType.unknown;
 
-  /// Contract only. Block 1 has no automatic caller or scheduler.
+  static bool activeStatus(OrderStatus status) =>
+      status == OrderStatus.confirmed ||
+      status == OrderStatus.preparing ||
+      status == OrderStatus.ready;
+
   static bool regularAsap(OrderDetail order, PrinterSettings settings) =>
       initial(order, settings) &&
       settings.autoPrintRegularAsap &&

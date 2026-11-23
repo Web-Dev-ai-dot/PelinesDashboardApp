@@ -1,5 +1,15 @@
 // English source messages and their Spanish UI translations. Backend values are never catalog keys.
 const spanishCatalog = <String, String>{
+  'Submitted means data was sent. Check the physical ticket.': 'Enviado significa que se transmitieron los datos. Comprueba el ticket físico.',
+  'Paid and confirmed orders print automatically when enabled. ASAP and catering print immediately. Scheduled regular orders print 30 minutes before their scheduled time, or when confirmed within that window.': 'Si activas la autoimpresión, los pedidos pagados y confirmados se imprimen automáticamente. Los inmediatos y de catering se imprimen al momento. Los regulares programados se imprimen 30 minutos antes de su hora, o al confirmarse dentro de ese plazo.',
+  'Keep the app open and signed in. Use one auto-print device per location. Immediate orders placed before activation can be printed manually.': 'Mantén la app abierta y la sesión iniciada. Usa un solo dispositivo de autoimpresión por sucursal. Puedes imprimir manualmente los pedidos inmediatos hechos antes de la activación.',
+  'Check the queue after an error. Retry failures before send manually. Check the paper for uncertain delivery.': 'Revisa la cola si ocurre un error. Reintenta manualmente los fallos previos al envío. Comprueba el papel si el resultado es incierto.',
+  'Auto-print Catering': 'Autoimprimir catering',
+  'Activate auto-print for this account':
+      'Activar autoimpresión para esta cuenta',
+  'Printing needs attention. Check orders and Printer Settings.': 'La impresión requiere atención. Revisa los pedidos y la configuración de impresión.',
+  'Printer simulation was disabled. Select a network printer in Printer Settings.': 'Se desactivó la simulación. Selecciona una impresora de red en la configuración de impresión.',
+  'Auto-print checks the orders returned by the server. Complete coverage cannot be verified.': 'La autoimpresión revisa los pedidos devueltos por el servidor. No se puede verificar la cobertura completa.',
   "Enter an hour from 1 to 12 and minutes from 0 to 59.": "Introduce una hora de 1 a 12 y minutos de 0 a 59.",
   "Manage restaurant location details, addresses, and contact information.": "Administra los datos, direcciones e información de contacto de las sucursales.",
   "Location Name": "Nombre de la sucursal",
