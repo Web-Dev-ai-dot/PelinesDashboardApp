@@ -94,7 +94,7 @@ workflows:
     # Upload runs after validation on manual Start build; no TestFlight distribution step.
 
   ios-production-testflight:
-    name: iOS production · TestFlight internal
+    name: iOS production · App Store Connect
     instance_type: mac_mini_m2
     max_build_duration: 60
     environment:
@@ -108,7 +108,7 @@ workflows:
         API_BASE_URL: https://pelines-api.aiwithtalha.com/v1
         SUPABASE_URL: https://yoolmwqgjftqmcxriwnx.supabase.co
         RELEASE_VERSION: "1.0.1"
-        RELEASE_BUILD_NUMBER: "10"
+        RELEASE_BUILD_NUMBER: "11"
       groups:
         - pelines_production
         - apple_upload
@@ -144,11 +144,13 @@ workflows:
           export PRODUCTION_DEFINE_FILE="$CM_BUILD_DIR/build/ios-ci/production-defines.json"
           trap 'rm -f "$PRODUCTION_DEFINE_FILE"' EXIT
           python3 tools/write_production_defines.py
+          # Use only this workflow's export options, even if a group supplies overrides.
+          unset XCODE_PROJECT_CUSTOM_EXPORT_OPTIONS
+          export_options="$HOME/export_options.plist"
           xcode-project use-profiles --project ios/Runner.xcodeproj \
             --archive-method app-store \
-            --custom-export-options='{"teamID":"B4YBH74VKG","destination":"export","testFlightInternalTestingOnly":true}'
-          test "$(/usr/libexec/PlistBuddy -c 'Print teamID' "$HOME/export_options.plist")" = "B4YBH74VKG"
-          test "$(/usr/libexec/PlistBuddy -c 'Print testFlightInternalTestingOnly' "$HOME/export_options.plist")" = "true"
+            --custom-export-options='{"teamID":"B4YBH74VKG","destination":"export"}'
+          python3 tools/check_app_store_export.py "$export_options"
           flutter build ios --release --config-only \
             --build-name="$RELEASE_VERSION" --build-number="$RELEASE_BUILD_NUMBER" \
             --dart-define-from-file="$PRODUCTION_DEFINE_FILE"
@@ -157,7 +159,7 @@ workflows:
             -configuration Release
           flutter build ipa --release \
             --build-name="$RELEASE_VERSION" --build-number="$RELEASE_BUILD_NUMBER" \
-            --export-options-plist="$HOME/export_options.plist" \
+            --export-options-plist="$export_options" \
             --dart-define-from-file="$PRODUCTION_DEFINE_FILE"
           plutil -lint build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app/Info.plist
           test "$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app/Info.plist)" = "$RELEASE_VERSION"
