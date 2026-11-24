@@ -16,6 +16,7 @@ Future<void> main() async {
     await Supabase.initialize(
       url: AppConfig.supabaseUrl,
       publishableKey: AppConfig.supabaseAnonKey,
+      debug: false,
     );
   } on Object catch (error, stackTrace) {
     if (kDebugMode) {

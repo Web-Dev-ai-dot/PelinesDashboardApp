@@ -449,7 +449,7 @@ class ApiLocationsRepository
       final int? status = error.response?.statusCode;
       final String message = switch (status) {
         400 => 'The server rejected the location change.',
-        401 => 'Your session has expired. Please sign in again.',
+        401 => 'The server rejected this request. Please try again.',
         403 => 'Administrator access is required.',
         404 => 'This location no longer exists.',
         _ => switch (error.type) {

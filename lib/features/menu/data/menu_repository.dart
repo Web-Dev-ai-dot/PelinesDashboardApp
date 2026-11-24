@@ -501,7 +501,7 @@ class ApiMenuRepository implements MenuRepository {
   ApiException _error(DioException error, {String? entity}) {
     final int? status = error.response?.statusCode;
     final String message = switch (status) {
-      401 => 'Your session is no longer valid. Please sign in again.',
+      401 => 'The server rejected this request. Please try again.',
       403 => 'Administrator access is required.',
       404 when entity != null => '$entity no longer available.',
       409 when entity != null =>

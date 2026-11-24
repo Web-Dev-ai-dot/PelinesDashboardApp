@@ -2,7 +2,6 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/api/api_exception.dart';
-import '../../auth/providers/auth_providers.dart';
 import '../../locations/providers/locations_providers.dart';
 import '../data/menu_repository.dart';
 import '../models/menu_models.dart';
@@ -18,24 +17,16 @@ typedef ModifierContext = ({
 
 final modifierGroupsProvider = FutureProvider.autoDispose
     .family<List<MenuModifierGroup>, ModifierContext>((ref, context) async {
-      try {
-        await _validateModifierContext(ref, context);
-        final groups = await ref
-            .watch(menuRepositoryProvider)
-            .getModifierGroups(context.productId);
-        if (groups.any(
-          (group) =>
-              group.productId != context.productId || !group.isFullyLoaded,
-        )) {
-          throw const MenuContextChangedException();
-        }
-        return groups;
-      } on ApiException catch (error) {
-        if (error.statusCode == 401) {
-          await ref.read(authControllerProvider.notifier).signOut();
-        }
-        rethrow;
+      await _validateModifierContext(ref, context);
+      final groups = await ref
+          .watch(menuRepositoryProvider)
+          .getModifierGroups(context.productId);
+      if (groups.any(
+        (group) => group.productId != context.productId || !group.isFullyLoaded,
+      )) {
+        throw const MenuContextChangedException();
       }
+      return groups;
     });
 
 enum ModifierMutationPhase { idle, submitting, reconciling, success, error }
@@ -149,9 +140,6 @@ class ModifierMutationController extends Notifier<ModifierMutationState> {
         }
       }
     } on ApiException catch (error) {
-      if (error.statusCode == 401) {
-        await ref.read(authControllerProvider.notifier).signOut();
-      }
       state = ModifierMutationState(
         phase: ModifierMutationPhase.error,
         message: error.message,
@@ -177,9 +165,6 @@ class ModifierMutationController extends Notifier<ModifierMutationState> {
       };
       return await _reconcile(responseId, find, matches, successMessage);
     } on ApiException catch (error) {
-      if (error.statusCode == 401) {
-        await ref.read(authControllerProvider.notifier).signOut();
-      }
       if (_ambiguous(error) && !create) {
         return _reconcile(
           existingOptionId ?? existingGroupId ?? '',

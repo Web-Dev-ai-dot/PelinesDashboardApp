@@ -58,7 +58,7 @@ class ProfileMutationController extends Notifier<ProfileMutationState> {
     try {
       canonical = await repository.getMe();
     } catch (error) {
-      await _handleError(error, 'Your profile could not be checked.');
+      _handleError(error, 'Your profile could not be checked.');
       return;
     }
     if (!_hasSession()) {
@@ -93,7 +93,7 @@ class ProfileMutationController extends Notifier<ProfileMutationState> {
       await repository.updateMe(patch);
     } catch (error) {
       if (!_ambiguous(error)) {
-        await _handleError(error, 'Your profile could not be updated.');
+        _handleError(error, 'Your profile could not be updated.');
         return;
       }
       await _reconcile(repository, profileId, patch, ambiguous: true);
@@ -141,7 +141,7 @@ class ProfileMutationController extends Notifier<ProfileMutationState> {
             : 'The server did not save the expected profile values.',
       );
     } catch (error) {
-      await _handleError(
+      _handleError(
         error,
         ambiguous
             ? 'The update result could not be confirmed. Reload before retrying.'
@@ -155,11 +155,7 @@ class ProfileMutationController extends Notifier<ProfileMutationState> {
   void _adopt(Profile profile) =>
       ref.read(authControllerProvider.notifier).adoptCanonicalProfile(profile);
 
-  Future<void> _handleError(Object error, String fallback) async {
-    if (error is ApiException &&
-        (error.statusCode == 401 || error.statusCode == 403)) {
-      await ref.read(authControllerProvider.notifier).signOut();
-    }
+  void _handleError(Object error, String fallback) {
     _error(error is ApiException ? error.message : fallback);
   }
 

@@ -194,6 +194,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                       ),
                                     ),
                                   ],
+                                  if (auth.error is ApiException)
+                                    TextButton(
+                                      onPressed: loading
+                                          ? null
+                                          : () => ref
+                                                .read(
+                                                  authControllerProvider
+                                                      .notifier,
+                                                )
+                                                .retrySession(),
+                                      child: Text(tr(context, 'Try again')),
+                                    ),
                                   const SizedBox(height: 32),
                                   FilledButton(
                                     key: const Key('login-submit'),
@@ -241,7 +253,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         'Could not reach Supabase. Check your connection and try again.',
       ),
       AuthException() => tr(context, 'The email or password is incorrect.'),
-      ApiException() => error.message,
+      ApiException() => tr(context, error.message),
       _ => tr(context, 'Sign in failed. Please try again.'),
     };
   }

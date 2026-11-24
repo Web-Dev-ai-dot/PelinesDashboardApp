@@ -24,6 +24,9 @@ class SupabaseAuthRepository implements AuthRepository, PasswordAuthRepository {
 
   final GoTrueClient _auth;
   bool _passwordBusy = false;
+  ({String? token, Future<void> future})? _refreshInFlight;
+  String? _lastRefreshedToken;
+  final Stopwatch _sinceRefresh = Stopwatch();
 
   @override
   Session? get currentSession => _auth.currentSession;
@@ -52,7 +55,75 @@ class SupabaseAuthRepository implements AuthRepository, PasswordAuthRepository {
   Future<void> signOut() => _auth.signOut();
 
   @override
-  Future<String?> getAccessToken() async => _auth.currentSession?.accessToken;
+  Future<String?> getAccessToken() async {
+    final session = currentSession;
+    if (session == null) return null;
+    final running = _refreshInFlight;
+    if (session.isExpired ||
+        (running != null && running.token == session.refreshToken)) {
+      return _refreshFor(session);
+    }
+    return session.accessToken;
+  }
+
+  Future<String?> recoverRejectedToken(String rejectedToken) async {
+    final session = currentSession;
+    if (session == null) return null;
+    if (session.accessToken != rejectedToken) return getAccessToken();
+    if (!session.isExpired &&
+        rejectedToken == _lastRefreshedToken &&
+        _sinceRefresh.elapsed < const Duration(seconds: 15)) {
+      return null;
+    }
+    return _refreshFor(session);
+  }
+
+  Future<String?> _refreshFor(Session session) async {
+    final running = _refreshInFlight;
+    if (running != null && running.token == session.refreshToken) {
+      await running.future;
+    } else {
+      final pending = (token: session.refreshToken, future: _refresh(session));
+      _refreshInFlight = pending;
+      try {
+        await pending.future;
+      } finally {
+        if (_refreshInFlight == pending) _refreshInFlight = null;
+      }
+    }
+    final current = currentSession;
+    if (current == null ||
+        current.user.id != session.user.id ||
+        current.isExpired) {
+      return null;
+    }
+    return current.accessToken;
+  }
+
+  Future<void> _refresh(Session original) async {
+    try {
+      // The SDK joins recovery and auto-refresh for the same refresh token.
+      // Use currentSession afterward because the SDK discards stale results.
+      final response = await _auth.refreshSession();
+      final current = currentSession;
+      if (current?.user.id == original.user.id &&
+          current?.accessToken == response.session?.accessToken) {
+        _lastRefreshedToken = current?.accessToken;
+        _sinceRefresh
+          ..reset()
+          ..start();
+      }
+    } on AuthSessionMissingException {
+      if (identical(currentSession, original) &&
+          original.refreshToken == null) {
+        await _auth.signOut(scope: SignOutScope.local);
+      }
+    } on AuthException {
+      // GoTrue clears definitive failures and emits signedOut. A transient
+      // failure keeps the session and is surfaced as a retryable request error.
+      if (currentSession != null) rethrow;
+    }
+  }
 
   @override
   Future<void> changePassword({

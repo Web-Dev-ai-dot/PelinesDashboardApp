@@ -39,7 +39,7 @@ class ApiAccountRepository implements AccountRepository {
     } on DioException catch (error) {
       final int? status = error.response?.statusCode;
       final String message = switch (status) {
-        401 => 'Your session is no longer valid. Please sign in again.',
+        401 => 'The server rejected this request. Please try again.',
         403 => 'This account is not authorized to use the admin app.',
         _
             when error.type == DioExceptionType.connectionTimeout ||

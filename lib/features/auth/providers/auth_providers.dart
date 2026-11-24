@@ -19,13 +19,53 @@ final passwordAuthRepositoryProvider = Provider<PasswordAuthRepository?>((ref) {
       : null;
 });
 
-final apiClientProvider = Provider<ApiClient>((Ref ref) {
-  final AuthRepository auth = ref.watch(authRepositoryProvider);
-  return ApiClient(accessTokenProvider: auth.getAccessToken);
+ApiClient _createClient(Ref ref, {required Object? Function() scope}) {
+  final auth = ref.watch(authRepositoryProvider);
+  final client = ApiClient(
+    accessTokenProvider: auth.getAccessToken,
+    recoverToken: auth is SupabaseAuthRepository
+        ? auth.recoverRejectedToken
+        : null,
+    sessionScope: scope,
+  );
+  ref.onDispose(() => client.dio.close(force: true));
+  return client;
+}
+
+final apiClientProvider = Provider<ApiClient>((ref) {
+  final account = ref.watch(
+    authControllerProvider.select((value) => value.asData?.value?.profile.id),
+  );
+  final auth = ref.watch(authRepositoryProvider);
+  return _createClient(
+    ref,
+    scope: () =>
+        ref.mounted &&
+            auth.currentSession?.user.id == account &&
+            ref.read(authControllerProvider).asData?.value?.profile.id ==
+                account
+        ? account
+        : null,
+  );
 });
 
-final accountRepositoryProvider = Provider<AccountRepository>((Ref ref) {
-  return ApiAccountRepository(ref.watch(apiClientProvider));
+final accountRepositoryProvider = Provider<AccountRepository>((ref) {
+  // /me establishes the administrator role before protected providers start.
+  final auth = ref.watch(authRepositoryProvider);
+  var epoch = 0;
+  final subscription = auth.authStateChanges.listen((event) {
+    if (event.event == AuthChangeEvent.signedOut) epoch++;
+  }, onError: (Object _) {});
+  ref.onDispose(subscription.cancel);
+  return ApiAccountRepository(
+    _createClient(
+      ref,
+      scope: () {
+        final user = auth.currentSession?.user.id;
+        return user == null ? null : (user, epoch);
+      },
+    ),
+  );
 });
 
 final authControllerProvider =

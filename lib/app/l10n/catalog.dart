@@ -1,5 +1,6 @@
 // English source messages and their Spanish UI translations. Backend values are never catalog keys.
 const spanishCatalog = <String, String>{
+  'The server rejected this request. Please try again.': 'El servidor rechazó esta solicitud. Vuelve a intentarlo.',
   'Submitted means data was sent. Check the physical ticket.': 'Enviado significa que se transmitieron los datos. Comprueba el ticket físico.',
   'Paid and confirmed orders print automatically when enabled. ASAP and catering print immediately. Scheduled regular orders print 30 minutes before their scheduled time, or when confirmed within that window.': 'Si activas la autoimpresión, los pedidos pagados y confirmados se imprimen automáticamente. Los inmediatos y de catering se imprimen al momento. Los regulares programados se imprimen 30 minutos antes de su hora, o al confirmarse dentro de ese plazo.',
   'Keep the app open and signed in. Use one auto-print device per location. Immediate orders placed before activation can be printed manually.': 'Mantén la app abierta y la sesión iniciada. Usa un solo dispositivo de autoimpresión por sucursal. Puedes imprimir manualmente los pedidos inmediatos hechos antes de la activación.',

@@ -8,7 +8,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/theme/pelines_components.dart';
 import '../../../app/theme/pelines_tokens.dart';
 import '../../../core/api/api_exception.dart';
-import '../../auth/providers/auth_providers.dart';
 import '../../locations/models/location.dart';
 import '../../locations/providers/locations_providers.dart';
 import '../models/order_models.dart';
@@ -329,10 +328,6 @@ class _NewOrderDecisionState extends ConsumerState<_NewOrderDecision>
       }
     } on Object catch (error) {
       if (!_owns(session, request)) return;
-      if (error is ApiException && error.statusCode == 401) {
-        await ref.read(authControllerProvider.notifier).signOut();
-        return;
-      }
       if (error is ApiException && error.statusCode == 404) {
         _feedback.resolve();
         // A 404 permits explicit acknowledgement; it does not prove a status.

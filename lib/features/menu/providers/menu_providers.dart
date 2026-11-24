@@ -42,21 +42,14 @@ final menuCategoryDetailProvider = FutureProvider.autoDispose
       if (current == null || current.id != query.locationId) {
         throw const MenuContextChangedException();
       }
-      try {
-        final MenuCategory category = await ref
-            .watch(menuRepositoryProvider)
-            .getCategory(query.categoryId);
-        if (category.locationId != query.locationId ||
-            category.kind != query.kind) {
-          throw const MenuContextChangedException();
-        }
-        return category;
-      } on ApiException catch (error) {
-        if (error.statusCode == 401) {
-          await ref.read(authControllerProvider.notifier).signOut();
-        }
-        rethrow;
+      final MenuCategory category = await ref
+          .watch(menuRepositoryProvider)
+          .getCategory(query.categoryId);
+      if (category.locationId != query.locationId ||
+          category.kind != query.kind) {
+        throw const MenuContextChangedException();
       }
+      return category;
     });
 
 final menuCategoriesProvider = FutureProvider.autoDispose
@@ -70,23 +63,16 @@ final menuCategoriesProvider = FutureProvider.autoDispose
           current.slug != query.locationSlug) {
         return const <MenuCategory>[];
       }
-      try {
-        final categories = await ref
-            .watch(menuRepositoryProvider)
-            .getCategories(locationSlug: query.locationSlug, kind: query.kind);
-        return categories
-            .where(
-              (category) =>
-                  category.locationId == query.locationId &&
-                  category.kind == query.kind,
-            )
-            .toList(growable: false);
-      } on ApiException catch (error) {
-        if (error.statusCode == 401) {
-          await ref.read(authControllerProvider.notifier).signOut();
-        }
-        rethrow;
-      }
+      final categories = await ref
+          .watch(menuRepositoryProvider)
+          .getCategories(locationSlug: query.locationSlug, kind: query.kind);
+      return categories
+          .where(
+            (category) =>
+                category.locationId == query.locationId &&
+                category.kind == query.kind,
+          )
+          .toList(growable: false);
     });
 
 final menuProductsProvider = FutureProvider.autoDispose
@@ -100,22 +86,15 @@ final menuProductsProvider = FutureProvider.autoDispose
           current.slug != query.locationSlug) {
         return const <MenuProduct>[];
       }
-      try {
-        final products = await ref
-            .watch(menuRepositoryProvider)
-            .getProducts(
-              locationSlug: query.locationSlug,
-              categoryId: query.categoryId,
-            );
-        return products
-            .where((product) => product.categoryId == query.categoryId)
-            .toList(growable: false);
-      } on ApiException catch (error) {
-        if (error.statusCode == 401) {
-          await ref.read(authControllerProvider.notifier).signOut();
-        }
-        rethrow;
-      }
+      final products = await ref
+          .watch(menuRepositoryProvider)
+          .getProducts(
+            locationSlug: query.locationSlug,
+            categoryId: query.categoryId,
+          );
+      return products
+          .where((product) => product.categoryId == query.categoryId)
+          .toList(growable: false);
     });
 
 final menuProductDetailProvider = FutureProvider.autoDispose
@@ -127,20 +106,13 @@ final menuProductDetailProvider = FutureProvider.autoDispose
       if (current == null || current.id != query.locationId) {
         throw const MenuContextChangedException();
       }
-      try {
-        final product = await ref
-            .watch(menuRepositoryProvider)
-            .getProduct(query.productId);
-        if (product.categoryId != query.categoryId) {
-          throw const MenuContextChangedException();
-        }
-        return product;
-      } on ApiException catch (error) {
-        if (error.statusCode == 401) {
-          await ref.read(authControllerProvider.notifier).signOut();
-        }
-        rethrow;
+      final product = await ref
+          .watch(menuRepositoryProvider)
+          .getProduct(query.productId);
+      if (product.categoryId != query.categoryId) {
+        throw const MenuContextChangedException();
       }
+      return product;
     });
 
 class MenuContextChangedException implements Exception {
@@ -221,9 +193,6 @@ class ProductMutationController extends Notifier<ProductMutationState> {
       _refresh(canonical.id);
       return true;
     } on ApiException catch (error) {
-      if (error.statusCode == 401) {
-        await ref.read(authControllerProvider.notifier).signOut();
-      }
       if (_ambiguous(error) && key.productId != null) {
         return _reconcileUpdate(input, error);
       }
@@ -414,9 +383,6 @@ class CategoryMutationController extends Notifier<CategoryMutationState> {
       _refresh();
       return true;
     } on ApiException catch (error) {
-      if (error.statusCode == 401) {
-        await ref.read(authControllerProvider.notifier).signOut();
-      }
       if (_ambiguousCategory(error) && key.categoryId != null) {
         return _reconcile(input, error);
       }

@@ -2,7 +2,6 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/api/api_exception.dart';
-import '../../auth/providers/auth_providers.dart';
 import '../../locations/providers/locations_providers.dart';
 import '../data/menu_repository.dart';
 import '../data/product_image_service.dart';
@@ -166,9 +165,6 @@ class ProductImageController extends Notifier<ProductImageState> {
           .updateProductImage(context.productId, publicUrl);
       return await _reconcile(publicUrl);
     } on ApiException catch (error) {
-      if (error.statusCode == 401) {
-        await ref.read(authControllerProvider.notifier).signOut();
-      }
       if (_ambiguous(error)) return _reconcile(publicUrl, patchError: error);
       state = ProductImageState(
         phase: ProductImagePhase.error,
@@ -213,9 +209,6 @@ class ProductImageController extends Notifier<ProductImageState> {
             : '${patchError.message} The update was not confirmed; retry saving manually.',
       );
     } on ApiException catch (error) {
-      if (error.statusCode == 401) {
-        await ref.read(authControllerProvider.notifier).signOut();
-      }
       state = ProductImageState(
         phase: ProductImagePhase.error,
         pendingPublicUrl: publicUrl,
@@ -265,9 +258,6 @@ class ProductImageController extends Notifier<ProductImageState> {
   }
 
   Future<void> _apiError(ApiException error) async {
-    if (error.statusCode == 401) {
-      await ref.read(authControllerProvider.notifier).signOut();
-    }
     state = ProductImageState(
       phase: ProductImagePhase.error,
       message: error.message,

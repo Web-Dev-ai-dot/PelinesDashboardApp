@@ -45,14 +45,7 @@ final orderDetailProvider = FutureProvider.family<OrderDetail, String>((
   Ref ref,
   String id,
 ) async {
-  try {
-    return await ref.watch(ordersRepositoryProvider).getOrderById(id);
-  } on ApiException catch (error) {
-    if (error.statusCode == 401) {
-      await ref.read(authControllerProvider.notifier).signOut();
-    }
-    rethrow;
-  }
+  return await ref.watch(ordersRepositoryProvider).getOrderById(id);
 });
 
 final orderMutationProvider = NotifierProvider.autoDispose
@@ -170,9 +163,6 @@ class OrderNotesController extends Notifier<OrderNotesState> {
       );
       await _reconcile(attempted, previousServer);
     } on ApiException catch (error) {
-      if (error.statusCode == 401) {
-        await ref.read(authControllerProvider.notifier).signOut();
-      }
       if (_isAmbiguousNetworkError(error)) {
         state = OrderNotesState(
           phase: OrderNotesPhase.reconciling,
@@ -234,9 +224,6 @@ class OrderNotesController extends Notifier<OrderNotesState> {
       }
       ref.invalidate(orderDetailProvider(orderId));
     } on ApiException catch (error) {
-      if (error.statusCode == 401) {
-        await ref.read(authControllerProvider.notifier).signOut();
-      }
       state = OrderNotesState(
         phase: OrderNotesPhase.error,
         serverNotes: previousServer,
@@ -396,9 +383,6 @@ class OrderMutationController extends Notifier<OrderMutationState> {
       );
       await _reconcileAfterSuccess(action);
     } on ApiException catch (error) {
-      if (error.statusCode == 401) {
-        await ref.read(authControllerProvider.notifier).signOut();
-      }
       if (action == OrderStatusAction.cancelOrder && error.statusCode != 401) {
         await _reconcileCancellation(canonical);
         return;
@@ -494,9 +478,6 @@ class OrderMutationController extends Notifier<OrderMutationState> {
       }
       return canonical;
     } on ApiException catch (error) {
-      if (error.statusCode == 401) {
-        await ref.read(authControllerProvider.notifier).signOut();
-      }
       state = OrderMutationState(
         phase: OrderMutationPhase.error,
         canonicalOrder: original,
@@ -549,10 +530,7 @@ class OrderMutationController extends Notifier<OrderMutationState> {
       ref.invalidate(todayOrdersProvider);
       ref.invalidate(cancelledOrdersProvider);
       ref.invalidate(calendarOrdersProvider);
-    } on Object catch (error) {
-      if (error is ApiException && error.statusCode == 401) {
-        await ref.read(authControllerProvider.notifier).signOut();
-      }
+    } on Object {
       state = OrderMutationState(
         phase: OrderMutationPhase.error,
         canonicalOrder: original,
@@ -580,9 +558,6 @@ class OrderMutationController extends Notifier<OrderMutationState> {
       ref.invalidate(todayOrdersProvider);
       await ref.read(todayOrdersProvider.future);
     } on ApiException catch (error) {
-      if (error.statusCode == 401) {
-        await ref.read(authControllerProvider.notifier).signOut();
-      }
       state = OrderMutationState(
         phase: OrderMutationPhase.error,
         canonicalOrder: state.canonicalOrder,
@@ -627,10 +602,7 @@ class OrderMutationController extends Notifier<OrderMutationState> {
       ref.invalidate(orderDetailProvider(orderId));
       ref.invalidate(todayOrdersProvider);
       await ref.read(todayOrdersProvider.future);
-    } on ApiException catch (reconcileError) {
-      if (reconcileError.statusCode == 401) {
-        await ref.read(authControllerProvider.notifier).signOut();
-      }
+    } on ApiException {
       state = OrderMutationState(
         phase: OrderMutationPhase.error,
         canonicalOrder: original,
@@ -691,6 +663,7 @@ class TodayOrdersController extends AsyncNotifier<TodayOrdersState> {
 
   @override
   Future<TodayOrdersState> build() async {
+    ref.watch(ordersRepositoryProvider);
     final Location? location = await ref.watch(currentLocationProvider.future);
     if (location == null) {
       return const TodayOrdersState(orders: <OrderSummary>[]);
@@ -729,24 +702,17 @@ class TodayOrdersController extends AsyncNotifier<TodayOrdersState> {
   }
 
   Future<TodayOrdersState> _load(String locationId) async {
-    try {
-      final List<OrderSummary> all = await ref
-          .read(ordersRepositoryProvider)
-          .getOrders(locationId: locationId);
-      final snapshot = List<OrderSummary>.unmodifiable(
-        all.where((order) => order.locationId == locationId),
-      );
-      return TodayOrdersState(
-        orders: filterTodayActiveOrders(snapshot),
-        fullLocationSnapshot: snapshot,
-        snapshotLocationId: locationId,
-      );
-    } on ApiException catch (error) {
-      if (error.statusCode == 401) {
-        await ref.read(authControllerProvider.notifier).signOut();
-      }
-      rethrow;
-    }
+    final List<OrderSummary> all = await ref
+        .read(ordersRepositoryProvider)
+        .getOrders(locationId: locationId);
+    final snapshot = List<OrderSummary>.unmodifiable(
+      all.where((order) => order.locationId == locationId),
+    );
+    return TodayOrdersState(
+      orders: filterTodayActiveOrders(snapshot),
+      fullLocationSnapshot: snapshot,
+      snapshotLocationId: locationId,
+    );
   }
 }
 
@@ -790,6 +756,7 @@ abstract class HistoricalOrdersController
 
   @override
   Future<HistoricalOrdersState> build() async {
+    ref.watch(ordersRepositoryProvider);
     final Location? location = await ref.watch(currentLocationProvider.future);
     if (location == null) {
       return const HistoricalOrdersState(orders: <OrderSummary>[]);
@@ -821,23 +788,16 @@ abstract class HistoricalOrdersController
   }
 
   Future<List<OrderSummary>> _load(String locationId) async {
-    try {
-      final List<OrderSummary> orders = await ref
-          .read(ordersRepositoryProvider)
-          .getOrders(locationId: locationId, status: status);
-      final List<OrderSummary> sorted = List<OrderSummary>.of(orders);
-      sorted.sort(
-        status == OrderStatus.delivered
-            ? compareCompletedOrders
-            : compareCancelledOrders,
-      );
-      return List<OrderSummary>.unmodifiable(sorted);
-    } on ApiException catch (error) {
-      if (error.statusCode == 401) {
-        await ref.read(authControllerProvider.notifier).signOut();
-      }
-      rethrow;
-    }
+    final List<OrderSummary> orders = await ref
+        .read(ordersRepositoryProvider)
+        .getOrders(locationId: locationId, status: status);
+    final List<OrderSummary> sorted = List<OrderSummary>.of(orders);
+    sorted.sort(
+      status == OrderStatus.delivered
+          ? compareCompletedOrders
+          : compareCancelledOrders,
+    );
+    return List<OrderSummary>.unmodifiable(sorted);
   }
 }
 
@@ -856,6 +816,7 @@ class CalendarOrdersController extends AsyncNotifier<HistoricalOrdersState> {
 
   @override
   Future<HistoricalOrdersState> build() async {
+    ref.watch(ordersRepositoryProvider);
     final Location? location = await ref.watch(currentLocationProvider.future);
     if (location == null) {
       return const HistoricalOrdersState(orders: <OrderSummary>[]);
@@ -887,24 +848,17 @@ class CalendarOrdersController extends AsyncNotifier<HistoricalOrdersState> {
   }
 
   Future<HistoricalOrdersState> _load(String locationId) async {
-    try {
-      final List<OrderSummary> orders = await ref
-          .read(ordersRepositoryProvider)
-          .getOrders(locationId: locationId);
-      final snapshot = List<OrderSummary>.unmodifiable(
-        orders.where((order) => order.locationId == locationId),
-      );
-      return HistoricalOrdersState(
-        orders: calendarRelevantOrders(snapshot),
-        fullLocationSnapshot: snapshot,
-        snapshotLocationId: locationId,
-      );
-    } on ApiException catch (error) {
-      if (error.statusCode == 401) {
-        await ref.read(authControllerProvider.notifier).signOut();
-      }
-      rethrow;
-    }
+    final List<OrderSummary> orders = await ref
+        .read(ordersRepositoryProvider)
+        .getOrders(locationId: locationId);
+    final snapshot = List<OrderSummary>.unmodifiable(
+      orders.where((order) => order.locationId == locationId),
+    );
+    return HistoricalOrdersState(
+      orders: calendarRelevantOrders(snapshot),
+      fullLocationSnapshot: snapshot,
+      snapshotLocationId: locationId,
+    );
   }
 }
 
