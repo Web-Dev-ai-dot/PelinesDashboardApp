@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:intl/intl.dart';
 
 import '../../../core/time/pelines_time.dart';
+import '../../orders/models/order_models.dart';
 import '../models/ticket_document.dart';
 
 /// Conservative Font A layout fitting both TM-m30II 48/35 and 42/32 modes.
@@ -204,6 +205,9 @@ class EscPosTicketRenderer {
       line('Amount paid: Unknown');
     }
     line('Payment: ${ticket.payment.name}');
+    if (ticket.payment == PaymentStatus.refunded) {
+      line('REFUNDED / REEMBOLSADO', bold: true, center: true);
+    }
     optional('Card: ', ticket.cardBrand);
     optional('Card ending: ', ticket.cardLast4);
     command([27, 69, 0, 29, 33, 0, 27, 97, 0]);

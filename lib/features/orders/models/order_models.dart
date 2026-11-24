@@ -33,7 +33,14 @@ enum PaymentStatus {
     _ => unknown,
   };
 
-  bool get isOperationallyPaid => this == paid;
+  /// Settled: the order was paid, even if the money was later refunded. A
+  /// refunded order that is still active keeps flowing like a paid order
+  /// (Today, Calendar, boards, status changes).
+  bool get isOperationallyPaid => this == paid || this == refunded;
+
+  /// Strictly paid. New-order alerts and auto-print require this: a refunded
+  /// order must never alert or print automatically.
+  bool get isPaid => this == paid;
 }
 
 enum OrderType {

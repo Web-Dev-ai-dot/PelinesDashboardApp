@@ -68,6 +68,45 @@ void main() {
       expect(state.knownIds, isNot(contains('B')));
     });
   }
+  test('a refunded pending order never triggers the new-order alert', () async {
+    final store = _MemoryStore();
+    final sound = _FakeSound();
+    final container = _container(store, sound);
+    addTearDown(container.dispose);
+    await container.read(orderAlertsProvider.future);
+    final controller = container.read(orderAlertsProvider.notifier);
+    await controller.processSnapshot(
+      locationId: 'a',
+      orders: [],
+      mayPlaySound: true,
+    );
+    await controller.processSnapshot(
+      locationId: 'a',
+      orders: [
+        _order('refunded', payment: PaymentStatus.refunded),
+        _order(
+          'refunded-confirmed',
+          status: OrderStatus.confirmed,
+          payment: PaymentStatus.refunded,
+        ),
+      ],
+      mayPlaySound: true,
+    );
+    final state = container.read(orderAlertsProvider).requireValue;
+    expect(state.unseenIds, isEmpty);
+    expect(state.knownIds, isNot(contains('refunded')));
+    expect(sound.playCalls, 0);
+
+    // The same order once paid does alert, proving the gate is the payment.
+    await controller.processSnapshot(
+      locationId: 'a',
+      orders: [_order('paid')],
+      mayPlaySound: true,
+    );
+    expect(container.read(orderAlertsProvider).requireValue.unseenIds, [
+      'paid',
+    ]);
+  });
   test('persisted legacy JSON loads as version zero and writes full snapshot version', () async {
     SharedPreferences.setMockInitialValues({
       'pelines.order_alerts.a': '{"known":["A"],"unseen":["A"]}',

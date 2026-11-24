@@ -865,7 +865,23 @@ void main() {
     },
   );
 
-  for (final payment in ['unpaid', 'refunded', 'failed']) {
+  testWidgets('refunded active order never says Paid with but can Print', (
+    tester,
+  ) async {
+    final repo = _Repo(_data(payment: 'refunded'));
+    await _mount(tester, repo);
+    expect(find.byKey(const Key('detail-paid-card')), findsNothing);
+    expect(find.text('Payment not completed'), findsNothing);
+    expect(
+      tester
+          .widget<OutlinedButton>(
+            find.byKey(Key('todo-print-${repo.json['id']}')),
+          )
+          .onPressed,
+      isNotNull,
+    );
+  });
+  for (final payment in ['unpaid', 'failed']) {
     testWidgets('$payment never says Paid with or enables Print', (
       tester,
     ) async {

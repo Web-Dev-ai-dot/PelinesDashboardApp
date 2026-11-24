@@ -89,7 +89,7 @@ class OrderAlertCoordinator {
     if (_current == null || locationId != location) return;
     final order = orders.where((o) => o.id == orderId).firstOrNull;
     if (order == null ||
-        !order.paymentStatus.isOperationallyPaid ||
+        !order.paymentStatus.isPaid ||
         (order.status != OrderStatus.pending &&
             (order.status != OrderStatus.confirmed ||
                 _entry?.repeating == true))) {

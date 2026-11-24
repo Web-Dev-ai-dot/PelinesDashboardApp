@@ -638,7 +638,7 @@ class _DetailBody extends ConsumerWidget {
                       key: const Key('detail-payment'),
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        if (!(order.paymentStatus.isOperationallyPaid &&
+                        if (!(order.paymentStatus.isPaid &&
                             order.cardBrand?.trim().isNotEmpty == true &&
                             order.cardLast4?.trim().isNotEmpty == true))
                           _Row(
@@ -651,7 +651,7 @@ class _DetailBody extends ConsumerWidget {
                                     paymentStatusLabel(order.paymentStatus),
                                   ),
                           ),
-                        if (order.paymentStatus.isOperationallyPaid &&
+                        if (order.paymentStatus.isPaid &&
                             order.cardBrand?.trim().isNotEmpty == true &&
                             order.cardLast4?.trim().isNotEmpty == true)
                           Text(

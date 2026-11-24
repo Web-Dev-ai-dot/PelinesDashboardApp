@@ -190,7 +190,8 @@ void main() {
         dateFilter: OrdersDateFilter.upcoming,
         now: now,
       ).map((o) => o.id),
-      ['picked-id'],
+      // A refunded pickup is settled and still counts as picked up.
+      ['picked-id', 'refunded-id'],
     );
     expect(calendarRelevantOrders(rows).map((o) => o.id), ['ready-id']);
   });
@@ -238,7 +239,7 @@ void main() {
       locationId: 'location-id',
       now: now,
     );
-    expect(result.map((o) => o.id), [picked.id]);
+    expect(result.map((o) => o.id), [picked.id, 'refunded-id']);
     expect(filterTodayActiveOrders(snapshot, now: now).map((o) => o.id), [
       'ready-id',
     ]);
@@ -359,7 +360,7 @@ void main() {
     ]);
   });
 
-  test('only paid active orders enter the operational Today flow', () {
+  test('paid and refunded active orders enter the operational Today flow', () {
     final DateTime now = DateTime.parse('2026-09-04T19:00:00Z');
     final List<OrderSummary> result = filterTodayActiveOrders(<OrderSummary>[
       _order('pending-paid', OrderStatus.pending, '2026-09-04T18:00:00Z'),
@@ -397,6 +398,7 @@ void main() {
       'confirmed-paid',
       'preparing-paid',
       'ready-paid',
+      'pending-refunded',
     ]);
   });
 

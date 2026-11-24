@@ -417,7 +417,7 @@ void main() {
       await _mount(tester, repo);
       expect(card('confirmed'), findsNothing);
       expect(find.text('Confirmed · 0'), findsOneWidget);
-      repo.rows['pending']!['paymentStatus'] = 'refunded';
+      repo.rows['pending']!['paymentStatus'] = 'failed';
       await tester.ensureVisible(action('pending'));
       await tester.tap(action('pending'));
       await tester.pumpAndSettle();

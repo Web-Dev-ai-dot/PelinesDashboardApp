@@ -141,8 +141,56 @@ void main() {
     });
   }
 
-  test('canonical refunded payment blocks a locally paid order', () async {
+  test('refunded active order is settled: status change allowed', () async {
     final OrderDetail refunded = orderDetail(payment: PaymentStatus.refunded);
+    final OrderDetail accepted = orderDetail(
+      status: OrderStatus.confirmed,
+      payment: PaymentStatus.refunded,
+    );
+    final _FakeOrdersRepository repository = _FakeOrdersRepository(
+      patchResult: accepted,
+      getResult: accepted,
+      getResults: <OrderDetail>[refunded, accepted],
+    );
+    final ProviderContainer container = _container(repository);
+    addTearDown(container.dispose);
+    await container.read(currentLocationProvider.future);
+    await container
+        .read(orderMutationProvider(repository.orderId).notifier)
+        .acceptOrder(refunded);
+    expect(repository.patchCalls, 1);
+    expect(repository.requestedStatuses, <OrderStatus>[OrderStatus.confirmed]);
+    expect(
+      container.read(orderMutationProvider(repository.orderId)).phase,
+      OrderMutationPhase.success,
+    );
+  });
+
+  testWidgets(
+    'refunded active order shows no payment warning and keeps its action',
+    (WidgetTester tester) async {
+      final OrderDetail refunded = orderDetail(payment: PaymentStatus.refunded);
+      final _FakeOrdersRepository repository = _FakeOrdersRepository(
+        patchResult: orderDetail(
+          status: OrderStatus.confirmed,
+          payment: PaymentStatus.refunded,
+        ),
+        getResult: refunded,
+      );
+      await _pumpDetail(tester, repository);
+      expect(find.text('Payment not completed'), findsNothing);
+      expect(
+        find.text(
+          'This order cannot be processed because its payment is not marked as paid.',
+        ),
+        findsNothing,
+      );
+      expect(find.text('Accept order'), findsWidgets);
+    },
+  );
+
+  test('canonical unpaid payment blocks a locally paid order', () async {
+    final OrderDetail refunded = orderDetail(payment: PaymentStatus.unpaid);
     final _FakeOrdersRepository repository = _FakeOrdersRepository(
       patchResult: orderDetail(status: OrderStatus.confirmed),
       getResult: refunded,
@@ -278,7 +326,6 @@ void main() {
   for (final PaymentStatus payment in <PaymentStatus>[
     PaymentStatus.failed,
     PaymentStatus.unpaid,
-    PaymentStatus.refunded,
     PaymentStatus.unknown,
   ]) {
     test('${payment.name} payment blocks status PATCH in controller', () async {
@@ -723,7 +770,6 @@ void main() {
   for (final PaymentStatus payment in <PaymentStatus>[
     PaymentStatus.failed,
     PaymentStatus.unpaid,
-    PaymentStatus.refunded,
     PaymentStatus.unknown,
   ]) {
     testWidgets('direct detail blocks actions for ${payment.name} payment', (

@@ -185,13 +185,14 @@ class OrderAlertsController extends AsyncNotifier<OrderAlertsState> {
     state = const AsyncData<OrderAlertsState>(OrderAlertsState());
   }
 
+  // Alerts require strictly paid orders: a refunded order never alerts.
   static bool _isAlertEligible(OrderSummary order) =>
-      order.paymentStatus.isOperationallyPaid &&
+      order.paymentStatus.isPaid &&
       (order.status == OrderStatus.pending ||
           order.status == OrderStatus.confirmed);
 
   static bool _isOperational(OrderSummary order) =>
-      order.paymentStatus.isOperationallyPaid &&
+      order.paymentStatus.isPaid &&
       const <OrderStatus>{
         OrderStatus.pending,
         OrderStatus.confirmed,
