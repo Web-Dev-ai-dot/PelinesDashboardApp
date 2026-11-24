@@ -22,6 +22,7 @@ import '../providers/orders_providers.dart';
 import 'order_ui_helpers.dart';
 import 'order_parity_content.dart';
 import 'order_preview_action.dart';
+import 'order_refunds.dart';
 import '../../../app/theme/app_theme.dart';
 import 'cancel_order_action.dart';
 import 'todo_print_action.dart';
@@ -40,6 +41,20 @@ class OrderDetailScreen extends ConsumerStatefulWidget {
 class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
   OrderDetail? _lastOrder;
   int? _lastResumeTick;
+  bool _refundSyncStarted = false;
+
+  /// Pulls refunds made in the Stripe dashboard once per opened detail.
+  /// Silent: older APIs have no sync endpoint.
+  Future<void> _syncRefunds() async {
+    try {
+      final repository = ref.read(orderRefundsRepositoryProvider);
+      if (repository == null) return;
+      await repository.syncRefunds(widget.orderId);
+    } on Object {
+      return;
+    }
+    if (mounted) ref.invalidate(orderDetailProvider(widget.orderId));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -85,6 +100,15 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
     }
     final OrderNotesState notes = ref.watch(orderNotesProvider(widget.orderId));
     final OrderDetail? displayed = detail.value ?? _lastOrder;
+    if (!_refundSyncStarted &&
+        displayed != null &&
+        (displayed.paymentStatus == PaymentStatus.paid ||
+            displayed.paymentStatus == PaymentStatus.refunded)) {
+      _refundSyncStarted = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _syncRefunds();
+      });
+    }
 
     Future<void> leave() async {
       if (notes.isDirty) {
@@ -634,6 +658,13 @@ class _DetailBody extends ConsumerWidget {
                             key: const Key('detail-paid-card'),
                           ),
                       ],
+                    ),
+                    OrderRefundSection(
+                      order: order,
+                      enabled:
+                          !locationContextChanged &&
+                          !mutation.isBusy &&
+                          !notes.isBusy,
                     ),
                   ],
                 ),
