@@ -28,13 +28,17 @@ Map<String, dynamic> _order({
   List<Map<String, dynamic>>? refunds,
   int? refundedCents,
   int? refundableCents,
+  bool legacyApi = false,
 }) => <String, dynamic>{
   ...orderJson(payment: payment),
   'cardBrand': 'visa',
   'cardLast4': '4242',
-  'refunds': ?refunds,
-  'refundedCents': ?refundedCents,
-  'refundableCents': ?refundableCents,
+  // An API without refund routes omits all three fields.
+  if (!legacyApi) ...<String, dynamic>{
+    'refunds': refunds ?? <dynamic>[],
+    'refundedCents': refundedCents ?? 0,
+    'refundableCents': refundableCents ?? 1100,
+  },
 };
 
 Widget _app(Widget home, {List overrides = const [], double scale = 1}) =>
@@ -190,7 +194,22 @@ class _SyncingRepo implements OrdersRepository, OrderRefundsRepository {
     required RefundReason reason,
     required String idempotencyKey,
     String? note,
-  }) => throw UnimplementedError();
+  }) async {
+    refundCalls++;
+    final int refunded = (json['refundedCents'] as int) + amountCents;
+    json = <String, dynamic>{
+      ...json,
+      'refunds': <dynamic>[
+        ...json['refunds'] as List<dynamic>,
+        refundJson(id: 'refund-$refundCalls', amountCents: amountCents),
+      ],
+      'refundedCents': refunded,
+      'refundableCents': (json['totalCents'] as int) - refunded,
+    };
+    return OrderDetail.fromJson(json);
+  }
+
+  int refundCalls = 0;
 
   @override
   Future<List<OrderSummary>> getOrders({
@@ -323,6 +342,15 @@ void main() {
       expect(find.text('Remaining refundable'), findsNothing);
       expect(find.byKey(const Key('refund-issue')), findsNothing);
       expect(find.text('• Oct 28, 2026 • Order cancelled'), findsOneWidget);
+    });
+
+    testWidgets('(e) paid order from an API without refunds shows nothing', (
+      tester,
+    ) async {
+      await _pumpSection(tester, OrderDetail.fromJson(_order(legacyApi: true)));
+      expect(find.byKey(const Key('refund-section')), findsNothing);
+      expect(find.byKey(const Key('refund-issue')), findsNothing);
+      expect(find.text('Issue Refund'), findsNothing);
     });
 
     testWidgets('(d) unpaid order shows nothing', (tester) async {
@@ -506,9 +534,8 @@ void main() {
           isNull,
         );
 
-        // Not dismissible while in flight: barrier tap and back are ignored.
-        await tester.tapAt(const Offset(5, 5));
-        await tester.pump();
+        // Not dismissible while in flight: back / barrier dismissal
+        // (both route through maybePop) are ignored.
         final NavigatorState navigator = tester.state<NavigatorState>(
           find.byType(Navigator),
         );
@@ -664,6 +691,54 @@ void main() {
         scrollable: find.byType(Scrollable).first,
       );
       expect(find.text('Issue Refund'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('API without refunds: no sync and no refund UI', (
+      tester,
+    ) async {
+      final _SyncingRepo repo = _SyncingRepo(
+        _order(legacyApi: true)..['status'] = 'confirmed',
+      );
+      await mount(tester, repo);
+      expect(repo.syncs, 0);
+      expect(find.byKey(const Key('detail-paid-card')), findsOneWidget);
+      expect(find.byKey(const Key('refund-section')), findsNothing);
+      expect(find.text('Issue Refund'), findsNothing);
+    });
+
+    testWidgets('a successful refund updates the open detail', (tester) async {
+      final _SyncingRepo repo = _SyncingRepo(
+        _order()..['status'] = 'confirmed',
+        syncFails: true,
+      );
+      await mount(tester, repo);
+      final int getsBefore = repo.gets;
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('refund-issue')),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.ensureVisible(find.byKey(const Key('refund-issue')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('refund-issue')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('refund-mode-partial')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('refund-amount')), '4');
+      await tester.pump();
+      await tester.ensureVisible(find.byKey(const Key('refund-submit')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('refund-submit')));
+      await tester.pumpAndSettle();
+
+      expect(repo.refundCalls, 1);
+      expect(find.byKey(const Key('refund-sheet')), findsNothing);
+      expect(find.text(r'Refunded $4.00'), findsOneWidget);
+      expect(repo.gets, greaterThan(getsBefore));
+      expect(find.text('Partially Refunded'), findsOneWidget);
+      expect(find.text('Issue Another Refund'), findsOneWidget);
+      expect(find.text(r'$7.00'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 

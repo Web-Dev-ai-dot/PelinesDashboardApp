@@ -166,8 +166,8 @@ class OrderDetail {
     this.printedAt,
     this.refunds = const <OrderRefund>[],
     this.refundedCents = 0,
-    int? refundableCents,
-  }) : refundableCents = refundableCents ?? totalCents;
+    this.refundableCents,
+  });
 
   factory OrderDetail.fromJson(Map<String, dynamic> json) {
     return OrderDetail(
@@ -211,7 +211,8 @@ class OrderDetail {
             return OrderItem.fromJson(item);
           })
           .toList(growable: false),
-      // Older APIs omit refund data: no refunds, the whole total refundable.
+      // Older APIs omit refund data (and have no refund routes): no refunds,
+      // and refundableCents stays null so no refund UI is offered.
       refunds: OrderRefund.listFromJson(json['refunds']),
       refundedCents: json['refundedCents'] is int
           ? json['refundedCents'] as int
@@ -259,15 +260,22 @@ class OrderDetail {
   /// Refunds oldest first, as the API returns them.
   final List<OrderRefund> refunds;
   final int refundedCents;
-  final int refundableCents;
+
+  /// Null when the API predates refunds (no refund routes exist there).
+  final int? refundableCents;
+
+  /// Only APIs that report refundableCents expose the refund endpoints.
+  bool get supportsRefunds => refundableCents != null;
 
   /// Staff may issue a refund only for a paid order with a balance left.
   bool get canIssueRefund =>
-      paymentStatus == PaymentStatus.paid && refundableCents > 0;
+      supportsRefunds &&
+      paymentStatus == PaymentStatus.paid &&
+      refundableCents! > 0;
 
   bool get isFullyRefunded =>
       refundedCents > 0 &&
-      (paymentStatus == PaymentStatus.refunded || refundableCents <= 0);
+      (paymentStatus == PaymentStatus.refunded || (refundableCents ?? 0) <= 0);
 }
 
 enum RefundStatus {

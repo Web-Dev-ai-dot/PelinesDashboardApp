@@ -35,13 +35,14 @@ Map<String, dynamic> refundJson({
 void main() {
   group('OrderDetail.fromJson refunds', () {
     test(
-      'older API without refund fields: none refunded, total refundable',
+      'older API without refund fields: no refunds and no refund support',
       () {
         final OrderDetail order = OrderDetail.fromJson(orderJson());
         expect(order.refunds, isEmpty);
         expect(order.refundedCents, 0);
-        expect(order.refundableCents, 1100);
-        expect(order.canIssueRefund, isTrue);
+        expect(order.refundableCents, isNull);
+        expect(order.supportsRefunds, isFalse);
+        expect(order.canIssueRefund, isFalse);
         expect(order.isFullyRefunded, isFalse);
       },
     );
@@ -115,7 +116,19 @@ void main() {
       expect(refund.reason, 'other');
       expect(refund.source, 'staff');
       expect(order.refundedCents, 0);
-      expect(order.refundableCents, 1100);
+      expect(order.refundableCents, isNull);
+      expect(order.supportsRefunds, isFalse);
+    });
+
+    test('a paid order with refundableCents supports refunds', () {
+      final OrderDetail order = OrderDetail.fromJson(<String, dynamic>{
+        ...orderJson(),
+        'refunds': <dynamic>[],
+        'refundedCents': 0,
+        'refundableCents': 1100,
+      });
+      expect(order.supportsRefunds, isTrue);
+      expect(order.canIssueRefund, isTrue);
     });
 
     test('non-list refunds field is treated as no refunds', () {

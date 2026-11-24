@@ -102,6 +102,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
     final OrderDetail? displayed = detail.value ?? _lastOrder;
     if (!_refundSyncStarted &&
         displayed != null &&
+        displayed.supportsRefunds &&
         (displayed.paymentStatus == PaymentStatus.paid ||
             displayed.paymentStatus == PaymentStatus.refunded)) {
       _refundSyncStarted = true;

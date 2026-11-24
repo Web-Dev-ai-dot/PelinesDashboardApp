@@ -54,6 +54,7 @@ class OrderRefundSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (!order.supportsRefunds) return const SizedBox.shrink();
     final List<OrderRefund> history = newestRefundsFirst(order.refunds);
     final bool canRefund = order.canIssueRefund;
     final int refunded = order.refundedCents;
@@ -104,7 +105,7 @@ class OrderRefundSection extends ConsumerWidget {
                 key: const Key('refund-remaining'),
                 label: Text(tr(context, 'Remaining refundable')),
                 value: Text(
-                  money(order.refundableCents),
+                  money(order.refundableCents ?? 0),
                   textAlign: TextAlign.end,
                 ),
               ),
@@ -297,7 +298,7 @@ class _RefundSheetState extends ConsumerState<RefundSheet> {
   // refund twice, while a new sheet (a genuinely new refund) gets a new key.
   late final String _idempotencyKey = newIdempotencyKey();
   late final TextEditingController _amount = TextEditingController(
-    text: centsToDollarInput(widget.order.refundableCents),
+    text: centsToDollarInput(widget.order.refundableCents ?? 0),
   );
   final TextEditingController _note = TextEditingController();
   _RefundMode _mode = _RefundMode.full;
@@ -305,7 +306,7 @@ class _RefundSheetState extends ConsumerState<RefundSheet> {
   bool _submitting = false;
   String? _error;
 
-  int get _refundable => widget.order.refundableCents;
+  int get _refundable => widget.order.refundableCents ?? 0;
 
   int? get _cents => _mode == _RefundMode.full
       ? _refundable
@@ -365,14 +366,15 @@ class _RefundSheetState extends ConsumerState<RefundSheet> {
       invalidateOrderAfterRefund(ref, orderId);
       Navigator.of(context).pop(cents);
     } on ApiException catch (error) {
-      if (error.statusCode == 401) {
-        await ref.read(authControllerProvider.notifier).signOut();
-      }
       if (!mounted) return;
+      // Unlock the sheet first: sign-out must never leave it undismissable.
       setState(() {
         _submitting = false;
         _error = error.message;
       });
+      if (error.statusCode == 401) {
+        await ref.read(authControllerProvider.notifier).signOut();
+      }
     } on Object {
       if (!mounted) return;
       setState(() {

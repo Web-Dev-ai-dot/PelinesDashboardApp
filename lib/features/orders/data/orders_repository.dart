@@ -255,7 +255,8 @@ class ApiOrdersRepository implements OrdersRepository, OrderRefundsRepository {
       401 => 'Your session is no longer valid. Please sign in again.',
       403 => 'Administrator access is required.',
       400 || 409 || 422 when serverMessage != null => serverMessage,
-      404 => 'Order no longer available.',
+      // An API without refund routes also answers 404.
+      404 => 'Refunds are not available.',
       _
           when error.type == DioExceptionType.connectionTimeout ||
               error.type == DioExceptionType.receiveTimeout ||
