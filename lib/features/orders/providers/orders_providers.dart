@@ -21,6 +21,26 @@ final ordersRepositoryProvider = Provider<OrdersRepository>((Ref ref) {
   return ApiOrdersRepository(ref.watch(apiClientProvider));
 });
 
+/// Refunds share the orders repository; null when it cannot refund (no sync,
+/// no submit) so alternate repositories need not implement refunds.
+final orderRefundsRepositoryProvider = Provider<OrderRefundsRepository?>((
+  Ref ref,
+) {
+  final OrdersRepository repository = ref.watch(ordersRepositoryProvider);
+  return repository is OrderRefundsRepository
+      ? repository as OrderRefundsRepository
+      : null;
+});
+
+/// Expires every cached view of an order after its payment changed.
+void invalidateOrderAfterRefund(WidgetRef ref, String orderId) {
+  ref.invalidate(orderDetailProvider(orderId));
+  ref.invalidate(todayOrdersProvider);
+  ref.invalidate(completedOrdersProvider);
+  ref.invalidate(cancelledOrdersProvider);
+  ref.invalidate(calendarOrdersProvider);
+}
+
 final todayOrdersProvider =
     AsyncNotifierProvider<TodayOrdersController, TodayOrdersState>(
       TodayOrdersController.new,

@@ -302,6 +302,9 @@ class EscPosTicketRenderer {
         center: true,
       );
     }
+    if (ticket.payment == PaymentStatus.refunded) {
+      line('REFUNDED / REEMBOLSADO', bold: true, center: true);
+    }
     if (ticket.payment == PaymentStatus.paid) {
       if (ticket.isTest) {
         line('SIMULATED PAYMENT: card', bold: true, center: true);

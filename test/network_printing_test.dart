@@ -319,6 +319,17 @@ void main() {
         }
       },
     );
+    test('refunded ticket carries a REFUNDED / REEMBOLSADO stamp', () {
+      String render(String payment) => latin1.decode(
+        const EscPosTicketRenderer().render(
+          const TicketBuilder().build(
+            OrderDetail.fromJson(orderJson()..['paymentStatus'] = payment),
+          ),
+        ),
+      );
+      expect(render('refunded'), contains('REFUNDED / REEMBOLSADO'));
+      expect(render('paid'), isNot(contains('REFUNDED')));
+    });
     test('unpaid amount stays unknown', () {
       final json = orderJson()..['paymentStatus'] = 'pending';
       final text = latin1.decode(

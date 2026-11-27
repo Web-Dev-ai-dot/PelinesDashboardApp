@@ -163,7 +163,6 @@ void main() {
   for (final payment in [
     PaymentStatus.unpaid,
     PaymentStatus.failed,
-    PaymentStatus.refunded,
     PaymentStatus.unknown,
   ]) {
     test('preflight rejects canonical ${payment.name}', () async {
@@ -297,7 +296,6 @@ void main() {
   for (final payment in [
     PaymentStatus.unpaid,
     PaymentStatus.failed,
-    PaymentStatus.refunded,
     PaymentStatus.unknown,
   ]) {
     testWidgets('no Cancel UI for ${payment.name}', (tester) async {

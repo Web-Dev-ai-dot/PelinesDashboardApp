@@ -162,7 +162,7 @@ class OrderPreviewCard extends ConsumerWidget {
                               foreground: PelinesColors.textSecondary,
                               background: PelinesColors.mutedSurface,
                             ),
-                          if (!order.paymentStatus.isOperationallyPaid)
+                          if (!order.paymentStatus.isPaid)
                             PelinesOrderBadges.payment(
                               payment: order.paymentStatus,
                               label: tr(

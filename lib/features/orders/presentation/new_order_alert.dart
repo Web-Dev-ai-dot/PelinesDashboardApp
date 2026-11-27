@@ -323,7 +323,7 @@ class _NewOrderDecisionState extends ConsumerState<_NewOrderDecision>
           needsDecision:
               OrderStatusAction.forOrder(order.status, order.fulfillmentType) ==
               OrderStatusAction.acceptOrder,
-          paid: order.paymentStatus.isOperationallyPaid,
+          paid: order.paymentStatus.isPaid,
         );
       }
     } on Object catch (error) {
@@ -446,7 +446,7 @@ class _NewOrderDecisionState extends ConsumerState<_NewOrderDecision>
         order.locationId == widget.location.id;
     final needsDecision =
         safe &&
-        order.paymentStatus.isOperationallyPaid &&
+        order.paymentStatus.isPaid &&
         OrderStatusAction.forOrder(order.status, order.fulfillmentType) ==
             OrderStatusAction.acceptOrder;
     final canCancel =
@@ -542,7 +542,7 @@ class _NewOrderDecisionState extends ConsumerState<_NewOrderDecision>
                   locationName: widget.location.name,
                   locationAddress: widget.location.address,
                 ),
-                if (!order.paymentStatus.isOperationallyPaid)
+                if (!order.paymentStatus.isPaid)
                   Text(
                     tr(
                       context,

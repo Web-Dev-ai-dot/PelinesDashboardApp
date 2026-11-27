@@ -140,16 +140,24 @@ void main() {
   });
   group('Eligibility', () {
     for (final payment in PaymentStatus.values) {
-      test(
-        '$payment eligibility is strict',
-        () => expect(
-          PrintEligibility.initial(
-            orderDetail(status: OrderStatus.confirmed, payment: payment),
-            config,
+      test('$payment manual eligibility requires a settled payment', () {
+        final order = orderDetail(
+          status: OrderStatus.confirmed,
+          payment: payment,
+        );
+        expect(
+          PrintEligibility.initial(order, config),
+          payment == PaymentStatus.paid || payment == PaymentStatus.refunded,
+        );
+        // Automatic printing never fires for a refunded order.
+        expect(
+          PrintEligibility.regularAsap(
+            order,
+            config.copyWith(autoPrintRegularAsap: true),
           ),
           payment == PaymentStatus.paid,
-        ),
-      );
+        );
+      });
     }
     test('location, enabled, known type and status required', () {
       expect(

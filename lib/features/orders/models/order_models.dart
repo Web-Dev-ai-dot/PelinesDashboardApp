@@ -33,7 +33,14 @@ enum PaymentStatus {
     _ => unknown,
   };
 
-  bool get isOperationallyPaid => this == paid;
+  /// Settled: the order was paid, even if the money was later refunded. A
+  /// refunded order that is still active keeps flowing like a paid order
+  /// (Today, Calendar, boards, status changes).
+  bool get isOperationallyPaid => this == paid || this == refunded;
+
+  /// Strictly paid. New-order alerts and auto-print require this: a refunded
+  /// order must never alert or print automatically.
+  bool get isPaid => this == paid;
 }
 
 enum OrderType {
@@ -164,6 +171,9 @@ class OrderDetail {
     this.cardLast4,
     this.deliveredAt,
     this.printedAt,
+    this.refunds = const <OrderRefund>[],
+    this.refundedCents = 0,
+    this.refundableCents,
   });
 
   factory OrderDetail.fromJson(Map<String, dynamic> json) {
@@ -208,6 +218,15 @@ class OrderDetail {
             return OrderItem.fromJson(item);
           })
           .toList(growable: false),
+      // Older APIs omit refund data (and have no refund routes): no refunds,
+      // and refundableCents stays null so no refund UI is offered.
+      refunds: OrderRefund.listFromJson(json['refunds']),
+      refundedCents: json['refundedCents'] is int
+          ? json['refundedCents'] as int
+          : 0,
+      refundableCents: json['refundableCents'] is int
+          ? json['refundableCents'] as int
+          : null,
     );
   }
 
@@ -244,6 +263,106 @@ class OrderDetail {
   final DateTime? deliveredAt;
   final DateTime? printedAt;
   final List<OrderItem> items;
+
+  /// Refunds oldest first, as the API returns them.
+  final List<OrderRefund> refunds;
+  final int refundedCents;
+
+  /// Null when the API predates refunds (no refund routes exist there).
+  final int? refundableCents;
+
+  /// Only APIs that report refundableCents expose the refund endpoints.
+  bool get supportsRefunds => refundableCents != null;
+
+  /// Staff may issue a refund only for a paid order with a balance left.
+  bool get canIssueRefund =>
+      supportsRefunds &&
+      paymentStatus == PaymentStatus.paid &&
+      refundableCents! > 0;
+
+  bool get isFullyRefunded =>
+      refundedCents > 0 &&
+      (paymentStatus == PaymentStatus.refunded || (refundableCents ?? 0) <= 0);
+}
+
+enum RefundStatus {
+  succeeded,
+  pending,
+  requiresAction,
+  failed,
+  canceled,
+  unknown;
+
+  static RefundStatus fromJson(Object? value) => switch (value) {
+    'succeeded' => succeeded,
+    'pending' => pending,
+    'requires_action' => requiresAction,
+    'failed' => failed,
+    'canceled' => canceled,
+    _ => unknown,
+  };
+
+  /// Failed and canceled refunds returned no money.
+  bool get returnedMoney => this != failed && this != canceled;
+
+  bool get isPending => this == pending || this == requiresAction;
+}
+
+class OrderRefund {
+  const OrderRefund({
+    required this.id,
+    required this.amountCents,
+    required this.status,
+    required this.reason,
+    required this.source,
+    this.stripeRefundId,
+    this.note,
+    this.failureReason,
+    this.createdAt,
+  });
+
+  /// Null for an entry too malformed to show; reasons/sources stay raw strings.
+  static OrderRefund? tryFromJson(Object? value) {
+    if (value is! Map<String, dynamic>) return null;
+    final Object? id = value['id'];
+    final Object? amount = value['amountCents'];
+    if (id is! String || amount is! int) return null;
+    final Object? created = value['createdAt'];
+    return OrderRefund(
+      id: id,
+      stripeRefundId: value['stripeRefundId'] is String
+          ? value['stripeRefundId'] as String
+          : null,
+      amountCents: amount,
+      status: RefundStatus.fromJson(value['status']),
+      reason: value['reason'] is String ? value['reason'] as String : 'other',
+      note: value['note'] is String ? value['note'] as String : null,
+      source: value['source'] is String ? value['source'] as String : 'staff',
+      failureReason: value['failureReason'] is String
+          ? value['failureReason'] as String
+          : null,
+      createdAt: created is String ? DateTime.tryParse(created) : null,
+    );
+  }
+
+  static List<OrderRefund> listFromJson(Object? value) {
+    if (value is! List<dynamic>) return const <OrderRefund>[];
+    return <OrderRefund>[
+      for (final Object? entry in value) ?tryFromJson(entry),
+    ];
+  }
+
+  final String id;
+  final String? stripeRefundId;
+  final int amountCents;
+  final RefundStatus status;
+  final String reason;
+  final String? note;
+  final String source;
+  final String? failureReason;
+  final DateTime? createdAt;
+
+  bool get viaStripe => source == 'stripe';
 }
 
 class OrderItem {

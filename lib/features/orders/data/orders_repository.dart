@@ -20,7 +20,34 @@ abstract interface class OrdersRepository {
   });
 }
 
-class ApiOrdersRepository implements OrdersRepository {
+/// Refund reasons staff may choose; `order_cancelled` is server-only.
+enum RefundReason {
+  requestedByCustomer('requested_by_customer'),
+  duplicate('duplicate'),
+  fraudulent('fraudulent'),
+  other('other');
+
+  const RefundReason(this.wireValue);
+  final String wireValue;
+}
+
+/// Kept apart from [OrdersRepository] so existing implementations stay valid.
+abstract interface class OrderRefundsRepository {
+  /// [idempotencyKey] must be generated once per refund form, never per tap,
+  /// so a double-submit or retry of that form cannot refund twice.
+  Future<OrderDetail> issueRefund({
+    required String orderId,
+    required int amountCents,
+    required RefundReason reason,
+    required String idempotencyKey,
+    String? note,
+  });
+
+  /// Pulls refunds made outside the app (e.g. the Stripe dashboard).
+  Future<OrderDetail> syncRefunds(String orderId);
+}
+
+class ApiOrdersRepository implements OrdersRepository, OrderRefundsRepository {
   ApiOrdersRepository(this._client);
   final ApiClient _client;
 
@@ -151,6 +178,109 @@ class ApiOrdersRepository implements OrdersRepository {
         cause: error,
       );
     }
+  }
+
+  @override
+  Future<OrderDetail> issueRefund({
+    required String orderId,
+    required int amountCents,
+    required RefundReason reason,
+    required String idempotencyKey,
+    String? note,
+  }) async {
+    final String? trimmedNote = note?.trim();
+    try {
+      final Response<dynamic> response = await _client.dio.post<dynamic>(
+        'orders/$orderId/refunds',
+        data: <String, dynamic>{
+          'amountCents': amountCents,
+          'reason': reason.wireValue,
+          if (trimmedNote != null && trimmedNote.isNotEmpty)
+            'note': trimmedNote,
+        },
+        options: Options(
+          headers: <String, String>{'Idempotency-Key': idempotencyKey},
+        ),
+      );
+      return _orderFrom(response.data);
+    } on DioException catch (error) {
+      throw _mapRefundError(error);
+    } on FormatException catch (error) {
+      throw ApiException(
+        message: 'The Pelines server returned an invalid order.',
+        cause: error,
+      );
+    } on TypeError catch (error) {
+      throw ApiException(
+        message: 'The Pelines server returned an invalid order.',
+        cause: error,
+      );
+    }
+  }
+
+  @override
+  Future<OrderDetail> syncRefunds(String orderId) async {
+    try {
+      final Response<dynamic> response = await _client.dio.post<dynamic>(
+        'orders/$orderId/refunds/sync',
+      );
+      return _orderFrom(response.data);
+    } on DioException catch (error) {
+      throw _mapRefundError(error);
+    } on FormatException catch (error) {
+      throw ApiException(
+        message: 'The Pelines server returned an invalid order.',
+        cause: error,
+      );
+    } on TypeError catch (error) {
+      throw ApiException(
+        message: 'The Pelines server returned an invalid order.',
+        cause: error,
+      );
+    }
+  }
+
+  OrderDetail _orderFrom(Object? data) {
+    if (data is! Map<String, dynamic>) {
+      throw const FormatException('Invalid refund response.');
+    }
+    return OrderDetail.fromJson(data);
+  }
+
+  /// Refund rejections carry a human `message` (e.g. the remaining balance).
+  ApiException _mapRefundError(DioException error) {
+    final int? status = error.response?.statusCode;
+    final String? serverMessage = _serverMessage(error.response?.data);
+    final String message = switch (status) {
+      401 => 'Your session is no longer valid. Please sign in again.',
+      403 => 'Administrator access is required.',
+      400 || 409 || 422 when serverMessage != null => serverMessage,
+      // An API without refund routes also answers 404.
+      404 => 'Refunds are not available.',
+      _
+          when error.type == DioExceptionType.connectionTimeout ||
+              error.type == DioExceptionType.receiveTimeout ||
+              error.type == DioExceptionType.sendTimeout =>
+        'The Pelines server timed out. Please try again.',
+      _ when error.type == DioExceptionType.connectionError =>
+        'Could not connect to the Pelines server.',
+      _ => 'Refund failed. Please try again.',
+    };
+    return ApiException(message: message, statusCode: status, cause: error);
+  }
+
+  static String? _serverMessage(Object? data) {
+    if (data is! Map<String, dynamic>) return null;
+    final Object? message = data['message'];
+    if (message is String && message.trim().isNotEmpty) return message.trim();
+    if (message is List<dynamic>) {
+      final String joined = message
+          .whereType<String>()
+          .where((String part) => part.trim().isNotEmpty)
+          .join(' ');
+      return joined.isEmpty ? null : joined;
+    }
+    return null;
   }
 
   ApiException _mapDioError(DioException error, {required bool detail}) {
