@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/order_alert_sound.dart';
@@ -18,6 +19,7 @@ class _AlertBudget {
   bool resolved = false;
   bool played = false;
   bool repeating = false;
+  bool soundUnavailable = false;
 }
 
 /// One foreground owner, one finite native pulse, and one scheduling timer.
@@ -50,6 +52,8 @@ class OrderAlertCoordinator {
   bool _verified = false;
   bool _disposed = false;
   bool _playInFlight = false;
+  bool _testInFlight = false;
+  final soundIssue = ValueNotifier<String?>(null);
   bool _confirmation = false;
   DateTime? _nextPulse;
   DateTime? _nextOrderAt;
@@ -175,6 +179,25 @@ class OrderAlertCoordinator {
   void logout() {
     dismiss();
     _budgets.clear();
+    soundIssue.value = null;
+  }
+
+  Future<OrderSoundResult> testSound() async {
+    if (!_foreground || _disposed) return OrderSoundResult.inactive;
+    if (_current != null ||
+        _nextOrder != null ||
+        _playInFlight ||
+        _testInFlight) {
+      return OrderSoundResult.busy;
+    }
+    _testInFlight = true;
+    try {
+      return await sound.play(test: true);
+    } on Object {
+      return OrderSoundResult.unavailable;
+    } finally {
+      _testInFlight = false;
+    }
   }
 
   bool get _canPlay {
@@ -185,6 +208,7 @@ class OrderAlertCoordinator {
         !_confirmation &&
         entry != null &&
         !entry.muted &&
+        !entry.soundUnavailable &&
         !entry.resolved &&
         entry.deadline != null &&
         _now().isBefore(entry.deadline!) &&
@@ -212,12 +236,13 @@ class OrderAlertCoordinator {
   Future<void> _pulse(int token) async {
     if (!_canPlay || token != _generation || _playInFlight) return;
     _playInFlight = true;
-    _entry!.played = true;
+    final entry = _entry!;
     _nextPulse = _now().add(cadence);
+    OrderSoundResult result;
     try {
-      await sound.play(soundCount: _entry!.repeating ? 3 : 1);
+      result = await sound.play(soundCount: entry.repeating ? 3 : 1);
     } on Object {
-      // Audio and haptics are best-effort, never a prerequisite for UI actions.
+      result = OrderSoundResult.unavailable;
     } finally {
       _playInFlight = false;
     }
@@ -226,6 +251,15 @@ class OrderAlertCoordinator {
       // Do not let a late completion recreate an old timer.
       _arm();
       return;
+    }
+    if (result.status == OrderSoundStatus.started ||
+        result.reason == 'devicePolicy') {
+      entry.played = true;
+      if (result.status == OrderSoundStatus.started) soundIssue.value = null;
+    } else if (result.status == OrderSoundStatus.failed) {
+      final reason = result.reason ?? 'unavailable';
+      if (soundIssue.value != reason) soundIssue.value = reason;
+      entry.soundUnavailable = !result.retryable;
     }
     _arm();
   }
@@ -250,5 +284,6 @@ class OrderAlertCoordinator {
     dismiss();
     _disposed = true;
     _budgets.clear();
+    soundIssue.dispose();
   }
 }

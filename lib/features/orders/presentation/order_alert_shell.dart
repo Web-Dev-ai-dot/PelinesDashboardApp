@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/l10n/admin_localizations.dart';
+
 import 'new_order_alert.dart';
 import '../../auth/models/admin_session.dart';
 import '../../auth/providers/auth_providers.dart';
@@ -57,7 +59,7 @@ class _OrderAlertShellState extends ConsumerState<OrderAlertShell>
       next,
     ) {
       if (previous?.value?.id != next.value?.id) {
-        _feedback.dismiss();
+        _feedback.logout();
         ref.read(orderAlertsProvider.notifier).invalidatePendingSnapshots();
       }
       _processSnapshot(ref.read(todayOrdersProvider));
@@ -86,6 +88,7 @@ class _OrderAlertShellState extends ConsumerState<OrderAlertShell>
             locationId: selected.id,
             orders: snapshot.fullLocationSnapshot!,
             mayPlaySound: _isResumed,
+            accountId: ref.read(authControllerProvider).value?.profile.id,
           ),
     );
   }
@@ -140,12 +143,18 @@ class _OrderAlertShellState extends ConsumerState<OrderAlertShell>
       previous,
       next,
     ) {
-      if (previous?.value != null && next.value == null) {
-        _sessionEnded = true;
+      final previousAccount = previous?.value?.profile.id;
+      final nextAccount = next.value?.profile.id;
+      if (previousAccount != null && previousAccount != nextAccount) {
+        _sessionEnded = nextAccount == null;
         _timer?.cancel();
         _timer = null;
         _feedback.logout();
         ref.read(orderAlertsProvider.notifier).clearMemory();
+        if (!_sessionEnded && _isResumed) {
+          _feedback.resume();
+          _startPolling();
+        }
       } else if (_sessionEnded && next.value != null) {
         _sessionEnded = false;
         if (_isResumed) {
@@ -156,7 +165,35 @@ class _OrderAlertShellState extends ConsumerState<OrderAlertShell>
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) => _syncAlert());
-    return widget.child;
+    return ValueListenableBuilder<String?>(
+      valueListenable: _feedback.soundIssue,
+      builder: (context, issue, child) => issue == null
+          ? child!
+          : Column(
+              children: [
+                Material(
+                  color: Theme.of(context).colorScheme.errorContainer,
+                  child: SafeArea(
+                    bottom: false,
+                    child: Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: Semantics(
+                        liveRegion: true,
+                        child: Text(
+                          tr(
+                            context,
+                            'Order sound could not start. Try Test sound in My Profile.',
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Expanded(child: child!),
+              ],
+            ),
+      child: widget.child,
+    );
   }
 
   void _syncAlert() {

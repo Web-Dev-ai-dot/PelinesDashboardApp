@@ -52,6 +52,7 @@ class OrderAlertsController extends AsyncNotifier<OrderAlertsState> {
   static const int maxIdsPerLocation = 200;
   Future<void> _serial = Future<void>.value();
   int _epoch = 0;
+  String? _storeKey;
 
   void invalidatePendingSnapshots() => _epoch++;
 
@@ -62,13 +63,17 @@ class OrderAlertsController extends AsyncNotifier<OrderAlertsState> {
     required String locationId,
     required List<OrderSummary> orders,
     required bool mayPlaySound,
+    String? accountId,
   }) {
     final epoch = _epoch;
+    final key = accountId == null
+        ? locationId
+        : 'account/$accountId/$locationId';
     final Completer<void> done = Completer<void>();
     _serial = _serial
         .then((_) async {
           if (ref.mounted && epoch == _epoch) {
-            await _processSnapshot(locationId, orders, epoch);
+            await _processSnapshot(locationId, key, orders, epoch);
           }
           done.complete();
         })
@@ -80,13 +85,16 @@ class OrderAlertsController extends AsyncNotifier<OrderAlertsState> {
 
   Future<void> _processSnapshot(
     String locationId,
+    String key,
     List<OrderSummary> orders,
     int epoch,
   ) async {
     final OrderAlertStore store = ref.read(orderAlertStoreProvider);
-    final StoredOrderAlerts? stored = await store.read(locationId);
+    final StoredOrderAlerts? stored = await store.read(key);
     if (!ref.mounted || epoch != _epoch) return;
-    final bool sameLocation = state.value?.locationId == locationId;
+    final bool sameLocation =
+        _storeKey == key && state.value?.locationId == locationId;
+    _storeKey = key;
     final List<String> known = sameLocation
         ? List<String>.of(state.value!.knownIds)
         : List<String>.of(stored?.knownIds ?? const <String>[]);
@@ -135,7 +143,7 @@ class OrderAlertsController extends AsyncNotifier<OrderAlertsState> {
     state = AsyncData<OrderAlertsState>(next);
     try {
       await store.write(
-        locationId,
+        key,
         StoredOrderAlerts(
           knownIds: next.knownIds,
           unseenIds: next.unseenIds,
@@ -150,8 +158,10 @@ class OrderAlertsController extends AsyncNotifier<OrderAlertsState> {
   Future<void> acknowledge(String orderId) async {
     final OrderAlertsState? current = state.value;
     final String? locationId = current?.locationId;
+    final key = _storeKey ?? locationId;
     if (current == null ||
         locationId == null ||
+        key == null ||
         !current.unseenIds.contains(orderId)) {
       return;
     }
@@ -168,7 +178,7 @@ class OrderAlertsController extends AsyncNotifier<OrderAlertsState> {
       await ref
           .read(orderAlertStoreProvider)
           .write(
-            locationId,
+            key,
             StoredOrderAlerts(
               knownIds: next.knownIds,
               unseenIds: next.unseenIds,
@@ -182,6 +192,7 @@ class OrderAlertsController extends AsyncNotifier<OrderAlertsState> {
 
   void clearMemory() {
     _epoch++;
+    _storeKey = null;
     state = const AsyncData<OrderAlertsState>(OrderAlertsState());
   }
 

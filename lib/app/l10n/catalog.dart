@@ -1,5 +1,15 @@
 // English source messages and their Spanish UI translations. Backend values are never catalog keys.
 const spanishCatalog = <String, String>{
+  'Order alerts': 'Alertas de pedidos',
+  'Test sound': 'Probar sonido',
+  'Keep the app open with audible device volume to hear order alerts.': 'Mantén la app abierta y el volumen del dispositivo audible para oír las alertas.',
+  'Order sound could not start. Try Test sound in My Profile.': 'No se pudo iniciar el sonido del pedido. Usa Probar sonido en Mi perfil.',
+  'Sound started. Check that you can hear it.': 'La reproducción se inició. Comprueba si puedes oírla.',
+  'Wait for the current order alert or sound test to finish.': 'Espera a que termine la alerta de pedido o la prueba de sonido.',
+  'Sound is muted by device settings.': 'Los ajustes del dispositivo silencian el sonido.',
+  'Keep the app active and try again after the interruption.': 'Mantén la app activa y vuelve a intentarlo después de la interrupción.',
+  'The order sound file could not be loaded.': 'No se pudo cargar el archivo de sonido de pedidos.',
+  'Could not start the order sound. Try again.': 'No se pudo iniciar el sonido de pedidos. Vuelve a intentarlo.',
   'The server rejected this request. Please try again.': 'El servidor rechazó esta solicitud. Vuelve a intentarlo.',
   'Submitted means data was sent. Check the physical ticket.': 'Enviado significa que se transmitieron los datos. Comprueba el ticket físico.',
   'Paid and confirmed orders print automatically when enabled. ASAP and catering print immediately. Scheduled regular orders print 30 minutes before their scheduled time, or when confirmed within that window.': 'Si activas la autoimpresión, los pedidos pagados y confirmados se imprimen automáticamente. Los inmediatos y de catering se imprimen al momento. Los regulares programados se imprimen 30 minutos antes de su hora, o al confirmarse dentro de ese plazo.',

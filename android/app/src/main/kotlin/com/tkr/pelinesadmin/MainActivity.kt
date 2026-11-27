@@ -1,4 +1,4 @@
-﻿package com.tkr.pelinesadmin
+package com.tkr.pelinesadmin
 
 import android.app.NotificationManager
 import android.content.Context
@@ -107,7 +107,7 @@ class MainActivity : FlutterActivity() {
                 "stop" -> { stopAlert(); result.success(null) }
                 "play" -> {
                     if (!foreground || pattern.active || alertPlayer != null || SystemClock.elapsedRealtime() < pulseUntil) {
-                        result.success(null)
+                        result.success(mapOf("status" to "skipped", "reason" to if (foreground) "busy" else "inactive"))
                         return@setMethodCallHandler
                     }
                     val audio = getSystemService(Context.AUDIO_SERVICE) as AudioManager
@@ -115,8 +115,10 @@ class MainActivity : FlutterActivity() {
                     // Never bypass the user's interruption filter or raise volume.
                     val dnd = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
                         notifications.currentInterruptionFilter != NotificationManager.INTERRUPTION_FILTER_ALL
-                    if (dnd || audio.ringerMode == AudioManager.RINGER_MODE_SILENT) {
-                        result.success(null)
+                    val test = call.argument<Boolean>("test") == true
+                    if (dnd || audio.ringerMode == AudioManager.RINGER_MODE_SILENT ||
+                        (test && audio.ringerMode != AudioManager.RINGER_MODE_NORMAL)) {
+                        result.success(mapOf("status" to "skipped", "reason" to "devicePolicy"))
                         return@setMethodCallHandler
                     }
                     val attributes = AudioAttributes.Builder()
@@ -125,7 +127,7 @@ class MainActivity : FlutterActivity() {
                     pulseUntil = SystemClock.elapsedRealtime() + 550
                     // Haptics and audio fail independently. Each pulse is finite.
                     try {
-                        vibrator?.takeIf { it.hasVibrator() }?.let {
+                        vibrator?.takeIf { !test && it.hasVibrator() }?.let {
                             val pattern = longArrayOf(0, 200, 150, 200)
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                                 @Suppress("DEPRECATION")
@@ -137,9 +139,14 @@ class MainActivity : FlutterActivity() {
                         }
                     } catch (_: Exception) { }
                     if (audio.ringerMode == AudioManager.RINGER_MODE_NORMAL) {
-                        pattern.start(call.argument<Int>("soundCount") ?: 1)
+                        pattern.start(if (test) 1 else call.argument<Int>("soundCount") ?: 1)
                     }
-                    result.success(null)
+                    result.success(when {
+                        audio.ringerMode != AudioManager.RINGER_MODE_NORMAL ->
+                            mapOf("status" to "skipped", "reason" to "devicePolicy")
+                        alertPlayer != null -> mapOf("status" to "started")
+                        else -> mapOf("status" to "failed", "reason" to "playback")
+                    })
                 }
                 else -> result.notImplemented()
             }

@@ -144,10 +144,11 @@ class _Sound implements OrderAlertSound {
   int stops = 0;
   bool fail = false;
   @override
-  Future<void> play({int soundCount = 1}) async {
+  Future<OrderSoundResult> play({int soundCount = 1, bool test = false}) async {
     plays++;
     soundCounts.add(soundCount);
     if (fail) throw StateError('native effects unavailable');
+    return OrderSoundResult.started;
   }
 
   @override
@@ -1205,6 +1206,9 @@ void main() {
       final h = await _pump(tester);
       (h.container.read(authControllerProvider.notifier) as _Auth).signedIn();
       await tester.pumpAndSettle();
+      await h.emit(
+        tester,
+      ); // Baseline this account before the new order arrives.
       h.repo.orders['A'] = _detail('A');
       await h.emit(tester);
       final stops = h.sound.stops;
@@ -2100,10 +2104,12 @@ void main() {
     await h.emit(tester);
     expect(find.byKey(const Key('alert-accept')), findsNothing);
     expect(find.byKey(const Key('alert-acknowledge')), findsNothing);
+    expect(h.sound.plays, 0);
     h.repo.getError = null;
     await tester.tap(find.byKey(const Key('alert-refresh')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('alert-accept')), findsOneWidget);
+    expect(h.sound.plays, 1);
     expect(h.unseen, ['A']);
   });
 

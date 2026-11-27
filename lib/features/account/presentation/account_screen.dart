@@ -3,6 +3,9 @@ import '../../../app/theme/pelines_settings_content.dart';
 
 import 'package:pelines_admin_app/app/l10n/admin_localizations.dart';
 import 'package:flutter/material.dart';
+
+import '../../orders/presentation/order_sound_settings.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/navigation/admin_navigation.dart';
@@ -242,6 +245,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                       ),
                     ],
                   ),
+                  const SizedBox(height: PelinesSpacing.xl),
+                  const OrderSoundSettings(),
                 ],
               ),
             ),

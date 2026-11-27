@@ -208,6 +208,48 @@ void main() {
     expect(sound.playCalls, 0);
   });
 
+  test(
+    'account and branch isolates pending alerts and baselines history',
+    () async {
+      final container = _container(_MemoryStore(), _FakeSound());
+      addTearDown(container.dispose);
+      await container.read(orderAlertsProvider.future);
+      final controller = container.read(orderAlertsProvider.notifier);
+      Future<void> scan(
+        String account,
+        String location,
+        List<OrderSummary> orders,
+      ) => controller.processSnapshot(
+        accountId: account,
+        locationId: location,
+        orders: orders,
+        mayPlaySound: true,
+      );
+      await scan('first', 'a', [_order('A')]);
+      await scan('first', 'a', [_order('A'), _order('B'), _order('C')]);
+      expect(container.read(orderAlertsProvider).requireValue.unseenIds, [
+        'B',
+        'C',
+      ]);
+      controller.clearMemory();
+      await scan('second', 'a', [_order('A'), _order('B'), _order('C')]);
+      expect(
+        container.read(orderAlertsProvider).requireValue.unseenIds,
+        isEmpty,
+      );
+      await scan('second', 'b', []);
+      expect(
+        container.read(orderAlertsProvider).requireValue.unseenIds,
+        isEmpty,
+      );
+      await scan('first', 'a', [_order('A'), _order('B'), _order('C')]);
+      expect(container.read(orderAlertsProvider).requireValue.unseenIds, [
+        'B',
+        'C',
+      ]);
+    },
+  );
+
   test('noneligible orders never become unseen or play sound', () async {
     final _MemoryStore store = _MemoryStore();
     final _FakeSound sound = _FakeSound();
@@ -486,7 +528,11 @@ class _HeldStore extends _MemoryStore {
 class _FakeSound implements OrderAlertSound {
   int playCalls = 0;
   @override
-  Future<void> play({int soundCount = 1}) async => playCalls++;
+  Future<OrderSoundResult> play({int soundCount = 1, bool test = false}) async {
+    playCalls++;
+    return OrderSoundResult.started;
+  }
+
   @override
   Future<void> stop() async {}
   @override

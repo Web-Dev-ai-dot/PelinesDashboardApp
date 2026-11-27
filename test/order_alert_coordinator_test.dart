@@ -13,14 +13,17 @@ class _Sound implements OrderAlertSound {
   bool fail = false;
   Completer<void>? hold;
   @override
-  Future<void> play({int soundCount = 1}) async {
+  Future<OrderSoundResult> play({int soundCount = 1, bool test = false}) async {
     plays++;
     soundCounts.add(soundCount);
     inFlight++;
     if (inFlight > maxInFlight) maxInFlight = inFlight;
     try {
-      if (fail) throw StateError('audio/haptics unavailable');
+      if (fail) {
+        return const OrderSoundResult(OrderSoundStatus.failed, 'playback');
+      }
       await hold?.future;
+      return OrderSoundResult.started;
     } finally {
       inFlight--;
     }
@@ -267,6 +270,42 @@ void main() {
     coordinator.mute();
     expect(coordinator.hasTimer, isFalse);
     expect(sound.maxInFlight, 1);
+  });
+
+  testWidgets('test sound is exclusive and leaves active alerts alone', (
+    tester,
+  ) async {
+    setup(tester);
+    verify();
+    await tester.pump(Duration.zero);
+    final stops = sound.stops;
+    expect(await coordinator.testSound(), OrderSoundResult.busy);
+    expect(sound.stops, stops);
+    coordinator.logout();
+    final held = Completer<void>();
+    sound.hold = held;
+    final test = coordinator.testSound();
+    expect(await coordinator.testSound(), OrderSoundResult.busy);
+    held.complete();
+    expect(await test, OrderSoundResult.started);
+    coordinator.suspend();
+    expect(await coordinator.testSound(), OrderSoundResult.inactive);
+  });
+
+  testWidgets('failed one-shot can recover without duplicate announcements', (
+    tester,
+  ) async {
+    setup(tester);
+    sound.fail = true;
+    verify(pending: false);
+    await tester.pump(Duration.zero);
+    expect(coordinator.soundIssue.value, 'playback');
+    sound.fail = false;
+    await tester.pump(OrderAlertCoordinator.cadence);
+    expect(coordinator.soundIssue.value, isNull);
+    verify(pending: false);
+    await tester.pump(const Duration(seconds: 12));
+    expect(sound.soundCounts, [1, 1]);
   });
 
   testWidgets('late A play completion schedules only verified B', (
