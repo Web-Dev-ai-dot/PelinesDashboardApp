@@ -99,31 +99,12 @@ class PrintOrderService {
     }
     final id = _id();
     return _enqueue(
-      TicketDocument(
-        orderId: 'test-$id',
-        orderNumber: 'TEST',
-        orderType: OrderType.unknown,
-        fulfillmentType: FulfillmentType.unknown,
-        customerName: 'José / Piña / Jalapeño',
-        phone: '',
-        placedAt: DateTime.now().toUtc(),
+      builder.buildTest(
+        id: 'test-$id',
+        placedAt: DateTime.now(),
         locationName: locationName,
-        items: [],
-        notes: config.transport == PrinterTransport.fake
-            ? 'Simulation only. No physical ticket.'
-            : 'PRINTER TEST - TEST ONLY\nPrinter: ${config.displayName}\n'
-                  'Connection: Network\nTortilla española\n¿Sin cebolla? ¡Sí!\n'
-                  'á é í ó ú ñ ü\nVerify text, layout and cut on paper.',
-        payment: PaymentStatus.unknown,
-        totals: const TicketTotals(
-          subtotalCents: 0,
-          serviceFeeCents: 0,
-          tipCents: 0,
-          deliveryFeeCents: 0,
-          discountCents: 0,
-          taxCents: 0,
-          totalCents: 0,
-        ),
+        printerLabel: config.displayName,
+        simulated: config.transport == PrinterTransport.fake,
       ),
       config,
       PrintPurpose.test,

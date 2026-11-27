@@ -261,7 +261,8 @@ void main() {
           const EscPosTicketRenderer().render(job.ticket),
         );
         expect(paper, contains('CATERING'));
-        expect(paper, contains('Event: 2026-09-04 15:00 Pacific'));
+        expect(paper, contains('Pickup / Event'));
+        expect(paper, contains('2026-09-04 15:00 PDT'));
         now = event.subtract(AutoPrintPolicy.lead);
         await scan();
         expect(runtime.adapter.printCalls, 1);

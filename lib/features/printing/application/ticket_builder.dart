@@ -3,6 +3,63 @@ import '../models/ticket_document.dart';
 
 class TicketBuilder {
   const TicketBuilder();
+
+  TicketDocument buildTest({
+    required String id,
+    required DateTime placedAt,
+    String? locationName,
+    required String printerLabel,
+    required bool simulated,
+  }) => TicketDocument(
+    orderId: id,
+    orderNumber: 'TEST',
+    orderType: OrderType.online,
+    fulfillmentType: FulfillmentType.pickup,
+    customerName: 'Lucía del Río',
+    phone: '503-555-0147',
+    placedAt: placedAt.toUtc(),
+    locationName: locationName,
+    isTest: true,
+    notes:
+        'Fictional sample. Verify alignment and cut.\nPrinter: $printerLabel'
+        '${simulated ? '\nSimulation only. No physical ticket.' : ''}',
+    // Exercise the paid layout with a simulated payment in Test Print.
+    payment: PaymentStatus.paid,
+    discountCode: 'SAMPLE',
+    items: [
+      TicketItem(
+        quantity: 2,
+        name: 'Tacos de champiñón',
+        baseUnitPriceCents: 500,
+        lineTotalCents: 1120,
+        instructions: 'Sin cebolla, por favor.',
+        modifiers: const [
+          TicketModifier(
+            groupName: 'Extras',
+            optionName: 'Piña',
+            priceAdjustmentCents: 60,
+          ),
+        ],
+      ),
+      TicketItem(
+        quantity: 1,
+        name: 'Agua de limón',
+        baseUnitPriceCents: 300,
+        lineTotalCents: 300,
+        modifiers: const [],
+      ),
+    ],
+    totals: const TicketTotals(
+      subtotalCents: 1420,
+      serviceFeeCents: 50,
+      tipCents: 150,
+      deliveryFeeCents: 0,
+      discountCents: 200,
+      taxCents: 0,
+      totalCents: 1420,
+      amountPaidCents: 1420,
+    ),
+  );
   TicketDocument build(OrderDetail order) => TicketDocument(
     orderId: order.id,
     orderNumber: order.orderNumber,

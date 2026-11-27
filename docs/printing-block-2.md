@@ -200,3 +200,24 @@ under `lib/features/printing/`; extended `application/print_order_service.dart`,
 `presentation/printer_settings_screen.dart`, `providers/printer_controller.dart`
 and `providers/printing_providers.dart`. Added `test/network_printing_test.dart`,
 extended `test/printer_settings_screen_test.dart`, and added this document.
+
+
+## Restaurant ticket layout
+
+Manual orders, automatic orders and Test Print share the ESC/POS renderer. The
+layout uses 42 cells for the 80 mm profile and 32 for the alternate profile.
+The header includes a one-bit raster derived from the existing Pelines logo.
+Amounts use the rightmost cell, and long names and identifiers wrap rather
+than truncate. The item line total comes directly from the order and already
+includes modifier adjustments. Modifier prices below the item are informational.
+
+Amount Paid is the order total derived from a canonical paid status. It is
+not a separate captured-amount field. For other payment states the ticket
+shows Total and the payment status. The PAID / PAGADO mark is for paid
+orders, and Test Print is explicitly marked as fictional. Card brand and a
+valid last-four field are shown only when available. Dates use the Pacific
+time zone with its applicable daylight or standard abbreviation.
+
+A byte-stream preview can verify text and printer commands. Check the raster
+density, glyph appearance and wrapping, paper profile, feed and partial cut
+on the physical printer.

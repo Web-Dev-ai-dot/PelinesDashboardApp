@@ -74,7 +74,7 @@ class TicketTotals {
       taxCents,
       totalCents;
 
-  /// Unknown for non-paid orders: total is not evidence of a payment.
+  /// Order total for paid orders; this is not an independently captured amount.
   final int? amountPaidCents;
   Map<String, dynamic> toJson() => {
     'subtotalCents': subtotalCents,
@@ -116,6 +116,7 @@ class TicketDocument {
     this.discountCode,
     this.cardBrand,
     this.cardLast4,
+    this.isTest = false,
     Map<String, dynamic>? deliveryAddress,
     Map<String, dynamic>? eventDetails,
   }) : items = List.unmodifiable(items),
@@ -135,6 +136,7 @@ class TicketDocument {
   final List<TicketItem> items;
   final TicketTotals totals;
   final Map<String, dynamic>? deliveryAddress, eventDetails;
+  final bool isTest;
   bool get isAsap => scheduledFor == null;
   Map<String, dynamic> toJson() => {
     'orderId': orderId,
@@ -153,6 +155,7 @@ class TicketDocument {
     'discountCode': discountCode,
     'cardBrand': cardBrand,
     'cardLast4': cardLast4,
+    if (isTest) 'isTest': true,
     'deliveryAddress': deliveryAddress,
     'eventDetails': eventDetails,
   };
@@ -179,6 +182,10 @@ class TicketDocument {
     discountCode: j['discountCode'] as String?,
     cardBrand: j['cardBrand'] as String?,
     cardLast4: j['cardLast4'] as String?,
+    isTest:
+        j['isTest'] == true ||
+        (j['orderNumber'] == 'TEST' &&
+            (j['orderId'] as String).startsWith('test-')),
     deliveryAddress: j['deliveryAddress'] as Map<String, dynamic>?,
     eventDetails: j['eventDetails'] as Map<String, dynamic>?,
   );

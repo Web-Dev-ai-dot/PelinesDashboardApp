@@ -302,7 +302,8 @@ void main() {
           'Jalapeño',
           'Tortilla española',
           '¿Sin cebolla?',
-          'Scheduled: 2026-09-08 13:00 Pacific',
+          'Pickup scheduled',
+          '2026-09-08 13:00 PDT',
           'Visa',
           '4242',
           'SAVE',
@@ -325,7 +326,9 @@ void main() {
           const TicketBuilder().build(OrderDetail.fromJson(json)),
         ),
       );
-      expect(text, contains('Amount paid: Unknown'));
+      expect(text, contains('Total'));
+      expect(text, isNot(contains('Amount Paid')));
+      expect(text, isNot(contains('PAGADO')));
     });
     for (final profile in EscPosPaperProfile.values) {
       test('wraps long data without loss for ${profile.name}', () {
@@ -333,10 +336,11 @@ void main() {
           EscPosTicketRenderer(profile: profile)
               .render(job(notes: 'Z' * 150).ticket),
         );
-        expect('Z'.allMatches(text).length, 150);
+        final note = text.substring(text.lastIndexOf('NOTE\n'));
+        expect('Z'.allMatches(note).length, 150);
         expect(text, contains('-' * profile.columns));
         expect(
-          text
+          note
               .split('\n')
               .where((line) => line.contains('Z'))
               .every(
@@ -535,7 +539,15 @@ void main() {
         );
         expect(
           latin1.decode(connector.sockets.single.bytes),
-          contains('PRINTER TEST - TEST ONLY'),
+          allOf(
+            contains('TEST / NOT A REAL ORDER'),
+            contains('Tacos de champiñón'),
+            contains('Sin cebolla'),
+            contains('Discount (SAMPLE)'),
+            contains('SIMULATED PAYMENT: card'),
+            contains('[ PAID ]'),
+            contains('PAGADO'),
+          ),
         );
         expect(runtime.adapter.printCalls, 0);
       },
