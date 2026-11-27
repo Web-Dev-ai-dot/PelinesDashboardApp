@@ -634,11 +634,13 @@ class TodayOrdersState {
     this.refreshError,
     this.fullLocationSnapshot,
     this.snapshotLocationId,
+    this.refreshedAt,
   });
   final List<OrderSummary> orders;
   // Present only for a successful, complete location fetch; never a UI projection.
   final List<OrderSummary>? fullLocationSnapshot;
   final String? snapshotLocationId;
+  final DateTime? refreshedAt;
   final bool isRefreshing;
   final String? refreshError;
 
@@ -652,6 +654,7 @@ class TodayOrdersState {
       orders: orders ?? this.orders,
       fullLocationSnapshot: fullLocationSnapshot,
       snapshotLocationId: snapshotLocationId,
+      refreshedAt: refreshedAt,
       isRefreshing: isRefreshing ?? this.isRefreshing,
       refreshError: clearError ? null : refreshError ?? this.refreshError,
     );
@@ -660,36 +663,65 @@ class TodayOrdersState {
 
 class TodayOrdersController extends AsyncNotifier<TodayOrdersState> {
   bool _requestInFlight = false;
+  Object? _building;
 
   @override
   Future<TodayOrdersState> build() async {
-    ref.watch(ordersRepositoryProvider);
-    final Location? location = await ref.watch(currentLocationProvider.future);
-    if (location == null) {
-      return const TodayOrdersState(orders: <OrderSummary>[]);
+    final token = Object();
+    _building = token;
+    try {
+      final requestRef = ref;
+      final repository = requestRef.watch(ordersRepositoryProvider);
+      final location = await requestRef.watch(currentLocationProvider.future);
+      if (!requestRef.mounted || location == null) {
+        return const TodayOrdersState(orders: <OrderSummary>[]);
+      }
+      return await _load(repository, location.id);
+    } finally {
+      if (identical(_building, token)) _building = null;
     }
-    return _load(location.id);
   }
 
   Future<void> refresh() async {
-    if (_requestInFlight) return;
-    final Location? location = await ref.read(currentLocationProvider.future);
-    if (location == null) return;
+    if (_requestInFlight || _building != null) return;
     _requestInFlight = true;
-    final TodayOrdersState? previous = state.value;
-    if (previous != null) {
-      state = AsyncData(
-        previous.copyWith(isRefreshing: true, clearError: true),
-      );
-    }
+    final requestRef = ref;
+    final previous = state.value;
+    OrdersRepository? repository;
+    Future<Location?>? locationFuture;
+    Location? location;
+
+    bool current() =>
+        requestRef.mounted &&
+        (repository == null ||
+            identical(requestRef.read(ordersRepositoryProvider), repository)) &&
+        (locationFuture == null ||
+            identical(
+              requestRef.read(currentLocationProvider.future),
+              locationFuture,
+            )) &&
+        (location == null ||
+            requestRef.read(currentLocationProvider).asData?.value?.id ==
+                location.id);
+
     try {
-      final snapshot = await _load(location.id);
-      if (ref.read(currentLocationProvider).value?.id == location.id) {
-        state = AsyncData(snapshot);
+      final source = requestRef.read(ordersRepositoryProvider);
+      repository = source;
+      locationFuture = requestRef.read(currentLocationProvider.future);
+      location = await locationFuture;
+      if (location == null || !current()) return;
+
+      if (previous != null && previous.snapshotLocationId == location.id) {
+        state = AsyncData(
+          previous.copyWith(isRefreshing: true, clearError: true),
+        );
       }
+      final snapshot = await _load(source, location.id);
+      if (current()) state = AsyncData(snapshot);
     } on Object catch (error, stackTrace) {
-      if (ref.read(currentLocationProvider).value?.id != location.id) return;
-      if (previous == null) {
+      if (!current()) return;
+      if (previous == null ||
+          (location != null && previous.snapshotLocationId != location.id)) {
         state = AsyncError<TodayOrdersState>(error, stackTrace);
       } else {
         state = AsyncData(
@@ -701,10 +733,11 @@ class TodayOrdersController extends AsyncNotifier<TodayOrdersState> {
     }
   }
 
-  Future<TodayOrdersState> _load(String locationId) async {
-    final List<OrderSummary> all = await ref
-        .read(ordersRepositoryProvider)
-        .getOrders(locationId: locationId);
+  Future<TodayOrdersState> _load(
+    OrdersRepository repository,
+    String locationId,
+  ) async {
+    final all = await repository.getOrders(locationId: locationId);
     final snapshot = List<OrderSummary>.unmodifiable(
       all.where((order) => order.locationId == locationId),
     );
@@ -712,6 +745,7 @@ class TodayOrdersController extends AsyncNotifier<TodayOrdersState> {
       orders: filterTodayActiveOrders(snapshot),
       fullLocationSnapshot: snapshot,
       snapshotLocationId: locationId,
+      refreshedAt: DateTime.now().toUtc(),
     );
   }
 }

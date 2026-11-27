@@ -109,6 +109,7 @@ class _PrintingShellState extends ConsumerState<PrintingShell>
         final location = ref.read(currentLocationProvider).asData?.value?.id;
         if (location == null) continue;
         if (state.hasError || snapshot?.refreshError != null) {
+          _runtime!.recordOrdersFailure(location);
           try {
             final enabled = await _runtime!.hasAutomaticPrinting(location);
             if (mounted) {
@@ -132,6 +133,7 @@ class _PrintingShellState extends ConsumerState<PrintingShell>
           final limited = await _runtime!.evaluate(
             snapshot.fullLocationSnapshot!,
             location,
+            refreshedAt: snapshot.refreshedAt,
           );
           if (mounted) {
             setState(() {

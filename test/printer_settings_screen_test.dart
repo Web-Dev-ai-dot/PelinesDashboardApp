@@ -176,7 +176,10 @@ void main() {
           );
           await settle();
           // Return to the top before locating the lazily built transport field.
-          await tester.drag(find.byType(ListView).first, const Offset(0, 5000));
+          tester
+              .state<ScrollableState>(find.byType(Scrollable).first)
+              .position
+              .jumpTo(0);
           await settle();
           final transport = find.byType(
             DropdownButtonFormField<PrinterTransport>,
@@ -452,9 +455,14 @@ void main() {
           final jobs = await runtime.jobs.list();
           expect(jobs.single.purpose, PrintPurpose.test);
           expect(jobs.single.status, PrintJobStatus.submitted);
-          await tester.drag(find.byType(ListView), const Offset(0, -900));
+          final testJob = find.textContaining('TEST · test');
+          await tester.scrollUntilVisible(
+            testJob,
+            300,
+            scrollable: find.byType(Scrollable).first,
+          );
           await settle();
-          expect(find.textContaining('TEST · test'), findsOneWidget);
+          expect(testJob, findsOneWidget);
           expect(find.text('Submitted'), findsOneWidget);
           expect(find.text('Printed successfully'), findsNothing);
           runtime.adapter.delay = const Duration(milliseconds: 100);

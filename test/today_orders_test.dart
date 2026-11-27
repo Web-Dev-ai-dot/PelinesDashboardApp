@@ -12,6 +12,104 @@ import 'package:pelines_admin_app/features/orders/providers/orders_providers.dar
 
 void main() {
   setUpAll(PelinesTime.initialize);
+  test('refresh absorbs location resolution failure and can recover', () async {
+    final repository = _RecordingRepository();
+    final container = ProviderContainer(
+      retry: (_, _) => null,
+      overrides: [
+        currentLocationProvider.overrideWith(_FakeCurrentLocation.new),
+        ordersRepositoryProvider.overrideWithValue(repository),
+      ],
+    );
+    addTearDown(container.dispose);
+    await container.read(todayOrdersProvider.future);
+    final location = container.read(
+      currentLocationProvider.notifier,
+    ) as _FakeCurrentLocation;
+    location.fail();
+    await expectLater(
+      container.read(todayOrdersProvider.notifier).refresh(),
+      completes,
+    );
+    location.change(_location('first'));
+    await container.read(todayOrdersProvider.future);
+    await container.read(todayOrdersProvider.notifier).refresh();
+    expect(
+      container.read(todayOrdersProvider).requireValue.snapshotLocationId,
+      'first',
+    );
+  });
+  test(
+    'concurrent refreshes share the guard while resolving the location',
+    () async {
+      final repository = _RecordingRepository();
+      final container = ProviderContainer(
+        overrides: [
+          currentLocationProvider.overrideWith(_FakeCurrentLocation.new),
+          ordersRepositoryProvider.overrideWithValue(repository),
+        ],
+      );
+      addTearDown(container.dispose);
+      await container.read(todayOrdersProvider.future);
+      final controller = container.read(todayOrdersProvider.notifier);
+      final result = Completer<List<OrderSummary>>();
+      repository.pending = result;
+      final first = controller.refresh();
+      final second = controller.refresh();
+      final third = controller.refresh();
+      await Future<void>.delayed(Duration.zero);
+      expect(repository.locationIds, ['first', 'first']);
+      result.complete([]);
+      await Future.wait([first, second, third]);
+      await controller.refresh();
+      expect(repository.locationIds, ['first', 'first', 'first']);
+    },
+  );
+
+  test(
+    'late account repository response cannot replace a fresh snapshot',
+    () async {
+      final first = _RecordingRepository();
+      final second = _RecordingRepository();
+      final container = ProviderContainer(
+        overrides: [
+          currentLocationProvider.overrideWith(_FakeCurrentLocation.new),
+          ordersRepositoryProvider.overrideWithValue(first),
+        ],
+      );
+      addTearDown(container.dispose);
+      await container.read(todayOrdersProvider.future);
+      final result = Completer<List<OrderSummary>>();
+      first.pending = result;
+      final stale = container.read(todayOrdersProvider.notifier).refresh();
+      await Future<void>.delayed(Duration.zero);
+      second.rows['first'] = [
+        _order(
+          'new-account',
+          OrderStatus.confirmed,
+          DateTime.now().toIso8601String(),
+          locationId: 'first',
+        ),
+      ];
+      container.updateOverrides([
+        currentLocationProvider.overrideWith(_FakeCurrentLocation.new),
+        ordersRepositoryProvider.overrideWithValue(second),
+      ]);
+      await container.read(todayOrdersProvider.future);
+      result.complete([]);
+      await stale;
+      expect(
+        container
+            .read(todayOrdersProvider)
+            .requireValue
+            .fullLocationSnapshot!
+            .single
+            .id,
+        'new-account-id',
+      );
+    },
+  );
+
   test(
     'Picked Up follows Refresh and location without additional queries',
     () async {
@@ -467,6 +565,10 @@ class _FakeCurrentLocation extends CurrentLocationController {
   @override
   Future<Location?> build() async => _location('first');
   void change(Location location) => state = AsyncData<Location?>(location);
+  void fail() => state = AsyncError<Location?>(
+    StateError('Location offline'),
+    StackTrace.current,
+  );
 }
 
 class _RecordingRepository implements OrdersRepository {

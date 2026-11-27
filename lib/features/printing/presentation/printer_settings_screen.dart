@@ -14,7 +14,10 @@ import '../../../app/theme/pelines_components.dart';
 import '../../../app/theme/pelines_tokens.dart';
 import '../../../core/time/pelines_time.dart';
 import '../../locations/providers/locations_providers.dart';
+import '../application/auto_print_policy.dart';
+import '../models/auto_print_diagnostics.dart';
 import '../models/print_job.dart';
+import 'auto_print_status_panel.dart';
 import '../models/print_result.dart';
 import '../models/printer.dart';
 import '../models/printer_settings.dart';
@@ -471,6 +474,11 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
                 key: const Key('printer-preferences-card'),
                 title: tr(context, 'Automatic printing preferences'),
                 children: [
+                  AutoPrintStatusPanel(
+                    runtime: engine,
+                    config: config,
+                    jobs: jobs.value ?? const [],
+                  ),
                   Text(
                     tr(
                       context,
@@ -523,14 +531,11 @@ class _SettingsBodyState extends ConsumerState<_SettingsBody> {
                           ),
                   ),
                   if (config.enabled &&
-                      config.autoPrintRequested &&
-                      (!engine.ownsActivation(config) ||
-                          (config.autoPrintRegularAsap &&
-                              config.asapSince == null) ||
-                          (config.autoPrintScheduled &&
-                              config.scheduledSince == null) ||
-                          (config.autoPrintCatering &&
-                              config.cateringSince == null)))
+                      AutoPrintType.values.any(
+                        (type) =>
+                            engine.effectiveState(config, type).mode ==
+                            AutoPrintMode.activationPending,
+                      ))
                     OutlinedButton(
                       onPressed: _busy || _dirty
                           ? null

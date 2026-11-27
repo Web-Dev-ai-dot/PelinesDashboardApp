@@ -12,6 +12,7 @@ import 'package:pelines_admin_app/features/printing/application/esc_pos_ticket_r
 import 'package:pelines_admin_app/features/printing/data/fake_printer_adapter.dart';
 import 'package:pelines_admin_app/features/printing/data/printing_database.dart';
 import 'package:pelines_admin_app/features/printing/models/print_job.dart';
+import 'package:pelines_admin_app/features/printing/models/auto_print_diagnostics.dart';
 import 'package:pelines_admin_app/features/printing/models/print_result.dart';
 import 'package:pelines_admin_app/features/printing/models/printer.dart';
 import 'package:pelines_admin_app/features/printing/models/printer_settings.dart';
@@ -195,6 +196,92 @@ void main() {
         '${folder.path}/queue.db',
       );
       await folder.delete();
+    });
+
+    test(
+      'effective state requires activation and reports a verifiable pause',
+      () async {
+        final saved = await runtime.settings.read(location);
+        expect(
+          runtime
+              .effectiveState(
+                saved.copyWith(enabled: false),
+                AutoPrintType.asap,
+              )
+              .mode,
+          AutoPrintMode.disabled,
+        );
+        expect(
+          runtime
+              .effectiveState(
+                saved.copyWith(resetActivation: true),
+                AutoPrintType.asap,
+              )
+              .mode,
+          AutoPrintMode.activationPending,
+        );
+        expect(
+          runtime.effectiveState(saved, AutoPrintType.asap).mode,
+          AutoPrintMode.active,
+        );
+        runtime.recordOrdersFailure(location);
+        final held = runtime.effectiveState(saved, AutoPrintType.asap);
+        expect(held.pause, AutoPrintPause.ordersUnavailable);
+        expect(held.activatedAt, activation);
+        await scan();
+        await runtime.updateScope(owner, location, orders, foreground: false);
+        expect(
+          runtime.effectiveState(saved, AutoPrintType.asap).pause,
+          AutoPrintPause.inactive,
+        );
+        expect((await runtime.settings.read(location)).asapSince, activation);
+      },
+    );
+
+    test('diagnostics are bounded, report exclusions and redact another account job', () async {
+      now = activation.add(const Duration(hours: 2));
+      orders.records.addAll({
+        'history': record(
+          id: 'history',
+          placed: activation.subtract(const Duration(minutes: 1)),
+        ),
+        'not-paid': record(id: 'not-paid', payment: 'unpaid'),
+        'pending': record(id: 'pending', status: 'pending'),
+        'future': record(
+          id: 'future',
+          scheduled: now.add(const Duration(hours: 2)),
+        ),
+        'manual': record(id: 'manual'),
+        for (var i = 0; i < 20; i++)
+          'extra$i': record(id: 'extra$i', payment: 'failed'),
+      });
+      await runtime.service.queueInitialPrint(
+        await orders.getOrderById('manual'),
+      );
+      await runtime.queue.idle;
+      await runtime.evaluate(orders.snapshot, location, refreshedAt: now);
+      final report = runtime.diagnosticsFor(location);
+      expect(report.lastRefresh, now);
+      expect(report.evaluation, AutoPrintEvaluation.noCandidates);
+      expect(report.observations.length, PrintingRuntime.diagnosisLimit);
+      expect(report.observations.take(5).map((row) => row.decision), [
+        AutoPrintDecision.beforeActivation,
+        AutoPrintDecision.unpaid,
+        AutoPrintDecision.statusIneligible,
+        AutoPrintDecision.outsideWindow,
+        AutoPrintDecision.initialJobExists,
+      ]);
+      expect(report.observations[4].jobStatus, PrintJobStatus.submitted);
+      expect(report.observations[4].automatic, isFalse);
+      await runtime.updateScope('other', location, orders, foreground: true);
+      expect(runtime.diagnosticsFor(location).observations, isEmpty);
+      await scan();
+      final hiddenJob = runtime.diagnosticsFor(location).observations[4];
+      expect(hiddenJob.decision, AutoPrintDecision.initialJobExists);
+      expect(hiddenJob.jobStatus, isNull);
+      expect(hiddenJob.automatic, isNull);
+      await runtime.updateScope('other', 'elsewhere', orders, foreground: true);
+      expect(runtime.diagnosticsFor(location).observations, isEmpty);
     });
 
     test('explicit activation skips ASAP history and discovers a future existing schedule', () async {
